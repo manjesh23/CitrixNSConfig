@@ -7,6 +7,8 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM" crossorigin="anonymous"></script>
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="./css/style.css">
+    <script type='text/javascript' src='./js/script.js'></script>
     <title>Citrix ADC NS Config Analyzer</title>
 </head>
 
@@ -17,19 +19,30 @@
     </div>
     <hr class="bg-light" />
     <div class="tab container">
-        <button class="tablinks" onclick="opentab(event, 'nsconfig')">NS.Confg</button>
+        <button class="tablinks" onclick="opentab(event, 'intro')">Intro</button>
+        <button class="tablinks" onclick="opentab(event, 'nsconfig')">NS.Config</button>
     </div>
     <hr class="bg-light" />
-    <div id="logz" class="tabcontent lthree-col">
-        <h3>NS.Config</h3>
-        <p>Build Totology Eazy</p>
-        <div class="col4">
-            <input type="button" value="ns.conf" class="btn btn-outline-secondary" onclick="guilogs()" />
-            <input class="hide" id="guilogs" onpaste="gui();" />
+    <div class="text-white">
+        <div id="landing" class="landing">
+            <pre class="text-muted" id="landingpage"></pre>
         </div>
-        <span id="selectfilename"></span>
-        <pre class="formated" id="results"></pre>
-    </div>
+
+        <div id="intro" class="tabcontent">
+            <h3>Intro</h3>
+            <p class="para">This page explains how to use features of this project...</p>
+            <hr>
+            <pre class="fs-6 text-nowrap"><p class="text-info fs-4">ns.config Analysis</p>
+        </div>
+
+
+        <div id="nsconfig" class="tabcontent lthree-col">
+            <h3>NS.Config</h3>
+            <p>Analyze logs Eazy</p>
+            <div class="col1">
+                <input id="evlogs" hidden="hidden" type="file" class="uploadfiles" name="nsconf" onclick="nsconf();" />
+                <button type="button" class="btn btn-outline-secondary" id="evcustom-button">ns.config</button>
+            </div>
 </body>
 
 </html>
