@@ -98,3 +98,14 @@ label {
     cursor: pointer;
     margin-top: 1rem;
 }
+
+pre {
+    white-space: unset;
+}
+
+table,
+th,
+td {
+    border: 1px solid white;
+    padding: 0.2rem;
+}

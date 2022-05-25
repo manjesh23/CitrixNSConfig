@@ -18,11 +18,13 @@
         <p class="text-muted fs-5">Build Topology with ns.conf file</p>
         <a href="https://github.com/manjesh23/CitrixNSConfig" class="btn btn-sm btn-outline-success text-decoration-none">View on Github</a>
     </div>
-    <input type="file" name="nsconf" id="nsconf" hidden onchange="analyze()" />
-    <label for="nsconf">ns.conf</label>
+    <div class="container">
+        <input type="file" name="nsconf" id="nsconf" hidden onchange="analyze()" />
+        <label for="nsconf">ns.conf</label>
+    </div>
     <hr>
     <hr class="bg-light" />
-    <div class="tab container">
+    <div id="nsconfmenu" class="tab container">
         <button class="tablinks" onclick="openTab(event, 'rawnsconfig')">raw_NS_Config</button>
         <button class="tablinks" onclick="openTab(event, 'basicnsconfig')">basic_NS_Config</button>
     </div>
@@ -33,14 +35,22 @@
         </div>
         <div id="basicnsconfig" class="tabcontent">
             <pre id="basicnsconfigout">
-                <div id="nsversion">NS Version: </div>
-                <div id="nsip">NSIP: </div>
-            </pre>
+                <h4 class="text-muted">System</h4>
+                <div>NS Version: <code id="nsversion">NA</code></div>
+                <div>NS IP: <code id="nsip">NA</code></div>
+                <div>NS Features: <code id="nsfeatures">NA</code></div>
+                <div>NS Mode: <code id="nsmode">NA</code></div>
+                <div>Hostname: <code id="nshostname">NA</code></div>
+                <div>HA Node: <code id="nshanode">NA</code></div>
+                <div>TimeZone: <code id="nstimezone">NA</code></div>
+                <hr>
+                <h4 class="text-muted">Load Balancing</h4>
+                <div class="text-primary">LB vServer: <code class="text-light" id="lbvserver"></code></div>
+        </pre>
         </div>
 </body>
 <script>
-    document.getElementById("nsconfigout").style.display = 'none'
-    document.getElementById("basicnsconfigout").style.display = 'none'
+    document.getElementById("nsconfmenu").style.display = 'none'
 </script>
 
 </html>
