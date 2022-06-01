@@ -36,7 +36,7 @@ function analyze() {
                 document.getElementById("nstimezone").innerText = originalnsconf.match(/-timezone.+/g)[0].split(" ")[1]
                     //load balancing realted details
                     // loadbalancing virtual server info
-                let rawlbvserver = originalnsconf.match(/add\slb\svserver.+/g)
+                let rawlbvserver = originalnsconf.match(/add\slb\svserver\s.+/g)
                 if (rawlbvserver.length > 0) {
                     var lbvservertable = ""
                     for (var lbvserver = 0; lbvserver < rawlbvserver.length; lbvserver++) {
@@ -56,6 +56,26 @@ function analyze() {
                     }
                     document.getElementById("lbvserver").innerHTML += "<br><br><table><tr><th>LB vServer Name</th><th>Protocol</th><th>LB VIP</th><th>VIP Port</th><th>persistenceType</th><th>lbMethod</th><th>backupLBMethod</th></tr><tr><td>" + lbvservertable + "</table>"
                 }
+                let rawlbservice = originalnsconf.match(/add\sservice\s.+/g)
+                if (rawlbservice.length > 0) {
+                    var lbfullservice = ""
+                    for (var lbservice = 0; lbservice < rawlbservice.length; lbservice++) {
+                        let lbservicename = rawlbservice[lbservice].match(/add\sservice.+/g)[0].split(" ")[2]
+                        let lbserviceservername = rawlbservice[lbservice].match(/add\sservice.+/g)[0].split(" ")[3]
+                        let lbserviceproto = rawlbservice[lbservice].match(/add\sservice.+/g)[0].split(" ")[4]
+                        let lbserviceport = rawlbservice[lbservice].match(/add\sservice.+/g)[0].split(" ")[5]
+                        lbfullservice += lbservicename + "</td><td>" + lbserviceservername + "</td><td>" + lbserviceproto + "</td><td>" + lbserviceport + "</td></tr><td>"
+                    }
+                    document.getElementById("lbservice").innerHTML = "<br><br><table><tr><th>LB Service Name</th><th>LB Server Name</th><th>LB Service Protocol</th><th>LB Service Port</th><tr><td>" + lbfullservice + "</table>"
+                }
+                let rawlbserver = originalnsconf.match(/add\sserver\s.+/g)
+                var lbservertable = ""
+                for (var lbserver = 0; lbserver < rawlbserver.length; lbserver++) {
+                    let lbservername = rawlbserver[lbserver].match(/add\sserver.+/g)[0].split(" ")[2]
+                    let lbserverip = rawlbserver[lbserver].match(/add\sserver.+/g)[0].split(" ")[3]
+                    lbservertable += lbservername + "</td><td>" + lbserverip + "</td></tr><td>"
+                }
+                document.getElementById("lbserver").innerHTML = "<br><br><table><tr><th>LB Server Name</th><th>LB Server IP</th><tr><td>" + lbservertable + "</table>"
             } else {
                 alert("Invalid ns.conf file")
             }
