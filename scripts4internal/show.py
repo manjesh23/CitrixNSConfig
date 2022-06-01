@@ -2,6 +2,8 @@
 import os
 import sys
 import argparse
+from operator import itemgetter
+import re
 
 # Preparing Required color codes
 
@@ -37,11 +39,11 @@ ___  ___            _           _       _____      _   _
 \_|  |_/\__,_|_| |_| |\___||___/_| |_| \____/ \___|\__|\__|\__, |
                   _/ |                                      __/ |
                  |__/                                      |___/
-##############################################################
-##                                                          ##
-##    Script credit Manjesh Setty | manjesh.n@citrix.com    ##
-##                                                          ##
-##############################################################
+#################################################################
+##                                                             ##
+##     Script credit: Manjesh Setty | manjesh.n@citrix.com     ##
+##                                                             ##
+#################################################################
 '''
 
 parser = argparse.ArgumentParser(
@@ -50,23 +52,36 @@ parser.add_argument('--author', action="store_true",
                     help=argparse.SUPPRESS)
 parser.add_argument('-i', action="store_true",
                     help="ADC Basic Information")
+parser.add_argument('-n', action="store_true",
+                    help="ADC Networking Information")
 parser.add_argument('-im', action="store_true",
+                    help="Indexing timestamp of ns.log")
+parser.add_argument('-imall', action="store_true",
                     help="Indexing timestamp of logs including ns, auth, bash, nitro, notice, nsvpn, sh")
-parser.add_argument('-a', action="store_true",
+parser.add_argument('--about', action="store_true",
                     help="About Show Script")
 args = parser.parse_args()
+
+# Set correct support bundle path
+try:
+    os.chdir("/"+"/".join(itemgetter(1, 2, 3, 4)(os.getcwd().split("/"))))
+except IndexError:
+    print("\nPlease navigate to correct support bundle path")
+    print("Available directories with support bundle names: \n\n" +
+          "\n".join(re.findall("collect.*", "\n".join(next(os.walk('.'))[1]))))
+    quit()
 
 if args.i:
     try:
         # Printing system essential details
-        os.system('clear')
+        # os.system('clear')
         print('{:-^65}\n'.format('ADC Show Configuration'))
         print("ADC Firmware version: " +
               os.popen("cat nsconfig/ns.conf | grep \"#NS\" | cut -c 2-").read().strip())
         print("Platform Serial: " +
-              os.popen("awk '/platform: serial/{print $NF;exit}' var/log/mess*").read().strip())
+              os.popen("sed -n '/^exec: show ns hardware/,/Done/p' shell/showcmds.txt | awk '/Serial/{print $NF}'").read().strip())
         print("Platform Model: " + os.popen(
-            "awk \'/ns/&&/kernel: platform: sysid/{$NF;gsub(/Appliance/,\"Virtual Appliance\",$NF); print $NF;exit}\' var/log/mess*").read().strip())
+            "sed -n '/^exec: show ns hardware/,/Done/p' shell/showcmds.txt | awk '/Platform/{print $1=\"\"; print}'").read().strip())
         print("NSIP Address: " + os.popen(
             "sed -n '/ns config/,/Done/p' shell/showcmds.txt | grep \"NetScaler IP\" | egrep -o \"[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\" | grep -v 255").read().strip() + " | " + os.popen("sed -n '/ns config/,/Done/p' shell/showcmds.txt | grep \"NetScaler IP\" | egrep -o \"[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\" | grep 255").read().strip())
         print("NS Enabled Feature: " + os.popen(
@@ -77,11 +92,21 @@ if args.i:
               os.popen("cat shell/date.out").read().strip())
         print("Device uptime: " +
               os.popen("sed 's/^.*up //' shell/uptime.out | sed 's/,...users.*//'").read().strip() + "\n")
+    except IOError as io:
+        print(io)
     finally:
         quit()
 elif args.im:
     try:
-        os.system('clear')
+        # os.system('clear')
+        print('{:-^65}\n'.format('ADC ns.log timestamp IndexMessages') + os.popen(
+            "awk \'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}\'; for i in $(printf \'%s\n\' var/log/ns.lo*); do awk \'NR == 1 {printf \"%s %s %s\\t| \", $1,$2,$3}END{printf \"%s %s %s | %s\\n\",  $1,$2,$3,ARGV[1]}\' $i; done").read().strip() + "\n")
+    finally:
+        quit()
+elif args.imall:
+    try:
+        # Printing Index messages for ns.log, auth.log, bash.log, nitro.log, notice.log, nsvpn.log, sh.log
+        # os.system('clear')
         print('{:-^65}\n'.format('ADC ns.log timestamp IndexMessages') + os.popen(
             "awk \'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}\'; for i in $(printf \'%s\n\' var/log/ns.lo*); do awk \'NR == 1 {printf \"%s %s %s\\t| \", $1,$2,$3}END{printf \"%s %s %s | %s\\n\",  $1,$2,$3,ARGV[1]}\' $i; done").read().strip() + "\n")
         print('{:-^65}\n'.format('ADC auth.log timestamp IndexMessages') + os.popen(
@@ -98,9 +123,16 @@ elif args.im:
             "awk \'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}\'; for i in $(printf \'%s\n\' var/log/sh.lo*); do awk \'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,ARGV[1]}\' $i; done").read().strip() + "\n")
     finally:
         quit()
+elif args.n:
+    try:
+        # Prining Network related information on ADC
+        print('{:-^65}\n'.format('ADC Network Interface') + os.popen(
+            "awk '/exec: show ns ip$/{flag=1;next}/Done/{flag=0}flag' shell/showcmds.txt").read().strip())
+    finally:
+        quit()
 elif args.author:
     print(showscriptauthor)
-elif args.a:
+elif args.about:
     print(showscriptabout)
 else:
     print("Please use -h for help")
