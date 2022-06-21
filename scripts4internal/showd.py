@@ -83,8 +83,8 @@ try:
     os.chdir("/"+"/".join(itemgetter(1, 2, 3, 4)(os.getcwd().split("/"))))
 except IndexError:
     print("\nPlease navigate to correct support bundle path")
-    print("Available directories with support bundle names: \n\n" +
-          "\n".join(re.findall("collect.*", "\n".join(next(os.walk('.'))[1]))))
+    print("Available directories with support bundle names: \n\n" + style.CYAN +
+          "\n".join(re.findall("collect.*", "\n".join(next(os.walk('.'))[1]))) + style.RESET)
     quit()
 
 # Assign correct files and its path to variables
@@ -101,7 +101,6 @@ try:
         if file_exists(i):
             pass
         else:
-            print("\n")
             print(style.RED +
                   "File " + i + " is missing from collector pack and script might not work fully !!" + style.RESET)
 finally:
@@ -147,14 +146,17 @@ if args.i:
                              shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         memoryinfo = sp.run(
             "awk '(/real memory/ && ORS=\" ,\") || (/avail memory/ && ORS=RS)' var/nslog/dmesg.boot | head -n1 | awk '{printf \"%s | %s\", \"Total Memory: \"$5$6, \"Available Memory: \"$11$12}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        memoryinfototal = int(memoryinfo.stdout.split()[2][:-3][1:])
-        memoryinfoavail = int(memoryinfo.stdout.split()[6][:-3][1:])
-        memfreepercent = (memoryinfoavail / memoryinfototal)*100
-        memfreepercent = round(memfreepercent, 2)
         varsize = sp.run(
             "awk '/\/var/{printf \"%s -> %s | %s | %s | %s\", $1,\"Total: \"$2,\"Used: \"$3, \"Free: \"$4, \"Capacity Used: \"substr($5, 1, length($5)-1)}' shell/df-akin.out | awk '{if ($NF > 75){printf \"%s\", substr($0, 1, length($0)-2)\"\033[0;31m\"$NF\"%\033[0m\"}else{printf \"%s\", substr($0, 1, length($0)-2)\"\033\[0;32m\"$NF\"%\033[0m\"}}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         nsppe = sp.run("awk '/NSPPE/{c++}END{print c}' shell/nsp.out",
                        shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        if len(memoryinfo.stdout) > 0:
+            memoryinfototal = int(memoryinfo.stdout.split()[2][:-3][1:])
+            memoryinfoavail = int(memoryinfo.stdout.split()[6][:-3][1:])
+            memfreepercent = (memoryinfoavail / memoryinfototal)*100
+            memfreepercent = round(memfreepercent, 2)
+        else:
+            pass
     except IOError as io:
         print(io)
     finally:
@@ -174,40 +176,95 @@ if args.i:
         print("Device uptime: " + deviceuptime.stdout.strip())
         print("CPU Info: " + cpuinfo.stdout.strip())
         print("Load Average: " + loadaverage.stdout.strip())
-        if memfreepercent > 40:
-            print("Memory Info: " + memoryinfo.stdout.strip() +
-                  " Free: " + style.GREEN + str(memfreepercent) + "%" + style.RESET)
-        else:
-            print("Memory Info: " + memoryinfo.stdout.strip() +
-                  " Free: " + style.RED + str(memfreepercent) + "%" + style.RESET)
+        try:
+            if memfreepercent > 40:
+                print("Memory Info: " + memoryinfo.stdout.strip() +
+                      " Free Percent: " + style.GREEN + str(memfreepercent) + "%" + style.RESET)
+            else:
+                print("Memory Info: " + memoryinfo.stdout.strip() +
+                      " Free Percent: " + style.RED + str(memfreepercent) + "%" + style.RESET)
+        except NameError:
+            pass
         print("var Size: " + varsize.stdout.strip())
         print("NSPPE Count: " + nsppe.stdout.strip() + "\n")
         quit()
 elif args.im:
     try:
         logger.info(os.getcwd() + " - show -im")
-        print(style.YELLOW + '{:-^65}\n'.format('ADC ns.log timestamp IndexMessages') + style.RESET + os.popen(
-            "awk \'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}\'; for i in $(printf \'%s\n\' var/log/ns.lo*); do awk \'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,ARGV[1]}\' $i; done").read().strip() + "\n")
+        try:
+            nslog = sp.run(
+                "awk \'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}\'; for i in $(printf \'%s\n\' var/log/ns.lo*); do awk \'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}\' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        finally:
+            if nslog.returncode == 0:
+                print(style.YELLOW +
+                      '{:-^65}\n'.format('ADC ns.log timestamp IndexMessages') + style.RESET + nslog.stdout)
+            else:
+                print(
+                    style.RED + '{:-^65}\n'.format('Unable to read ns.log') + style.RESET)
     finally:
         quit()
 elif args.imall:
     try:
         logger.info(os.getcwd() + " - show -imall")
         # Printing Index messages for ns.log, auth.log, bash.log, nitro.log, notice.log, nsvpn.log, sh.log
-        print(style.YELLOW + '{:-^65}\n'.format('ADC ns.log timestamp IndexMessages') + style.RESET + os.popen(
-            "awk \'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}\'; for i in $(printf \'%s\n\' var/log/ns.lo*); do awk \'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,ARGV[1]}\' $i; done").read().strip() + "\n")
-        print(style.YELLOW + '{:-^65}\n'.format('ADC auth.log timestamp IndexMessages') + style.RESET + os.popen(
-            "awk \'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}\'; for i in $(printf \'%s\n\' var/log/auth.lo*); do awk \'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,ARGV[1]}\' $i; done").read().strip() + "\n")
-        print(style.YELLOW + '{:-^65}\n'.format('ADC bash.log timestamp IndexMessages') + style.RESET + os.popen(
-            "awk \'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}\'; for i in $(printf \'%s\n\' var/log/bash.lo*); do awk \'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,ARGV[1]}\' $i; done").read().strip() + "\n")
-        print(style.YELLOW + '{:-^65}\n'.format('ADC nitro.log timestamp IndexMessages') + style.RESET + os.popen(
-            "awk \'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}\'; for i in $(printf \'%s\n\' var/log/nitro.lo*); do awk \'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,ARGV[1]}\' $i; done").read().strip() + "\n")
-        print(style.YELLOW + '{:-^65}\n'.format('ADC notice.log timestamp IndexMessages') + style.RESET + os.popen(
-            "awk \'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}\'; for i in $(printf \'%s\n\' var/log/notice.lo*); do awk \'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,ARGV[1]}\' $i; done").read().strip() + "\n")
-        print(style.YELLOW + '{:-^65}\n'.format('ADC nsvpn.log timestamp IndexMessages') + style.RESET + os.popen(
-            "awk \'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}\'; for i in $(printf \'%s\n\' var/log/nsvpn.lo*); do awk \'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,ARGV[1]}\' $i; done").read().strip() + "\n")
-        print(style.YELLOW + '{:-^65}\n'.format('ADC sh.log timestamp IndexMessages') + style.RESET + os.popen(
-            "awk \'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}\'; for i in $(printf \'%s\n\' var/log/sh.lo*); do awk \'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,ARGV[1]}\' $i; done").read().strip() + "\n")
+        try:
+            nslog = sp.run(
+                "awk \'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}\'; for i in $(printf \'%s\n\' var/log/ns.lo*); do awk \'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}\' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+            authlog = sp.run(
+                "awk \'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}\'; for i in $(printf \'%s\n\' var/log/auth.lo*); do awk \'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}\' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+            bashlog = sp.run(
+                "awk \'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}\'; for i in $(printf \'%s\n\' var/log/bash.lo*); do awk \'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}\' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+            nitrolog = sp.run(
+                "awk \'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}\'; for i in $(printf \'%s\n\' var/log/nitro.lo*); do awk \'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}\' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+            noticelog = sp.run(
+                "awk \'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}\'; for i in $(printf \'%s\n\' var/log/notice.lo*); do awk \'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}\' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+            nsvpnlog = sp.run(
+                "awk \'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}\'; for i in $(printf \'%s\n\' var/log/nsvpn.lo*); do awk \'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}\' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+            shlog = sp.run(
+                "awk \'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}\'; for i in $(printf \'%s\n\' var/log/sh.lo*); do awk \'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}\' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        finally:
+            if nslog.returncode == 0:
+                print(style.YELLOW +
+                      '{:-^65}\n'.format('ADC ns.log timestamp IndexMessages') + style.RESET + nslog.stdout)
+            else:
+                print(
+                    style.RED + '{:-^65}\n'.format('Unable to read ns.log') + style.RESET)
+            if authlog.returncode == 0:
+                print(style.YELLOW +
+                      '{:-^65}\n'.format('ADC auth.log timestamp IndexMessages') + style.RESET + authlog.stdout)
+            else:
+                print(
+                    style.RED + '{:-^65}\n'.format('Unable to read auth.log') + style.RESET)
+            if bashlog.returncode == 0:
+                print(style.YELLOW +
+                      '{:-^65}\n'.format('ADC bash.log timestamp IndexMessages') + style.RESET + bashlog.stdout)
+            else:
+                print(
+                    style.RED + '{:-^65}\n'.format('Unable to read bash.log') + style.RESET)
+            if nitrolog.returncode == 0:
+                print(style.YELLOW +
+                      '{:-^65}\n'.format('ADC nitro.log timestamp IndexMessages') + style.RESET + nitrolog.stdout)
+            else:
+                print(
+                    style.RED + '{:-^65}\n'.format('Unable to read nitro.log') + style.RESET)
+            if noticelog.returncode == 0:
+                print(style.YELLOW +
+                      '{:-^65}\n'.format('ADC notice.log timestamp IndexMessages') + style.RESET + noticelog.stdout)
+            else:
+                print(
+                    style.RED + '{:-^65}\n'.format('Unable to read notice.log') + style.RESET)
+            if nsvpnlog.returncode == 0:
+                print(style.YELLOW +
+                      '{:-^65}\n'.format('ADC nsvpn.log timestamp IndexMessages') + style.RESET + nsvpnlog.stdout)
+            else:
+                print(
+                    style.RED + '{:-^65}\n'.format('Unable to read nsvpn.log') + style.RESET)
+            if shlog.returncode == 0:
+                print(style.YELLOW +
+                      '{:-^65}\n'.format('ADC sh.log timestamp IndexMessages') + style.RESET + shlog.stdout)
+            else:
+                print(
+                    style.RED + '{:-^65}\n'.format('Unable to read sh.log') + style.RESET)
     finally:
         quit()
 elif args.n:
@@ -252,9 +309,15 @@ elif args.stat:
 elif args.gz:
     try:
         logger.info(os.getcwd() + " - show -gz")
-        print(style.YELLOW + '{:-^65}\n'.format('Gunzip all .gz files under /var/log') + style.RESET + os.popen(
-            "gunzip var/log/*.gz").read().strip() + "\n")
+        gunzipresult = sp.run("gunzip var/log/*.gz", shell=True,
+                              text=True, stdout=sp.PIPE, stderr=sp.PIPE)
     finally:
+        if gunzipresult == 0:
+            print(style.YELLOW +
+                  '{:-^65}\n'.format('Gunzip all .gz files under /var/log') + style.RESET + "\n")
+            print(style.GREEN + "Extracted all files !!!" + style.RESET)
+        else:
+            print(style.RED + "Nothing to do here in var/log" + style.RESET)
         quit()
 elif args.author:
     logger.info(os.getcwd() + " - author")
