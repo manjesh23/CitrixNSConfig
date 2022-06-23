@@ -64,6 +64,7 @@ parser.add_argument('-im', action="store_true",
                     help="Indexing timestamp of ns.log")
 parser.add_argument('-imall', action="store_true",
                     help="Indexing timestamp of logs including ns, auth, bash, nitro, notice, nsvpn, sh")
+parser.add_argument('-error', metavar="", help="Highlights known errors")
 parser.add_argument('-show', metavar="", help="Selected Show Commands")
 parser.add_argument('-stat', metavar="", help="Selected Stat Commands")
 parser.add_argument('--about', action="store_true",
@@ -193,7 +194,7 @@ elif args.im:
         logger.info(os.getcwd() + " - show -im")
         try:
             nslog = sp.run(
-                "awk \'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}\'; for i in $(printf \'%s\n\' var/log/ns.lo*); do awk \'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}\' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                "awk \'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}\'; for i in $(printf \'%s\n\' var/log/ns.lo*); do awk \'NR == 2 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}\' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         finally:
             if nslog.returncode == 0:
                 print(style.YELLOW +
@@ -209,7 +210,7 @@ elif args.imall:
         # Printing Index messages for ns.log, auth.log, bash.log, nitro.log, notice.log, nsvpn.log, sh.log
         try:
             nslog = sp.run(
-                "awk \'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}\'; for i in $(printf \'%s\n\' var/log/ns.lo*); do awk \'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}\' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                "awk \'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}\'; for i in $(printf \'%s\n\' var/log/ns.lo*); do awk \'NR == 2 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}\' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
             authlog = sp.run(
                 "awk \'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}\'; for i in $(printf \'%s\n\' var/log/auth.lo*); do awk \'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}\' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
             bashlog = sp.run(
@@ -309,15 +310,25 @@ elif args.stat:
 elif args.gz:
     try:
         logger.info(os.getcwd() + " - show -gz")
-        gunzipresult = sp.run("gunzip var/log/*.gz", shell=True,
-                              text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        gunzipresult = sp.run("gunzip -v var/log/*.gz",
+                              shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
     finally:
-        if gunzipresult == 0:
+        if gunzipresult.returncode == 0:
             print(style.YELLOW +
-                  '{:-^65}\n'.format('Gunzip all .gz files under /var/log') + style.RESET + "\n")
+                  '{:-^65}\n'.format('Gunzip all .gz files under /var/log') + style.RESET)
+            print(style.YELLOW + str(gunzipresult.stderr.decode('utf-8')) + style.RESET)
             print(style.GREEN + "Extracted all files !!!" + style.RESET)
         else:
-            print(style.RED + "Nothing to do here in var/log" + style.RESET)
+            print(style.RED + "Nothing to do here in var/log/" + style.RESET)
+        quit()
+elif args.error:
+    try:
+        nslogerror = sp.run(
+            "awk '/ERROR|err|down|disconnect|fail/{print \"\033[0;31m\"$0\"\033[0m\";next}{print $0}' var/log/ns.log", shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
+
+    finally:
+        print(sp.run("if test -f var/log/" + args.error +
+              "; then awk '/ERROR|err|down|disconnect|fail/{print \"\033[0;31m\"$0\"\033[0m\";next}{print $0}' var/log/" + args.error + "; else echo \"File not found\"; fi", shell=True).stdout)
         quit()
 elif args.author:
     logger.info(os.getcwd() + " - author")
