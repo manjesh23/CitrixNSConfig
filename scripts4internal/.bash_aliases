@@ -1,9 +1,12 @@
 # Datad alias
 alias datad="source /home/CITRITE/manjeshn/manscript/datad.sh"
 
-# Show script alias
+# conFetch alias
 alias show="python /home/CITRITE/manjeshn/manscript/show.py"
 alias showd="python /home/CITRITE/manjeshn/manscript/showd.py"
+
+# bigCap alias
+alias bigcap="python /home/CITRITE/manjeshn/manscript/bigcap.py"
 
 # My style of tshoot
 alias ll="ls -lah"

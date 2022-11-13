@@ -1,5 +1,6 @@
 #!/usr/local/bin/python3.7
 from asyncio import subprocess
+from asyncore import read
 import os
 import subprocess as sp
 import logging
@@ -7,9 +8,10 @@ import argparse
 from operator import itemgetter
 import re
 from os.path import exists as file_exists
-import requests
+from urllib import request, parse
 import json
 import ast
+import time
 
 # Preparing Required color codes
 
@@ -17,7 +19,9 @@ import ast
 class style():
     BLACK = '\033[30m'
     RED = '\033[31m'
+    LIGHTRED = '\033[0;91m'
     GREEN = '\033[32m'
+    LIGHTGREEN = '\033[0;92m'
     YELLOW = '\033[33m'
     BLUE = '\033[34m'
     MAGENTA = '\033[35m'
@@ -29,10 +33,22 @@ class style():
 
 # About script
 showscriptabout = '''
-Note -- Please do not use this script if you are not sure of what you are doing.
-Product -- Only for Citrix TAC Use.
-Unauthorized usage of this script / sharing for personal use will be considered as offence.
-This script is designed to extract data from support bundle -- "script based troubleshooting".
+
+  ____            _           _                     _____    _       _     
+ |  _ \ _ __ ___ (_) ___  ___| |_    ___ ___  _ __ |  ___|__| |_ ___| |__  
+ | |_) | '__/ _ \| |/ _ \/ __| __|  / __/ _ \| '_ \| |_ / _ \ __/ __| '_ \ 
+ |  __/| | | (_) | |  __/ (__| |_  | (_| (_) | | | |  _|  __/ || (__| | | |
+ |_|   |_|  \___// |\___|\___|\__|  \___\___/|_| |_|_|  \___|\__\___|_| |_|
+               |__/                                                        
+               
+######################################################################################################
+##                                                                                                  ##
+##   Note -- Please do not use this script if you are not sure of what you are doing.               ##
+##   Product -- Only for Citrix NetScaler TAC Use.                                                  ##
+##   Unauthorized usage of this script / sharing for personal use will be considered as offence.    ##
+##   This script is designed to extract data from support bundle -- "script based troubleshooting". ##
+##                                                                                                  ##
+######################################################################################################
 '''
 
 # About Author
@@ -52,18 +68,10 @@ ___  ___            _           _       _____      _   _
 #################################################################
 '''
 
-# Citrix Analyzer
-citrixanalyzer = '''                                                                                                                                 
-             ,,                   ,,                                                      ,,                                     
-  .g8"""bgd  db   mm              db                       db                           `7MM                                     
-.dP'     `M       MM                                      ;MM:                            MM                                     
-dM'       ``7MM mmMMmm `7Mb,od8 `7MM  `7M'   `MF'        ,V^MM.    `7MMpMMMb.   ,6"Yb.    MM `7M'   `MF',pP"Ybd  .gP"Ya `7Mb,od8 
-MM           MM   MM     MM' "'   MM    `VA ,V'         ,M  `MM      MM    MM  8)   MM    MM   VA   ,V  8I   `" ,M'   Yb  MM' "' 
-MM.          MM   MM     MM       MM      XMX           AbmmmqMA     MM    MM   ,pm9MM    MM    VA ,V   `YMMMa. 8M""""""  MM     
-`Mb.     ,'  MM   MM     MM       MM    ,V' VA.        A'     VML    MM    MM  8M   MM    MM     VVV    L.   I8 YM.    ,  MM     
-  `"bmmmd' .JMML. `Mbmo.JMML.   .JMML..AM.   .MA.    .AMA.   .AMMA..JMML  JMML.`Moo9^Yo..JMML.   ,V     M9mmmP'  `Mbmmd'.JMML.   
-                                                                                                ,V                               
-                                                                                             OOb"                                '''
+# tooltrack data
+url = 'https://tooltrack.deva.citrite.net/use/conFetch'
+headers = {'Content-Type': 'application/json'}
+version = "2.7.0"
 
 # Parser args
 parser = argparse.ArgumentParser(
@@ -78,6 +86,8 @@ parser.add_argument('-p', action="store_true",
                     help="ADC Process Related Information")
 parser.add_argument('-E', action="store_true",
                     help="Match well known error with KB articles")
+parser.add_argument('-fu', action="store_true",
+                    help="Display Latest RTM Firmware Code")
 parser.add_argument('-gz', action="store_true",
                     help="Unzip *.gz files under /var/log and vsr/nslog")
 parser.add_argument('-im', action="store_true",
@@ -87,6 +97,11 @@ parser.add_argument('-imall', action="store_true",
 parser.add_argument('-error', metavar="", help="Highlights known errors")
 parser.add_argument('-show', metavar="", help="Selected Show Commands")
 parser.add_argument('-stat', metavar="", help="Selected Stat Commands")
+parser.add_argument('-vip', action="store_true", help="Get VIP Basic Details")
+parser.add_argument('-case', action="store_true",
+                    help=argparse.SUPPRESS)
+parser.add_argument('-ha', action="store_true",
+                    help=argparse.SUPPRESS)
 parser.add_argument('--about', action="store_true",
                     help="About Show Script")
 args = parser.parse_args()
@@ -99,35 +114,6 @@ logging.basicConfig(filename=userfile,
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
-# Get SFDC API Keys
-try:
-    sfdcurl = "https://ftltoolswebapi.deva.citrite.net/sfaas/api/salesforce"
-    tokenpayload = {"feature": "login", "parameters": [{"name": "tokenuri", "value": "https://login.salesforce.com/services/oauth2/token", "isbase64": "false"}]
-                    }
-    headers = {"Content-type": "application/json"}
-    sfdctoken = requests.post(sfdcurl, data=json.dumps(
-        tokenpayload), headers=headers).json()["options"][0]["values"][0]
-except:
-    print(style.RED + "Unable to get SFDC Token" + style.RESET)
-
-# Get case number from path
-try:
-    casenum = os.popen("pwd").read().split("/")[3]
-except IndexError:
-    print(style.RED + "Unable to get case number from your current working directory" + style.RESET)
-
-# Get CaseAge and Entitlement Details
-try:
-    finaldata = requests.post(sfdcurl, data=json.dumps(
-        {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "EntitlementId,Age__c", "isbase64": "false"}, {
-            "name": "tablename", "value": "Case", "isbase64": "false"}, {"name": "selectcondition", "value": "CaseNumber = '"+casenum+"'", "isbase64": "false"}]}), headers=headers).json()["options"][0]["values"][0]
-    EntitlementId = ast.literal_eval(finaldata)["EntitlementId"]
-    CaseAge = str(ast.literal_eval(finaldata)["Age__c"])
-    Entitlement_EndDate = ast.literal_eval(requests.post(sfdcurl, data=json.dumps(
-        {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {
-            "name": "selectfields", "value": "EndDate", "isbase64": "false"}, {"name": "tablename", "value": "Entitlement", "isbase64": "false"}, {"name": "selectcondition", "value": "Id = '"+EntitlementId+"'", "isbase64": "false"}]}), headers=headers).json()["options"][0]["values"][0])["EndDate"]
-finally:
-    print(Entitlement_EndDate + CaseAge)
 # Set correct support bundle path
 try:
     if (os.popen("pwd").read().index("collector") >= 0):
@@ -137,6 +123,10 @@ except ValueError:
     print("\nPlease navigate to correct support bundle path")
     print("Available directories with support bundle names: \n\n" + style.CYAN +
           "\n".join(re.findall("collect.*", "\n".join(next(os.walk('.'))[1]))) + style.RESET)
+    payload = {"version": version, "user": username, "action": "Out of Support Bundle --> " + os.getcwd() + " --> " + str(int(time.time())),
+               "runtime": 0, "result": "Partial", "format": "string", "sr": os.getcwd().split("/")[3]}
+    resp = request.urlopen(request.Request(
+        url, data=parse.urlencode(payload).encode()))
     quit()
 
 # Assign correct files and its path to variables
@@ -147,8 +137,9 @@ try:
     sysctl = "shell/sysctl-a.out"
     uptime = "shell/uptime.out"
     df = "shell/df-akin.out"
+    dmesgboot = "var/nslog/dmesg.boot"
     allrequiredfiles = [nsconf] + [showcmd] + \
-        [statcmd] + [sysctl] + [uptime] + [df]
+        [statcmd] + [sysctl] + [uptime] + [df] + [dmesgboot]
     for i in allrequiredfiles:
         if file_exists(i):
             pass
@@ -170,21 +161,24 @@ if args.i:
             "sed -n -e \"/show ns version/I,/Done/p\" shell/showcmds.txt | grep Node | awk -F':' '{print $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         adcfirmware = sp.run("cat shell/ns_running_config.conf | grep \"#NS\" | cut -c 2-",
                              shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        firmwarehistory = sp.run(
+            "awk -F'NetScaler' 'BEGIN{nores=1;}/upgrade from NetScaler/{if ($0 ~ \"build\") history=$2; nores=0} END {if (nores) print \"None found recently\"; else print history}' shell/dmesg-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        nsinstall = sp.run(
+            "awk '/VERSION/||/_TIME/{$1=\"\"; printf \"%s -->\", $0}' var/nsinstall/installns_state | sed -E 's/^\s|[0-9]{9,15}.|-->$//g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         platformserial = sp.run(
             "sed -n '/^exec: show ns hardware/,/Done/p' shell/showcmds.txt | awk '/Serial/{print $NF}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         platformmodel = sp.run(
             "sed -n '/^exec: show ns hardware/,/Done/p' shell/showcmds.txt | awk '/Platform/{print $1=\"\"; print}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         licmodel = sp.run("awk '/Users/{print}' var/log/license.log | awk -F: '{print $1}' | awk '{printf \"%s | \", $NF}' | sed 's/..$//'",
                           shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        hwplatform = sp.run("awk '/platform/{$1=\"\"; print}' shell/sysctl-a.out | awk -F',' '/manufactured/{print $1}' | head -n1",
+        hwplatform = sp.run("egrep \"netscaler.descr\" shell/sysctl-a.out | awk -F':' '{print $2}'",
                             shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        vmplatform = sp.run("awk '/^platform.* on/{$1=\"\"; print}' shell/sysctl-a.out | head -n1",
+        vmplatform = sp.run("egrep \"platform\" var/nslog/dmesg.boot | head -2 | tail -1 | awk -F':' '{if ($2 ~ \"bios\") print \"No Hypervisor found\"; else print $2}'",
                             shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         licensetype = sp.run("awk '/License Type/{$1=$2=\"\"; print}' shell/showcmds.txt",
                              shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         licensemode = sp.run(
             "awk '/Licensing mode/{$1=$2=\"\"; print}' shell/showcmds.txt", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        #nsipsub = sp.run("sed -n -e \"/exec: show ns version/I,/Done/ p\" shell/showcmds.txt | grep mask | awk -FIP: '{print $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         nsip = sp.run(
             "sed -n '/ns config/,/Done/p' shell/showcmds.txt | grep \"NetScaler IP\" | egrep -o \"[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\" | grep -v 255", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         nsipsubnet = sp.run(
@@ -193,6 +187,8 @@ if args.i:
                             shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         nsmode = sp.run("awk '/ns mode/{$1=$2=$3=\"\";print $0}' nsconfig/ns.conf",
                         shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        nsboottime = sp.run(
+            "egrep \"nsstart\" var/nslog/ns.log | tail -1 | awk '{$1=$NF=$(NF-1)=\"\"; print}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         collectorpacktime = sp.run(
             "cat shell/date.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         deviceuptime = sp.run("sed 's/^.*up //' shell/uptime.out | sed 's/,...user.*//'",
@@ -229,6 +225,8 @@ if args.i:
         print("ADC Hostname: " + adchostname.stdout.strip())
         print("ADC HA State: " + adcha.stdout.strip())
         print("ADC Firmware version: " + adcfirmware.stdout.strip())
+        print("Firmware history: " + firmwarehistory.stdout.strip())
+        print("Last Upgrade Stats: " + nsinstall.stdout.strip())
         print("")
         print("Platform Serial: " + platformserial.stdout.strip())
         print("Platform Model: " + platformmodel.stdout.strip())
@@ -243,6 +241,7 @@ if args.i:
               " | " + nsipsubnet.stdout.strip())
         print("NS Enabled Feature: " + nsfeatures.stdout.strip())
         print("NS Enabled Mode: " + nsmode.stdout.strip())
+        print("NS Last Boot Time: " + nsboottime.stdout.strip())
         print("Device uptime: " + deviceuptime.stdout.strip())
         print("")
         print("CPU Info: " + cpuinfo.stdout.strip())
@@ -259,6 +258,11 @@ if args.i:
         print("var Size: " + varsize.stdout.strip())
         print("SSL Cards: " + sslcards.stdout.strip())
         print("NSPPE Count: " + nsppe.stdout.strip() + "\n")
+        # Tooltrack
+        payload = {"version": version, "user": username, "action": "show -i --> " + os.getcwd() + " --> " + str(int(time.time())),
+                   "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(
+            url, data=parse.urlencode(payload).encode()))
         quit()
 elif args.n:
     try:
@@ -291,16 +295,28 @@ elif args.n:
         else:
             print(
                 style.RED + '{:-^87}\n'.format('Unable to read ARP Table') + style.RESET)
+        payload = {"version": version, "user": username, "action": "show -n --> " + os.getcwd() + " --> " + str(
+            int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(
+            url, data=parse.urlencode(payload).encode()))
         quit()
 elif args.p:
     try:
         logger.info(os.getcwd() + " - show -p")
         vcpu = sp.run("awk '/System Detected/{print $(NF-1), $NF;exit}' var/nslog/dmesg.boot",
                       shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        core = sp.run("awk '/NSPPE-/&&!/gz/{printf \"[%s-%s/%s --> %s --> %s]\\n\",  $6, $7, $8, $NF, $5}' shell/ls_lRtrp_var.out",
+                      shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
     finally:
         print(style.YELLOW + '{:-^87}'.format('ADC Process Information'))
         print(style.RESET)
-        print("Number of vCPU: " + vcpu.stdout)
+        print("Number of vCPU: " + vcpu.stdout.strip())
+        print("Core files: " + "\n" + core.stdout.strip())
+        print("")
+    payload = {"version": version, "user": username, "action": "show -p --> " + os.getcwd() + " --> " + str(
+        int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+    resp = request.urlopen(request.Request(
+        url, data=parse.urlencode(payload).encode()))
 elif args.E:
     try:
         print(style.YELLOW +
@@ -309,10 +325,73 @@ elif args.E:
             "for i in $(ls -lah var/log/ | awk '/ns.lo*/{print $NF}'); do awk 'BEGIN{c=0}/\"ERROR: Operation not permitted - no FIPS card present in the system\"/{c++}END {if(c > 0){printf \"%s\\t%s\\t%s\\t%s\\n\", ARGV[1], c, \"ERROR: Operation not permitted - no FIPS card present in the system\", \"https://support.citrix.com/article/CTX330685\"}}' var/log/$i; done").read().strip())
         print("\n")
     finally:
+        payload = {"version": version, "user": username, "action": "show -E --> " + os.getcwd() + " --> " + str(
+            int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(
+            url, data=parse.urlencode(payload).encode()))
         quit()
+elif args.fu:
+    try:
+        logger.info(os.getcwd() + " - show -fu")
+        adcfirmwareRTM = sp.run(
+            "curl -s 'https://www.citrix.com/downloads/citrix-adc/' | egrep -C2 \"<a href=\\\"\/downloads\/citrix-adc.*\" | awk '/citrix-adc|\/p/{print}' | paste - - | sed -E 's/<\/.|<a href=|\\\"|NEW/ /g' | awk -F'>' '{printf \"%s|%s\\n\", $3, $2}' | awk '{$1=$1};1' | sed -E 's-\| \|- \|-g' | column -t -s'|' | sort -k4n -k2M -k3n", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip().replace('\n\n', '\n')
+        admadcfirmwareRTM = sp.run(
+            "curl -s 'https://www.citrix.com/downloads/citrix-application-management/' | egrep -C2 \"<a href=\\\"\/downloads\/citrix-application-management.*\" | awk '/citrix-application-management|\/p/{print}' | paste - - | sed -E 's/<\/.|<a href=|\\\"|NEW/ /g' | awk -F'>' '{printf \"%s|%s\\n\", $3, $2}' | awk '{$1=$1};1' | sed -E 's-\| \|- \|-g' | column -t -s'|' | sort -k4n -k2M -k3n", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip().replace('\n\n', '\n')
+    finally:
+        # ADC Release
+        print(style.YELLOW +
+              '{:-^87}'.format('ADC Released RTM Code Version and Date') + style.RESET+"\n")
+        print(style.YELLOW +
+              '{:-^87}'.format('ADC Release Feature Phase Code Details') + style.RESET+"\n")
+        for adcrelease in adcfirmwareRTM.splitlines():
+            if "ADC Release" in adcrelease and "Feature Phase" in adcrelease:
+                print(style.LIGHTGREEN + adcrelease + style.RESET)
+        print("\n")
+        print(style.YELLOW +
+              '{:-^87}'.format('ADC Release Maintenance Phase Code Details') + style.RESET+"\n")
+        for adcrelease in adcfirmwareRTM.splitlines():
+            if "ADC Release" in adcrelease and "Maintenance Phase" in adcrelease:
+                print(style.LIGHTRED + adcrelease + style.RESET)
+        print("\n")
+        # ADM Release
+        print(style.YELLOW +
+              '{:-^87}'.format('ADM Released RTM Code Version and Date') + style.RESET+"\n")
+        print(style.YELLOW +
+              '{:-^87}'.format('ADM Release Feature Phase Code Details') + style.RESET+"\n")
+        for admrelease in admadcfirmwareRTM.splitlines():
+            if "ADM Release" in admrelease and "Feature Phase" in admrelease:
+                print(style.LIGHTGREEN + admrelease + style.RESET)
+        print("\n")
+        print(style.YELLOW +
+              '{:-^87}'.format('ADM Release Maintenance Phase Code Details') + style.RESET+"\n")
+        for admrelease in admadcfirmwareRTM.splitlines():
+            if "ADM Release" in admrelease and "Maintenance Phase" in admrelease:
+                print(style.LIGHTRED + admrelease + style.RESET)
+        print("\n")
+        # SDX Release
+        print(style.YELLOW +
+              '{:-^87}'.format('SDX Released RTM Code Version and Date') + style.RESET+"\n")
+        print(style.YELLOW +
+              '{:-^87}'.format('SDX Bundle Feature Phase Code Details') + style.RESET+"\n")
+        for sdxrelease in adcfirmwareRTM.splitlines():
+            if "SDX Bundle" in sdxrelease and "Feature Phase" in sdxrelease:
+                print(style.LIGHTGREEN + sdxrelease + style.RESET)
+        print("\n")
+        print(style.YELLOW +
+              '{:-^87}'.format('SDX Bundle Maintenance Phase Code Details') + style.RESET+"\n")
+        for sdxrelease in adcfirmwareRTM.splitlines():
+            if "SDX Bundle" in sdxrelease and "Maintenance Phase" in sdxrelease:
+                print(style.LIGHTRED + sdxrelease + style.RESET)
+        payload = {"version": version, "user": username, "action": "show -fu --> " + os.getcwd() + " --> " + str(
+            int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(
+            url, data=parse.urlencode(payload).encode()))
 elif args.gz:
     try:
         logger.info(os.getcwd() + " - show -gz")
+        # Fix permission
+        sp.run("fixperms ./",
+               shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
         # Unzip all gz files under ./var/log
         gunzipresult = sp.run("gunzip -v var/log/*.gz",
                               shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
@@ -335,6 +414,10 @@ elif args.gz:
             print(style.GREEN + "Extracted all files var/nslog!!!" + style.RESET)
         else:
             print(style.RED + "Nothing to do here in var/nslog/" + style.RESET)
+        payload = {"version": version, "user": username, "action": "show -gz --> " + os.getcwd() + " --> " + str(
+            int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(
+            url, data=parse.urlencode(payload).encode()))
         quit()
 elif args.im:
     try:
@@ -350,6 +433,10 @@ elif args.im:
                 print(
                     style.RED + '{:-^87}\n'.format('Unable to read ns.log') + style.RESET)
     finally:
+        payload = {"version": version, "user": username, "action": "show -im --> " + os.getcwd() + " --> " + str(
+            int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(
+            url, data=parse.urlencode(payload).encode()))
         quit()
 elif args.imall:
     try:
@@ -422,6 +509,10 @@ elif args.imall:
                 print(
                     style.RED + '{:-^87}\n'.format('Unable to read newnslog') + style.RESET)
     finally:
+        payload = {"version": version, "user": username, "action": "show -imall --> " + os.getcwd() + " --> " + str(
+            int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(
+            url, data=parse.urlencode(payload).encode()))
         quit()
 elif args.error:
     try:
@@ -430,29 +521,175 @@ elif args.error:
         print(sp.run("if test -f var/log/" + args.error +
               "; then awk '/ERROR|err|Err|down|disconnect|fail/{print \"\033[1;31m\"$0\"\033[0m\";next}{print $0}' var/log/" + args.error + "; else echo \"File not found\"; fi", shell=True).stdout)
     finally:
+        payload = {"version": version, "user": username, "action": "show -error --> " + args.error + " --> " + os.getcwd() + " --> " + str(
+            int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(
+            url, data=parse.urlencode(payload).encode()))
         quit()
 elif args.show:
     try:
         logger.info(os.getcwd() + " - show -show - " + args.show)
-        # Prining show command output from file shell/statcmd.txt | Try without show
-        print(os.popen("sed -nr \"/^exec: show " + args.show +
-              "/,/Done/p\" shell/showcmds.txt").read().strip())
+        # Prining show command output from file shell/showcmds.txt | Try without show
+        showout = os.popen("sed -nr \"/^exec: show " + args.show +
+                           "/,/Done/p\" shell/showcmds.txt").read().strip()
+        if len(showout) < 1:
+            print(
+                style.RED + "Incorrect show command. Please use the below available match...\n" + style.RESET)
+            showsuggest = os.popen("cat shell/showcmds.txt | grep exec | grep -i " + "\"" +
+                                   args.show + "\"" + " | awk '{$1=$2=\"\"}1' | cut -c3-").read().strip()
+            if len(showsuggest) < 1:
+                print(style.RED + "No matching show command found." + style.RESET)
+                payload = {"version": version, "user": username, "action": "show -show " + args.show + " --> " + os.getcwd() + " --> " + str(
+                    int(time.time())), "runtime": 0, "result": "Failed", "format": "string", "sr": os.getcwd().split("/")[3]}
+                resp = request.urlopen(request.Request(
+                    url, data=parse.urlencode(payload).encode()))
+            else:
+                print(style.CYAN + os.popen("cat shell/showcmds.txt | grep exec | grep -i " + "\"" +
+                                            args.show + "\"" + " | awk '{$1=$2=\"\"}1' | cut -c3-").read().strip() + style.RESET)
+                payload = {"version": version, "user": username, "action": "show -show " + args.show + " --> " + os.getcwd() + " --> " + str(
+                    int(time.time())), "runtime": 0, "result": "Partial", "format": "string", "sr": os.getcwd().split("/")[3]}
+                resp = request.urlopen(request.Request(
+                    url, data=parse.urlencode(payload).encode()))
+        else:
+            print(showout)
+            payload = {"version": version, "user": username, "action": "show -show " + args.show + " --> " + os.getcwd() + " --> " + str(
+                int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+            resp = request.urlopen(request.Request(
+                url, data=parse.urlencode(payload).encode()))
     finally:
         quit()
 elif args.stat:
     try:
         logger.info(os.getcwd() + " - show -stat - " + args.stat)
-        # Prining stat command output from file shell/showcmd.txt | Try without show
-        print(os.popen("sed -nr \"/^exec: stat " + args.stat +
-              "/,/Done/p\" shell/statcmds.txt").read().strip())
+        # Prining stat command output from file shell/statcmds.txt | Try without stat
+        statout = os.popen("sed -nr \"/^exec: stat " + args.stat +
+                           "/,/Done/p\" shell/statcmds.txt").read().strip()
+        if len(statout) < 1:
+            print(
+                style.RED + "Incorrect stat command. Please use the below available match...\n" + style.RESET)
+            statsuggest = os.popen("cat shell/statcmds.txt | grep exec | grep -i " + "\"" +
+                                   args.stat + "\"" + " | awk '{$1=$2=\"\"}1' | cut -c3-").read().strip()
+            if len(statsuggest) < 1:
+                print(style.RED + "No matching stat command found." + style.RESET)
+                payload = {"version": version, "user": username, "action": "show -stat " + args.stat + " --> " + os.getcwd() + " --> " + str(
+                    int(time.time())), "runtime": 0, "result": "Failed", "format": "string", "sr": os.getcwd().split("/")[3]}
+                resp = request.urlopen(request.Request(
+                    url, data=parse.urlencode(payload).encode()))
+            else:
+                print(style.CYAN + os.popen("cat shell/statcmds.txt | grep exec | grep -i " + "\"" +
+                                            args.stat + "\"" + " | awk '{$1=$2=\"\"}1' | cut -c3-").read().strip() + style.RESET)
+                payload = {"version": version, "user": username, "action": "show -stat " + args.stat + " --> " + os.getcwd() + " --> " + str(
+                    int(time.time())), "runtime": 0, "result": "Partial", "format": "string", "sr": os.getcwd().split("/")[3]}
+                resp = request.urlopen(request.Request(
+                    url, data=parse.urlencode(payload).encode()))
+        else:
+            print(statout)
+            payload = {"version": version, "user": username, "action": "show -stat " + args.stat + " --> " + os.getcwd() + " --> " + str(
+                int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+            resp = request.urlopen(request.Request(
+                url, data=parse.urlencode(payload).encode()))
     finally:
         quit()
+elif args.vip:
+    try:
+        logger.info(os.getcwd() + " - show -vip")
+        # Prining formatted VIP output from file shell/ns_running_config.conf.txt
+        lbvipout = os.popen(
+            "awk '/^add lb/&&/vserver/{printf \"\033[0;92m%s\033[00m | %s | %s | %s | %s |\\n\", $2, $4, $5, $7, $6}' shell/ns_running_config.conf  | column -t -s'|'").read().strip()
+        csvipout = os.popen(
+            "awk '/^add cs/&&/vserver/{printf \"\033[0;96m%s\033[00m | %s | %s | %s | %s |\\n\", $2, $4, $7, $11, $8}' shell/ns_running_config.conf  | column -t -s'|'").read().strip()
+        authvipout = os.popen(
+            "awk '/^add authentication/&&/vserver/{printf \"\033[0;95m%s\033[00m | %s | %s | %s\\n\", $2, $4, $5, $6}' shell/ns_running_config.conf  | column -t -s'|'").read().strip()
+        vpnvipout = os.popen(
+            "awk '/^add vpn/&&/vserver/{printf \"\033[0;94m%s\033[00m | %s | %s | %s\\n\", $2, $4, $5, $6}' shell/ns_running_config.conf  | column -t -s'|'").read().strip()
+    finally:
+        if len(lbvipout) > 2:
+            print(style.YELLOW +
+                  '{:-^87}'.format('Load Balancing VIP Basic Info'))
+            print(lbvipout + "\n")
+        else:
+            pass
+        if len(csvipout) > 2:
+            print(style.YELLOW +
+                  '{:-^87}'.format('Content Switching VIP Basic Info'))
+            print(csvipout + "\n")
+        else:
+            pass
+        if len(authvipout) > 2:
+            print(style.YELLOW +
+                  '{:-^87}'.format('Authentication VIP Basic Info'))
+            print(authvipout + "\n")
+        else:
+            pass
+        if len(vpnvipout) > 2:
+            print(style.YELLOW + '{:-^87}'.format('VPN VIP Basic Info'))
+            print(vpnvipout + "\n")
+        else:
+            pass
+        payload = {"version": version, "user": username, "action": "show -vip --> " + os.getcwd() + " --> " + str(int(time.time())),
+                   "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(
+            url, data=parse.urlencode(payload).encode()))
+        quit()
+elif args.case:
+    # Get SFDC API Keys
+    try:
+        sfdcurl = "https://ftltoolswebapi.deva.citrite.net/sfaas/api/salesforce"
+        tokenpayload = {"feature": "login", "parameters": [{"name": "tokenuri", "value": "https://login.salesforce.com/services/oauth2/token", "isbase64": "false"}]
+                        }
+        sfdcreq = request.Request(sfdcurl)
+        sfdcreq.add_header('Content-Type', 'application/json; charset=utf-8')
+        jsondata = json.dumps(tokenpayload)
+        jsondataasbytes = jsondata.encode('utf-8')
+        sfdcreq.add_header('Content-Length', len(jsondataasbytes))
+        sfdctoken = json.loads(request.urlopen(sfdcreq, jsondataasbytes).read().decode(
+            "utf-8", "ignore"))['options'][0]['values'][0]
+    except:
+        print(style.RED + "Unable to get SFDC Token" + style.RESET)
+
+    # Get case number from path
+    try:
+        casenum = os.popen("pwd").read().split("/")[3]
+    except IndexError:
+        print(style.RED + "Unable to get case number from your current working directory" + style.RESET)
+
+    # Get CaseAge and Entitlement Details
+    try:
+        headers = {'Content-Type': 'application/json'}
+        data = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "EntitlementId,Age__c", "isbase64": "false"}, {
+            "name": "tablename", "value": "Case", "isbase64": "false"}, {"name": "selectcondition", "value": "CaseNumber = '"+casenum+"'", "isbase64": "false"}]}
+        jsondata = json.dumps(data)
+        jsondataasbytes = jsondata.encode('utf-8')
+        finaldata = json.loads(request.urlopen(sfdcreq, jsondataasbytes).read().decode(
+            "utf-8", "ignore"))['options'][0]['values'][0]
+        EntitlementId = ast.literal_eval(finaldata)["EntitlementId"]
+        CaseAge = str(ast.literal_eval(finaldata)["Age__c"])
+        data = ({"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "EndDate", "isbase64": "false"}, {
+                "name": "tablename", "value": "Entitlement", "isbase64": "false"}, {"name": "selectcondition", "value": "Id = '"+EntitlementId+"'", "isbase64": "false"}]})
+        jsondata = json.dumps(data)
+        jsondataasbytes = jsondata.encode('utf-8')
+        Entitlement_EndDate = ast.literal_eval(json.loads(request.urlopen(
+            sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore"))['options'][0]['values'][0])["EndDate"]
+    finally:
+        print(Entitlement_EndDate + CaseAge)
 elif args.author:
     logger.info(os.getcwd() + " - author")
     print(showscriptauthor)
+    payload = {"version": version, "user": username, "action": "show --author --> " + os.getcwd() + " --> " + str(
+        int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+    resp = request.urlopen(request.Request(
+        url, data=parse.urlencode(payload).encode()))
 elif args.about:
     logger.info(os.getcwd() + " - about")
     print(showscriptabout)
+    payload = {"version": version, "user": username, "action": "show --about --> " + os.getcwd() + " --> " + str(
+        int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+    resp = request.urlopen(request.Request(
+        url, data=parse.urlencode(payload).encode()))
 else:
     print("Please use -h for help")
     logger.error(os.getcwd() + " - No switch")
+    payload = {"version": version, "user": username, "action": "No Switch Used " + os.getcwd() + " --> " + str(
+        int(time.time())), "runtime": 0, "result": "Error", "format": "string", "sr": os.getcwd().split("/")[3]}
+    resp = request.urlopen(request.Request(
+        url, data=parse.urlencode(payload).encode()))
