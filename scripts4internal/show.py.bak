@@ -6,7 +6,6 @@ import subprocess as sp
 import logging
 import argparse
 from operator import itemgetter
-from glob import glob
 import re
 from os.path import exists as file_exists
 from urllib import request, parse
@@ -74,36 +73,6 @@ url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
 version = "2.7.0"
 
-# Html files
-# CPU Usage
-master_cpu_use_HTML_Start = '''
-<html>
-  <head>
-    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
-    <script type="text/javascript">
-      google.charts.load('current', {'packages':['corechart']});
-      google.charts.setOnLoadCallback(drawChart);
-      function drawChart() {
-        var data = google.visualization.arrayToDataTable([
-'''
-master_cpu_use_HTML_End = '''
-]);
-        var options = {
-          title: 'Master CPU Usage',
-          curveType: 'function',
-          legend: { position: 'bottom' }
-        };
-        var chart = new google.visualization.LineChart(document.getElementById('curve_chart'));
-        chart.draw(data, options);
-      }
-    </script>
-  </head>
-  <body>
-    <div id="curve_chart" style="width: 75%; height: 450px"></div>
-  </body>
-</html>
-'''
-
 # Parser args
 parser = argparse.ArgumentParser(
     description="Citrix Support Bundle Show Script")
@@ -135,8 +104,6 @@ parser.add_argument('-ha', action="store_true",
                     help=argparse.SUPPRESS)
 parser.add_argument('--about', action="store_true",
                     help="About Show Script")
-parser.add_argument('-G', action="append",
-                    help="Generate newnslog Graph HTML File")
 args = parser.parse_args()
 
 # Logme the user
@@ -338,17 +305,15 @@ elif args.p:
         logger.info(os.getcwd() + " - show -p")
         vcpu = sp.run("awk '/System Detected/{print $(NF-1), $NF;exit}' var/nslog/dmesg.boot",
                       shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        nsppenum = sp.run("awk '/NSPPE/{print}' shell/nsp.out | wc -l | sed \"s/^[ \t]*//\"",
-                          shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        nsppepid = sp.run("awk '/NSPPE/{print}' shell/nsp.out | sed \"s/^[ \t]*//\"",
-                          shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        core = sp.run("awk '/NSPPE-/&&!/gz/{printf \"[%s-%s/%s --> %s --> %s]\\n\",  $6, $7, $8, $NF, $5}' shell/ls_lRtrp_var.out | sed \"s/^[ \t]*//\"",
+        core = sp.run("awk '/NSPPE-/&&!/gz/{printf \"[%s-%s/%s --> %s --> %s]\\n\",  $6, $7, $8, $NF, $5}' shell/ls_lRtrp_var.out",
                       shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        nsppepid = sp.run("awk '/NSPPE/{print}' shell/nsp.out",
+                          shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
     finally:
         print(style.YELLOW + '{:-^87}'.format('ADC Process Information'))
         print(style.RESET)
         print("Number of vCPU: " + vcpu.stdout.strip())
-        print("NSPPE Details: " + nsppenum.stdout + "\n" + nsppepid.stdout)
+        print("NSPPE Details: " + "\n" + nsppepid.stdout)
         print("Core files: " + "\n" + core.stdout.strip())
         print("")
     payload = {"version": version, "user": username, "action": "show -p --> " + os.getcwd() + " --> " + str(
@@ -724,40 +689,6 @@ elif args.about:
         int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
     resp = request.urlopen(request.Request(
         url, data=parse.urlencode(payload).encode()))
-elif args.G:
-    try:
-        path = "conFetch"
-        isExist = os.path.exists(path)
-        if not isExist:
-            os.makedirs(path)
-        else:
-            pass
-        if "cpu" in args.G:
-            try:
-                for newnslog_file in glob('var/nslog/newnslo*'):
-                    master_cpu_usage = sp.run(
-                        "nsconmsg -K "+newnslog_file+" -d current -g master_cpu_use -s disptime=1 | awk 'BEGIN{q=\"\\047\"; printf \"[\"q\"Time\"q\",\"q\"CPU\"q\"],\"}/master/{q=\"\\047\"; printf \"[\"q$10q\",\" $3/10\"],\"}' | sed 's/,$//'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                    if len(master_cpu_usage.stdout) > 10:
-                        file = open(path+"/"+newnslog_file.split(
-                            "/")[2]+"_cpu_Usage.html", "w")
-                        file.write('''<html><head><script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script><script type="text/javascript">
-                                   google.charts.load('current', {'packages':['corechart']});
-                                   google.charts.setOnLoadCallback(drawChart);
-                                   function drawChart()
-                                   {var data = google.visualization.arrayToDataTable([''' + master_cpu_usage.stdout + ''']);
-                                   var options = {title: 'Master CPU Usage',curveType: 'function',legend: { position: 'bottom' }};
-                                   var chart = new google.visualization.LineChart(document.getElementById('curve_chart'));
-                                   chart.draw(data, options);}
-                                   </script></head>
-                                   <body><div id="curve_chart" style="width: 75%; height: 450px"></div></body>
-                                   </html>''')
-                        file.close()
-                        print("Processed "+newnslog_file)
-            finally:
-                cc_cpu_use = sp.run(
-                    "nsconmsg -K newnslog -d current -g cc_cpu_use -s disptime=1 | awk '/cpu/{print $7}' | sort -nr | uniq | wc -l", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-    finally:
-        pass
 else:
     print("Please use -h for help")
     logger.error(os.getcwd() + " - No switch")

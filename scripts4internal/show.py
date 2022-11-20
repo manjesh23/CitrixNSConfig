@@ -305,12 +305,17 @@ elif args.p:
         logger.info(os.getcwd() + " - show -p")
         vcpu = sp.run("awk '/System Detected/{print $(NF-1), $NF;exit}' var/nslog/dmesg.boot",
                       shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        core = sp.run("awk '/NSPPE-/&&!/gz/{printf \"[%s-%s/%s --> %s --> %s]\\n\",  $6, $7, $8, $NF, $5}' shell/ls_lRtrp_var.out",
+        nsppenum = sp.run("awk '/NSPPE/{print}' shell/nsp.out | wc -l | sed \"s/^[ \t]*//\"",
+                          shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        nsppepid = sp.run("awk '/NSPPE/{print}' shell/nsp.out | sed \"s/^[ \t]*//\"",
+                          shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        core = sp.run("awk '/NSPPE-/&&!/gz/{printf \"[%s-%s/%s --> %s --> %s]\\n\",  $6, $7, $8, $NF, $5}' shell/ls_lRtrp_var.out | sed \"s/^[ \t]*//\"",
                       shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
     finally:
         print(style.YELLOW + '{:-^87}'.format('ADC Process Information'))
         print(style.RESET)
         print("Number of vCPU: " + vcpu.stdout.strip())
+        print("NSPPE Details: " + nsppenum.stdout + "\n" + nsppepid.stdout)
         print("Core files: " + "\n" + core.stdout.strip())
         print("")
     payload = {"version": version, "user": username, "action": "show -p --> " + os.getcwd() + " --> " + str(
