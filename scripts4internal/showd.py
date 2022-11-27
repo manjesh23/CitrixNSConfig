@@ -1,11 +1,10 @@
-#!/usr/local/bin/python3.7
+#!/usr/local/bin/python3.9
 from asyncio import subprocess
 from asyncore import read
 import os
 import subprocess as sp
 import logging
 import argparse
-from operator import itemgetter
 from glob import glob
 import re
 from os.path import exists as file_exists
@@ -74,36 +73,6 @@ url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
 version = "2.7.0"
 
-# Html files
-# CPU Usage
-master_cpu_use_HTML_Start = '''
-<html>
-  <head>
-    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
-    <script type="text/javascript">
-      google.charts.load('current', {'packages':['corechart']});
-      google.charts.setOnLoadCallback(master_cpu_use);
-      function master_cpu_use() {
-        var data = google.visualization.arrayToDataTable([
-'''
-master_cpu_use_HTML_End = '''
-]);
-        var options = {
-          title: 'Master CPU Usage',
-          curveType: 'function',
-          legend: { position: 'bottom' }
-        };
-        var chart = new google.visualization.LineChart(document.getElementById('curve_chart'));
-        chart.draw(data, options);
-      }
-    </script>
-  </head>
-  <body>
-    <div id="curve_chart" style="width: 75%; height: 450px"></div>
-  </body>
-</html>
-'''
-
 # Parser args
 parser = argparse.ArgumentParser(
     description="Citrix Support Bundle Show Script")
@@ -136,7 +105,7 @@ parser.add_argument('-ha', action="store_true",
 parser.add_argument('--about', action="store_true",
                     help="About Show Script")
 parser.add_argument('-G', action="append",
-                    help="Generate newnslog Graph HTML File")
+                    choices={"cpu", "ha"}, help="Generate newnslog Graph HTML File")
 args = parser.parse_args()
 
 # Logme the user
@@ -739,6 +708,12 @@ elif args.G:
         if "cpu" in args.G:
             try:
                 for newnslog_file in glob('var/nslog/newnslo*[!.gz]'):
+                    adchostname = sp.run("awk '{print $2}' shell/uname-a.out",
+                                         shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                    collector_bundle_name = sp.run(
+                        "pwd", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.split("/")[4]
+                    time_range = sp.run(
+                        "nsconmsg -K "+newnslog_file+" -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=\"\"; printf $0}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                     master_cpu_use = sp.run(
                         "nsconmsg -K "+newnslog_file+" -d current -g master_cpu_use -s disptime=1 | awk 'BEGIN{q=\"\\047\"; printf \"[\"q\"Time\"q\",\"q\"CPU\"q\"],\"}/master/{q=\"\\047\"; printf \"[\"q$10q\",\" $3/10\"],\"}' | sed 's/,$//'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                     cc_cpu_use = sp.run(
@@ -746,23 +721,75 @@ elif args.G:
                     if True:
                         file = open(path+"/"+newnslog_file.split("/")
                                     [2]+"_cpu_Usage.html", "w")
-                        file.write('''<html><head><script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script><script type="text/javascript">google.charts.load('current', {'packages':['corechart']});
-                                   google.charts.setOnLoadCallback(master_cpu_use);
-                                   google.charts.setOnLoadCallback(cc_cpu_use);
-                                   function master_cpu_use()
-                                   {var data = google.visualization.arrayToDataTable([''' + master_cpu_use.stdout + ''']);
-                                   var options = {title: 'master_cpu_use',curveType: 'function',legend: { position: 'bottom' }};
-                                   var chart = new google.visualization.LineChart(document.getElementById('master_cpu_use_curve_chart'));
-                                   chart.draw(data, options);}
-                                   function cc_cpu_use()
-                                   {var data = google.visualization.arrayToDataTable([''' + cc_cpu_use.stdout + ''']);
-                                   var options = {title: 'cc_cpu_use',curveType: 'function',legend: { position: 'bottom' }};
-                                   var chart = new google.visualization.LineChart(document.getElementById('cc_cpu_use_curve_chart'));
-                                   chart.draw(data, options);}
-                                   </script></head><body>
-                                   <div id="master_cpu_use_curve_chart" style="width: 100%; height: 450px"></div>
-                                   <div id="cc_cpu_use_curve_chart" style="width: 100%; height: 500px"></div>
-                                   </body></html>''')
+                        file.write('''<html><head><script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script><script src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig/scripts4internal/conFetch.js"></script><script type="text/javascript">google.charts.load('current', {'packages':['corechart']});
+                                google.charts.setOnLoadCallback(master_cpu_use);
+                                google.charts.setOnLoadCallback(cc_cpu_use);
+                                function master_cpu_use()
+                                {var data = google.visualization.arrayToDataTable(['''+master_cpu_use.stdout+''']);
+                                var options = {title: 'master_cpu_use',curveType: 'function',legend: { position: 'bottom' }};
+                                var chart = new google.visualization.LineChart(document.getElementById('master_cpu_use_curve_chart'));
+                                chart.draw(data, options);}
+                                function cc_cpu_use()
+                                {var data = google.visualization.arrayToDataTable(['''+cc_cpu_use.stdout+''']);
+                                var options = {title: 'cc_cpu_use',curveType: 'function',legend: { position: 'bottom' }};
+                                var chart = new google.visualization.LineChart(document.getElementById('cc_cpu_use_curve_chart'));
+                                chart.draw(data, options);}
+                                </script><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous"><script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script></head><body>
+                                <h1 class="text-primary d-flex justify-content-center">conFetch CPU Graph</h1>
+                                <h6>'''+collector_bundle_name+" of " + adchostname + '''</h6><h6 class="text-muted">''' + newnslog_file.split("/")[2]+":" + time_range+'''</h6>
+                                <hr>
+                                <div id="master_cpu_use_curve_chart" class="w-auto" style="height:450px"></div>
+                                <div id="cc_cpu_use_curve_chart" class="w-auto" style="height:450px"></div>
+                                </body></html>''')
+                        file.close()
+                        print("Processed "+newnslog_file)
+            finally:
+                pass
+        elif "ha" in args.G:
+            try:
+                for newnslog_file in glob('var/nslog/newnslo*[!.gz]'):
+                    adchostname = sp.run("awk '{print $2}' shell/uname-a.out",
+                                         shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                    collector_bundle_name = sp.run(
+                        "pwd", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.split("/")[4]
+                    time_range = sp.run(
+                        "nsconmsg -K "+newnslog_file+" -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=\"\"; printf $0}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                    ha_tot_pkt_rx_tx = sp.run(
+                        "nsconmsg -K "+newnslog_file+" -d current -s disptime=1 -g ha_tot_pkt_rx -g ha_tot_pkt_tx | awk '/ha_tot/{print $10, $4, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"[\\047%s\\047%s\", \"Time\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"\\047%s\\047%s\", cpu, (cpuNr<numCpus ? OFS : \"]\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \",%s[\\047%s\\047%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]\");prev_vals[cpu] = val;};};print \"\";}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                    ha_err_heartbeat = sp.run(
+                        "nsconmsg -K "+newnslog_file+" -d current -s disptime=1 -g ha_err_heartbeat | awk '/ha_/{print $10, $4, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"[\\047%s\\047%s\", \"Time\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"\\047%s\\047%s\", cpu, (cpuNr<numCpus ? OFS : \"]\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \",%s[\\047%s\\047%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]\");prev_vals[cpu] = val;};};print \"\";}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                    ha_tot_macresolve_requests = sp.run(
+                        "nsconmsg -K "+newnslog_file+" -d current -s disptime=1 -g ha_tot_macresolve_requests | awk '/ha_/{print $10, $4, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"[\\047%s\\047%s\", \"Time\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"\\047%s\\047%s\", cpu, (cpuNr<numCpus ? OFS : \"]\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \",%s[\\047%s\\047%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]\");prev_vals[cpu] = val;};};print \"\";}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                    if True:
+                        file = open(path+"/"+newnslog_file.split("/")
+                                    [2]+"_HA.html", "w")
+                        file.write('''<html><head><script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script><script src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig/scripts4internal/conFetch.js"></script><script type="text/javascript">google.charts.load('current', {'packages':['corechart']});
+                                google.charts.setOnLoadCallback(ha_tot_pkt_rx_tx);
+                                google.charts.setOnLoadCallback(ha_err_heartbeat);
+                                google.charts.setOnLoadCallback(ha_tot_macresolve_requests);
+                                function ha_tot_pkt_rx_tx()
+                                {var data = google.visualization.arrayToDataTable(['''+ha_tot_pkt_rx_tx.stdout+''']);
+                                var options = {title: 'ha_tot_pkt_rx_tx',curveType: 'function',legend: { position: 'bottom' }};
+                                var chart = new google.visualization.LineChart(document.getElementById('ha_tot_pkt_rx_tx_curve_chart'));
+                                chart.draw(data, options);}
+                                function ha_err_heartbeat()
+                                {var data = google.visualization.arrayToDataTable(['''+ha_err_heartbeat.stdout+''']);
+                                var options = {title: 'ha_err_heartbeat',curveType: 'function',legend: { position: 'bottom' }};
+                                var chart = new google.visualization.LineChart(document.getElementById('ha_err_heartbeat_curve_chart'));
+                                chart.draw(data, options);}
+                                function ha_tot_macresolve_requests()
+                                {var data = google.visualization.arrayToDataTable(['''+ha_tot_macresolve_requests.stdout+''']);
+                                var options = {title: 'ha_tot_macresolve_requests',curveType: 'function',legend: { position: 'bottom' }};
+                                var chart = new google.visualization.LineChart(document.getElementById('ha_tot_macresolve_requests_curve_chart'));
+                                chart.draw(data, options);}
+                                </script><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous"><script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script></head><body>
+                                <h1 class="text-primary d-flex justify-content-center">conFetch HA Graph</h1>
+                                <h6>'''+collector_bundle_name+" of " + adchostname + '''</h6><h6 class="text-muted">''' + newnslog_file.split("/")[2]+":" + time_range+'''</h6>
+                                <hr>
+                                <div id="ha_tot_pkt_rx_tx_curve_chart" class="w-auto" style="height:450px"></div>
+                                <div id="ha_err_heartbeat_curve_chart" class="w-auto" style="height:450px"></div>
+                                <div id="ha_tot_macresolve_requests_curve_chart" class="w-auto" style="height:450px"></div>
+                                </body></html>''')
                         file.close()
                         print("Processed "+newnslog_file)
             finally:

@@ -1,7 +1,7 @@
 // showMe script//
 function showMe(box) {
 
-    var chboxs = document.getElementsByName("c1");
+    var chboxs = document.getElementsByName("manjesh");
     var vis = "none";
     for (var i = 0; i < chboxs.length; i++) {
         if (chboxs[i].checked) {
