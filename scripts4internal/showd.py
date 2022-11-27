@@ -82,8 +82,8 @@ master_cpu_use_HTML_Start = '''
     <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
     <script type="text/javascript">
       google.charts.load('current', {'packages':['corechart']});
-      google.charts.setOnLoadCallback(drawChart);
-      function drawChart() {
+      google.charts.setOnLoadCallback(master_cpu_use);
+      function master_cpu_use() {
         var data = google.visualization.arrayToDataTable([
 '''
 master_cpu_use_HTML_End = '''
@@ -438,6 +438,8 @@ elif args.gz:
             "for i in var/nslog/new*.tar.gz; do tar -xvf \"$i\" -C var/nslog/; done", shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
     finally:
         if gunzipresult.returncode == 0:
+            sp.run("fixperms ./",
+                   shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
             print(style.YELLOW +
                   '{:-^87}\n'.format('Gunzip all .gz files under /var/log') + style.RESET)
             print(style.YELLOW + str(gunzipresult.stderr.decode('utf-8')) + style.RESET)
@@ -445,6 +447,8 @@ elif args.gz:
         else:
             print(style.RED + "Nothing to do here in var/log/" + style.RESET)
         if gunzipnewnsresult.returncode == 0:
+            sp.run("fixperms ./",
+                   shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
             print(style.YELLOW +
                   '{:-^87}\n'.format('Gunzip all .gz files under /var/log') + style.RESET)
             print(style.YELLOW +
@@ -734,28 +738,35 @@ elif args.G:
             pass
         if "cpu" in args.G:
             try:
-                for newnslog_file in glob('var/nslog/newnslo*'):
-                    master_cpu_usage = sp.run(
+                for newnslog_file in glob('var/nslog/newnslo*[!.gz]'):
+                    master_cpu_use = sp.run(
                         "nsconmsg -K "+newnslog_file+" -d current -g master_cpu_use -s disptime=1 | awk 'BEGIN{q=\"\\047\"; printf \"[\"q\"Time\"q\",\"q\"CPU\"q\"],\"}/master/{q=\"\\047\"; printf \"[\"q$10q\",\" $3/10\"],\"}' | sed 's/,$//'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                    if len(master_cpu_usage.stdout) > 10:
-                        file = open(path+"/"+newnslog_file.split(
-                            "/")[2]+"_cpu_Usage.html", "w")
-                        file.write('''<html><head><script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script><script type="text/javascript">
-                                   google.charts.load('current', {'packages':['corechart']});
-                                   google.charts.setOnLoadCallback(drawChart);
-                                   function drawChart()
-                                   {var data = google.visualization.arrayToDataTable([''' + master_cpu_usage.stdout + ''']);
-                                   var options = {title: 'Master CPU Usage',curveType: 'function',legend: { position: 'bottom' }};
-                                   var chart = new google.visualization.LineChart(document.getElementById('curve_chart'));
+                    cc_cpu_use = sp.run(
+                        "nsconmsg -K "+newnslog_file+" -d current -g cc_cpu_use -s disptime=1 | awk '/cc_cpu/{print $11, $3/10, $7}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"[\\047%s\\047%s\", \"Time\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"\\047%s\\047%s\", cpu, (cpuNr<numCpus ? OFS : \"]\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \",%s[\\047%s\\047%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]\");prev_vals[cpu] = val;};};print \"\";}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                    if True:
+                        file = open(path+"/"+newnslog_file.split("/")
+                                    [2]+"_cpu_Usage.html", "w")
+                        file.write('''<html><head><script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script><script type="text/javascript">google.charts.load('current', {'packages':['corechart']});
+                                   google.charts.setOnLoadCallback(master_cpu_use);
+                                   google.charts.setOnLoadCallback(cc_cpu_use);
+                                   function master_cpu_use()
+                                   {var data = google.visualization.arrayToDataTable([''' + master_cpu_use.stdout + ''']);
+                                   var options = {title: 'master_cpu_use',curveType: 'function',legend: { position: 'bottom' }};
+                                   var chart = new google.visualization.LineChart(document.getElementById('master_cpu_use_curve_chart'));
                                    chart.draw(data, options);}
-                                   </script></head>
-                                   <body><div id="curve_chart" style="width: 75%; height: 450px"></div></body>
-                                   </html>''')
+                                   function cc_cpu_use()
+                                   {var data = google.visualization.arrayToDataTable([''' + cc_cpu_use.stdout + ''']);
+                                   var options = {title: 'cc_cpu_use',curveType: 'function',legend: { position: 'bottom' }};
+                                   var chart = new google.visualization.LineChart(document.getElementById('cc_cpu_use_curve_chart'));
+                                   chart.draw(data, options);}
+                                   </script></head><body>
+                                   <div id="master_cpu_use_curve_chart" style="width: 100%; height: 450px"></div>
+                                   <div id="cc_cpu_use_curve_chart" style="width: 100%; height: 500px"></div>
+                                   </body></html>''')
                         file.close()
                         print("Processed "+newnslog_file)
             finally:
-                cc_cpu_use = sp.run(
-                    "nsconmsg -K newnslog -d current -g cc_cpu_use -s disptime=1 | awk '/cpu/{print $7}' | sort -nr | uniq | wc -l", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                pass
     finally:
         pass
 else:

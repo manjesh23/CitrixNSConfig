@@ -1,0 +1,90 @@
+<html>
+
+<head>
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <script type="text/javascript" src="conFetch.js"></script>
+    <script type="text/javascript">
+        google.charts.load('current', {
+            'packages': ['corechart']
+        });
+        google.charts.setOnLoadCallback(master_cpu_use);
+        google.charts.setOnLoadCallback(cc_cpu_use);
+
+        function master_cpu_use() {
+            var data = google.visualization.arrayToDataTable([
+                ['Time', 'CPU'],
+                ['15:25:29', 54.8],
+                ['15:25:36', 0.4],
+                ['15:25:43', 0.3],
+                ['15:25:51', 0.7],
+                ['15:25:58', 1.3],
+                ['15:26:05', 2.7],
+                ['15:26:12', 2.1],
+                ['15:26:19', 2.9],
+                ['15:26:26', 2],
+                ['15:26:33', 2.3],
+                ['15:26:40', 5.3],
+                ['15:26:48', 30.6],
+                ['15:26:55', 54.4],
+                ['15:27:02', 59.4],
+                ['15:43:16', 4.9],
+                ['15:43:23', 4.6],
+                ['15:43:30', 4.8],
+                ['15:43:37', 5.9],
+                ['15:43:44', 2.7],
+                ['15:43:51', 2.4],
+                ['15:43:58', 2.5],
+                ['15:44:05', 2.6],
+                ['15:44:12', 2.4],
+                ['15:44:19', 2.6],
+                ['15:44:26', 2.4],
+                ['15:44:33', 3],
+                ['15:44:40', 2.9],
+                ['15:44:47', 1.9],
+                ['15:44:54', 2.1]
+            ]);
+            var options = {
+                title: 'master_cpu_use',
+                curveType: 'function',
+                legend: {
+                    position: 'bottom'
+                }
+            };
+            var chart = new google.visualization.LineChart(document.getElementById('master_cpu_use_curve_chart'));
+            chart.draw(data, options);
+        }
+
+        function cc_cpu_use() {
+            var data = google.visualization.arrayToDataTable([
+                ['Time', 'cpu(1)', 'cpu(2)', 'cpu(3)', 'cpu(4)', 'cpu(5)', 'cpu(6)', 'cpu(7)', 'cpu(8)', 'cpu(9)', 'cpu(10)', 'cpu(11)', 'cpu(12)', 'cpu(13)', 'cpu(14)', 'cpu(15)', 'cpu(16)', 'cpu(17)', 'cpu(18)', 'cpu(19)'],
+                ['15:25:29', 508, 496, 540, 532, 481, 534, 536, 509, 527, 565, 582, 577, 584, 575, 584, 584, 582, 567, 551],
+                ['15:25:36', 8, 3, 3, 3, 3, 3, 3, 3, 3, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5],
+                ['15:25:43', 6, 2, 2, 2, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
+                ['15:25:51', 21, 6, 6, 6, 6, 6, 6, 6, 6, 9, 8, 8, 8, 8, 8, 8, 8, 8, 8],
+                ['15:44:54', 36, 21, 17, 18, 21, 18, 18, 18, 17, 26, 22, 22, 23, 21, 21, 24, 21, 21, 21]
+            ]);
+            var options = {
+                title: 'cc_cpu_use',
+                curveType: 'function',
+                legend: {
+                    position: 'bottom'
+                }
+            };
+            var chart = new google.visualization.LineChart(document.getElementById('cc_cpu_use_curve_chart'));
+            chart.draw(data, options);
+        }
+    </script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM" crossorigin="anonymous"></script>
+</head>
+
+<body>
+    <h1 class="d-flex justify-content-center">conFetch CPU Graph</h1>
+    <h1 class="d-flex justify-content-center">newnslog</h1>
+    <input type="checkbox" name="c1" onclick="showMe('master_cpu_use_curve_chart')">Show Hide Checkbox
+
+    <div id="master_cpu_use_curve_chart" style="width: 75%; height: 450px"></div>
+    <div id="cc_cpu_use_curve_chart" style="width: 90%; height: 500px"></div>
+</body>
+
+</html>
