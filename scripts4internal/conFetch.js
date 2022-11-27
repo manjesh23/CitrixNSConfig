@@ -1,6 +1,3 @@
-// Google charts//
-google.load("visualization", "1", { packages: ["corechart"] });
-
 // showMe script//
 function showMe(box) {
 

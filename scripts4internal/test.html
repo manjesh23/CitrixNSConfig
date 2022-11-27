@@ -4,6 +4,9 @@
     <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig/scripts4internal/conFetch.js"></script>
     <script type="text/javascript">
+        google.charts.load('current', {
+            'packages': ['corechart']
+        });
         google.charts.setOnLoadCallback(master_cpu_use);
         google.charts.setOnLoadCallback(cc_cpu_use);
 
