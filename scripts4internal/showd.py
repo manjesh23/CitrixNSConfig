@@ -105,7 +105,7 @@ parser.add_argument('-ha', action="store_true",
 parser.add_argument('--about', action="store_true",
                     help="About Show Script")
 parser.add_argument('-G', action="append",
-                    choices={"cpu", "ha"}, help="Generate HTML Graph for all newnslog(s)")
+                    choices={"cpu", "mem", "ha"}, help="Generate HTML Graph for all newnslog(s)")
 args = parser.parse_args()
 
 # Logme the user
@@ -789,6 +789,37 @@ elif args.G:
                                 <div id="ha_tot_pkt_rx_tx_curve_chart" class="w-auto" style="height:450px"></div>
                                 <div id="ha_err_heartbeat_curve_chart" class="w-auto" style="height:450px"></div>
                                 <div id="ha_tot_macresolve_requests_curve_chart" class="w-auto" style="height:450px"></div>
+                                </body></html>''')
+                        file.close()
+                        print("Processed "+newnslog_file)
+            finally:
+                pass
+        elif "mem" in args.G:
+            try:
+                for newnslog_file in glob('var/nslog/newnslo*[!z]'):
+                    adchostname = sp.run("awk '{print $2}' shell/uname-a.out",
+                                         shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                    collector_bundle_name = sp.run(
+                        "pwd", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.split("/")[4]
+                    time_range = sp.run(
+                        "nsconmsg -K "+newnslog_file+" -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=\"\"; printf $0}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                    mem_cur_usedsize = sp.run(
+                        "nsconmsg -K "+newnslog_file+" -d current -s disptime=1 -g mem_cur_usedsize | awk '/mem_cur_/{print $10, $3/1000000, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"[\\047%s\\047%s\", \"Time\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"\\047%s\\047%s\", cpu, (cpuNr<numCpus ? OFS : \"]\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \",%s[\\047%s\\047%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]\");prev_vals[cpu] = val;};};print \"\";}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                    if True:
+                        file = open(path+"/"+newnslog_file.split("/")
+                                    [2]+"_memory.html", "w")
+                        file.write('''<html><head><script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script><script src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig/scripts4internal/conFetch.js"></script><script type="text/javascript">google.charts.load('current', {'packages':['corechart']});
+                                google.charts.setOnLoadCallback(mem_cur_usedsize);
+                                function mem_cur_usedsize()
+                                {var data = google.visualization.arrayToDataTable(['''+mem_cur_usedsize.stdout+''']);
+                                var options = {title: 'mem_cur_usedsize',curveType: 'function',legend: { position: 'bottom' }};
+                                var chart = new google.visualization.LineChart(document.getElementById('mem_cur_usedsize_curve_chart'));
+                                chart.draw(data, options);}
+                                </script><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous"><script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script></head><body>
+                                <h1 class="text-primary d-flex justify-content-center">conFetch Memory Graph</h1>
+                                <h6>'''+collector_bundle_name+" of " + adchostname + '''</h6><h6 class="text-muted">''' + newnslog_file.split("/")[2]+":" + time_range+'''</h6>
+                                <hr>
+                                <div id="mem_cur_usedsize_curve_chart" class="w-auto" style="height:450px"></div>
                                 </body></html>''')
                         file.close()
                         print("Processed "+newnslog_file)
