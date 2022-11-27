@@ -747,7 +747,7 @@ elif args.G:
                 pass
         elif "ha" in args.G:
             try:
-                for newnslog_file in glob('var/nslog/newnslo*[!.gz]'):
+                for newnslog_file in glob('var/nslog/newnslo*[!z]'):
                     adchostname = sp.run("awk '{print $2}' shell/uname-a.out",
                                          shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                     collector_bundle_name = sp.run(
