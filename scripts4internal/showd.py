@@ -105,7 +105,7 @@ parser.add_argument('-ha', action="store_true",
 parser.add_argument('--about', action="store_true",
                     help="About Show Script")
 parser.add_argument('-G', action="append",
-                    choices={"cpu", "ha"}, help="Generate newnslog Graph HTML File")
+                    choices={"cpu", "ha"}, help="Generate HTML Graph for all newnslog(s)")
 args = parser.parse_args()
 
 # Logme the user
@@ -707,7 +707,7 @@ elif args.G:
             pass
         if "cpu" in args.G:
             try:
-                for newnslog_file in glob('var/nslog/newnslo*[!.gz]'):
+                for newnslog_file in glob('var/nslog/newnslo*[!z]'):
                     adchostname = sp.run("awk '{print $2}' shell/uname-a.out",
                                          shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                     collector_bundle_name = sp.run(
