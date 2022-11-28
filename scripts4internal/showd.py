@@ -718,6 +718,10 @@ elif args.G:
                         "nsconmsg -K "+newnslog_file+" -d current -g master_cpu_use -s disptime=1 | awk 'BEGIN{q=\"\\047\"; printf \"[\"q\"Time\"q\",\"q\"CPU\"q\"],\"}/master/{q=\"\\047\"; printf \"[\"q$10q\",\" $3/10\"],\"}' | sed 's/,$//'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                     cc_cpu_use = sp.run(
                         "nsconmsg -K "+newnslog_file+" -d current -g cc_cpu_use -s disptime=1 | awk '/cc_cpu/{print $11, $3/10, $7}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"[\\047%s\\047%s\", \"Time\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"\\047%s\\047%s\", cpu, (cpuNr<numCpus ? OFS : \"]\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \",%s[\\047%s\\047%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]\");prev_vals[cpu] = val;};};print \"\";}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                    if len(master_cpu_use.stdout) < 23:
+                        master_cpu_use.stdout = "['Time', 'dummy']"
+                    if len(cc_cpu_use.stdout) < 23:
+                        cc_cpu_use.stdout = "['Time', 'dummy']"
                     if True:
                         file = open(path+"/"+newnslog_file.split("/")
                                     [2]+"_cpu_Usage.html", "w")
@@ -744,7 +748,11 @@ elif args.G:
                         file.close()
                         print("Processed "+newnslog_file)
             finally:
-                pass
+                os.popen("fixperms ./conFetch").read()
+                payload = {"version": version, "user": username, "action": "show -G " + ''.join(args.G) + " --> " + os.getcwd() + " --> " + str(
+                    int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+                resp = request.urlopen(request.Request(
+                    url, data=parse.urlencode(payload).encode()))
         elif "ha" in args.G:
             try:
                 for newnslog_file in glob('var/nslog/newnslo*[!z]'):
@@ -760,6 +768,12 @@ elif args.G:
                         "nsconmsg -K "+newnslog_file+" -d current -s disptime=1 -g ha_err_heartbeat | awk '/ha_/{print $10, $4, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"[\\047%s\\047%s\", \"Time\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"\\047%s\\047%s\", cpu, (cpuNr<numCpus ? OFS : \"]\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \",%s[\\047%s\\047%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]\");prev_vals[cpu] = val;};};print \"\";}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                     ha_tot_macresolve_requests = sp.run(
                         "nsconmsg -K "+newnslog_file+" -d current -s disptime=1 -g ha_tot_macresolve_requests | awk '/ha_/{print $10, $4, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"[\\047%s\\047%s\", \"Time\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"\\047%s\\047%s\", cpu, (cpuNr<numCpus ? OFS : \"]\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \",%s[\\047%s\\047%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]\");prev_vals[cpu] = val;};};print \"\";}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                    if len(ha_tot_pkt_rx_tx.stdout) < 23:
+                        ha_tot_pkt_rx_tx.stdout = "['Time', 'dummy']"
+                    if len(ha_tot_macresolve_requests.stdout) < 23:
+                        ha_tot_macresolve_requests.stdout = "['Time', 'dummy']"
+                    if len(ha_err_heartbeat.stdout) < 23:
+                        ha_err_heartbeat.stdout = "['Time', 'dummy']"
                     if True:
                         file = open(path+"/"+newnslog_file.split("/")
                                     [2]+"_HA.html", "w")
@@ -793,7 +807,11 @@ elif args.G:
                         file.close()
                         print("Processed "+newnslog_file)
             finally:
-                pass
+                os.popen("fixperms ./conFetch").read()
+                payload = {"version": version, "user": username, "action": "show -G " + ''.join(args.G) + " --> " + os.getcwd() + " --> " + str(
+                    int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+                resp = request.urlopen(request.Request(
+                    url, data=parse.urlencode(payload).encode()))
         elif "mem" in args.G:
             try:
                 for newnslog_file in glob('var/nslog/newnslo*[!z]'):
@@ -805,6 +823,8 @@ elif args.G:
                         "nsconmsg -K "+newnslog_file+" -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=\"\"; printf $0}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                     mem_cur_usedsize = sp.run(
                         "nsconmsg -K "+newnslog_file+" -d current -s disptime=1 -g mem_cur_usedsize | awk '/mem_cur_/{print $10, $3/1000000, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"[\\047%s\\047%s\", \"Time\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"\\047%s\\047%s\", cpu, (cpuNr<numCpus ? OFS : \"]\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \",%s[\\047%s\\047%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]\");prev_vals[cpu] = val;};};print \"\";}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                    if len(mem_cur_usedsize.stdout) < 23:
+                        mem_cur_usedsize.stdout = "['Time', 'dummy']"
                     if True:
                         file = open(path+"/"+newnslog_file.split("/")
                                     [2]+"_memory.html", "w")
@@ -824,7 +844,11 @@ elif args.G:
                         file.close()
                         print("Processed "+newnslog_file)
             finally:
-                pass
+                os.popen("fixperms ./conFetch").read()
+                payload = {"version": version, "user": username, "action": "show -G " + ''.join(args.G) + " --> " + os.getcwd() + " --> " + str(
+                    int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+                resp = request.urlopen(request.Request(
+                    url, data=parse.urlencode(payload).encode()))
     finally:
         pass
 else:
