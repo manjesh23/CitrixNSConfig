@@ -743,7 +743,8 @@ elif args.G:
                                 chart.draw(data, options);}
                                 </script><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous"><script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script></head><body>
                                 <h1 class="text-primary d-flex justify-content-center">CPU Graph</h1>
-                                <h6>'''+collector_bundle_name+" of " + adchostname + '''</h6><h6 class="text-muted">''' + newnslog_file.split("/")[2]+":" + time_range+'''</h6>
+                                <hr>
+                                <h6 class="d-inline-block">Collector_Bundle_Name: '''+collector_bundle_name+'''</h6><h6>Device_Name: '''+adchostname+'''</h6><h6>Log_file: '''+newnslog_file.split("/")[2]+'''</h6><h6>Log_Timestamp: '''+time_range+'''</h6>
                                 <hr>
                                 <div id="master_cpu_use_curve_chart" class="w-auto" style="height:450px"></div>
                                 <div id="cc_cpu_use_curve_chart" class="w-auto" style="height:450px"></div>
@@ -798,7 +799,8 @@ elif args.G:
                                 chart.draw(data, options);}
                                 </script><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous"><script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script></head><body>
                                 <h1 class="text-primary d-flex justify-content-center">HA Graph</h1>
-                                <h6>'''+collector_bundle_name+" of " + adchostname + '''</h6><h6 class="text-muted">''' + newnslog_file.split("/")[2]+":" + time_range+'''</h6>
+                                <hr>
+                                <h6 class="d-inline-block">Collector_Bundle_Name: '''+collector_bundle_name+'''</h6><h6>Device_Name: '''+adchostname+'''</h6><h6>Log_file: '''+newnslog_file.split("/")[2]+'''</h6><h6>Log_Timestamp: '''+time_range+'''</h6>
                                 <hr>
                                 <div id="ha_tot_pkt_rx_tx_curve_chart" class="w-auto" style="height:450px"></div>
                                 <div id="ha_err_heartbeat_curve_chart" class="w-auto" style="height:450px"></div>
@@ -834,7 +836,8 @@ elif args.G:
                                 chart.draw(data, options);}
                                 </script><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous"><script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script></head><body>
                                 <h1 class="text-primary d-flex justify-content-center">Memory Graph</h1>
-                                <h6>'''+collector_bundle_name+" of " + adchostname + '''</h6><h6 class="text-muted">''' + newnslog_file.split("/")[2]+":" + time_range+'''</h6>
+                                <hr>
+                                <h6 class="d-inline-block">Collector_Bundle_Name: '''+collector_bundle_name+'''</h6><h6>Device_Name: '''+adchostname+'''</h6><h6>Log_file: '''+newnslog_file.split("/")[2]+'''</h6><h6>Log_Timestamp: '''+time_range+'''</h6>
                                 <hr>
                                 <div id="mem_cur_usedsize_freesize_curve_chart" class="w-auto" style="height:450px"></div>
                                 <div class="bg-dark text-primary fw-bold footer">Project conFetch</div>
