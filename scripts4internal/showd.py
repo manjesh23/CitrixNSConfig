@@ -728,7 +728,7 @@ elif args.G:
                     if True:
                         file = open(path+"/"+newnslog_file.split("/")
                                     [2]+"_cpu_Usage.html", "w")
-                        file.write('''<html><head><script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script><script src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig/scripts4internal/conFetch.js"></script><script type="text/javascript">google.charts.load('current', {'packages':['corechart']});
+                        file.write('''<html><head><script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script><script src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig/scripts4internal/conFetch.js"></script><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig/scripts4internal/conFetch.css"></link><script type="text/javascript">google.charts.load('current', {'packages':['corechart']});
                                 google.charts.setOnLoadCallback(master_cpu_use);
                                 google.charts.setOnLoadCallback(cc_cpu_use);
                                 function master_cpu_use()
@@ -777,7 +777,7 @@ elif args.G:
                     if True:
                         file = open(path+"/"+newnslog_file.split("/")
                                     [2]+"_HA.html", "w")
-                        file.write('''<html><head><script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script><script src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig/scripts4internal/conFetch.js"></script><script type="text/javascript">google.charts.load('current', {'packages':['corechart']});
+                        file.write('''<html><head><script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script><script src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig/scripts4internal/conFetch.js"></script><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig/scripts4internal/conFetch.css"></link><script type="text/javascript">google.charts.load('current', {'packages':['corechart']});
                                 google.charts.setOnLoadCallback(ha_tot_pkt_rx_tx);
                                 google.charts.setOnLoadCallback(ha_err_heartbeat);
                                 google.charts.setOnLoadCallback(ha_tot_macresolve_requests);
@@ -825,7 +825,7 @@ elif args.G:
                     if True:
                         file = open(path+"/"+newnslog_file.split("/")
                                     [2]+"_memory.html", "w")
-                        file.write('''<html><head><script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script><script src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig/scripts4internal/conFetch.js"></script><script type="text/javascript">google.charts.load('current', {'packages':['corechart']});
+                        file.write('''<html><head><script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script><script src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig/scripts4internal/conFetch.js"></script><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig/scripts4internal/conFetch.css"></link><script type="text/javascript">google.charts.load('current', {'packages':['corechart']});
                                 google.charts.setOnLoadCallback(mem_cur_usedsize_freesize);
                                 function mem_cur_usedsize_freesize()
                                 {var data = google.visualization.arrayToDataTable(['''+mem_cur_usedsize_freesize.stdout+''']);
