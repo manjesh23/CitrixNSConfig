@@ -738,7 +738,7 @@ elif args.G:
                                 chart.draw(data, options);}
                                 function cc_cpu_use()
                                 {var data = google.visualization.arrayToDataTable(['''+cc_cpu_use.stdout+''']);
-                                var options = {title: 'cc_cpu_use',curveType: 'function',vAxis:{title:'Percent',titleTextStyle:{italic:false}},legend: { position: 'bottom' }};
+                                var options = {title: 'cc_cpu_use',curveType: 'function',animation:{duration: 2000,easing: 'out',startup:true},explorer:{axis: 'horizontal',actions: ['dragToZoom', 'rightClickToReset'],keepInBounds: true},vAxis:{title:'Percent',titleTextStyle:{italic:false}},legend: { position: 'bottom' }};
                                 var chart = new google.visualization.LineChart(document.getElementById('cc_cpu_use_curve_chart'));
                                 chart.draw(data, options);}
                                 </script><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous"><script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script></head><body>
@@ -794,7 +794,7 @@ elif args.G:
                                 chart.draw(data, options);}
                                 function ha_tot_macresolve_requests()
                                 {var data = google.visualization.arrayToDataTable(['''+ha_tot_macresolve_requests.stdout+''']);
-                                var options = {title: 'ha_tot_macresolve_requests',curveType: 'function',vAxis:{title:'ARP_Requests/sec',titleTextStyle:{italic:false}},legend: { position: 'bottom' }};
+                                var options = {title: 'ha_tot_macresolve_requests',curveType: 'function',animation:{duration: 2000,easing: 'out',startup:true},explorer:{axis: 'horizontal',actions: ['dragToZoom', 'rightClickToReset'],keepInBounds: true},vAxis:{title:'ARP_Requests/sec',titleTextStyle:{italic:false}},legend: { position: 'bottom' }};
                                 var chart = new google.visualization.LineChart(document.getElementById('ha_tot_macresolve_requests_curve_chart'));
                                 chart.draw(data, options);}
                                 </script><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous"><script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script></head><body>
@@ -831,7 +831,7 @@ elif args.G:
                                 google.charts.setOnLoadCallback(mem_cur_usedsize_freesize);
                                 function mem_cur_usedsize_freesize()
                                 {var data = google.visualization.arrayToDataTable(['''+mem_cur_usedsize_freesize.stdout+''']);
-                                var options = {title: 'mem_cur_usedsize_freesize',curveType: 'function',vAxis:{title:'Megabytes',titleTextStyle:{italic:false}},legend: { position: 'bottom' }};
+                                var options = {title: 'mem_cur_usedsize_freesize',curveType: 'function',animation:{duration: 2000,easing: 'out',startup:true},explorer:{axis: 'horizontal',actions: ['dragToZoom', 'rightClickToReset'],keepInBounds: true},vAxis:{title:'Megabytes',titleTextStyle:{italic:false}},legend: { position: 'bottom' }};
                                 var chart = new google.visualization.LineChart(document.getElementById('mem_cur_usedsize_freesize_curve_chart'));
                                 chart.draw(data, options);}
                                 </script><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous"><script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script></head><body>
