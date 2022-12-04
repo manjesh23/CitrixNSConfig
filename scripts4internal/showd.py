@@ -747,7 +747,7 @@ elif args.G:
                                 <hr>
                                 <div id="master_cpu_use_curve_chart" class="w-auto" style="height:450px"></div>
                                 <div id="cc_cpu_use_curve_chart" class="w-auto" style="height:450px"></div>
-                                <footer class="text-primary bg-dark"><div class="text-center py-3">Project conFetch</div></footer>
+                                <div class="bg-dark text-primary fw-bold footer">Project conFetch</div>
                                 </body></html>''')
                         file.close()
                         print("Processed "+newnslog_file)
@@ -803,7 +803,7 @@ elif args.G:
                                 <div id="ha_tot_pkt_rx_tx_curve_chart" class="w-auto" style="height:450px"></div>
                                 <div id="ha_err_heartbeat_curve_chart" class="w-auto" style="height:450px"></div>
                                 <div id="ha_tot_macresolve_requests_curve_chart" class="w-auto" style="height:450px"></div>
-                                <footer class="text-primary d-flex justify-content-center">Project conFetch</footer>
+                                <div class="bg-dark text-primary fw-bold footer">Project conFetch</div>
                                 </body></html>''')
                         file.close()
                         print("Processed "+newnslog_file)
@@ -837,7 +837,7 @@ elif args.G:
                                 <h6>'''+collector_bundle_name+" of " + adchostname + '''</h6><h6 class="text-muted">''' + newnslog_file.split("/")[2]+":" + time_range+'''</h6>
                                 <hr>
                                 <div id="mem_cur_usedsize_freesize_curve_chart" class="w-auto" style="height:450px"></div>
-                                <footer class="text-primary d-flex justify-content-center">Project conFetch</footer>
+                                <div class="bg-dark text-primary fw-bold footer">Project conFetch</div>
                                 </body></html>''')
                         file.close()
                         print("Processed "+newnslog_file)
