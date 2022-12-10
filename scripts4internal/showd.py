@@ -1,6 +1,4 @@
 #!/usr/local/bin/python3.9
-from asyncio import subprocess
-from asyncore import read
 import os
 import subprocess as sp
 import logging
@@ -34,13 +32,13 @@ class style():
 # About script
 showscriptabout = '''
 
-  ____            _           _                     _____    _       _     
- |  _ \ _ __ ___ (_) ___  ___| |_    ___ ___  _ __ |  ___|__| |_ ___| |__  
- | |_) | '__/ _ \| |/ _ \/ __| __|  / __/ _ \| '_ \| |_ / _ \ __/ __| '_ \ 
+  ____            _           _                     _____    _       _
+ |  _ \ _ __ ___ (_) ___  ___| |_    ___ ___  _ __ |  ___|__| |_ ___| |__
+ | |_) | '__/ _ \| |/ _ \/ __| __|  / __/ _ \| '_ \| |_ / _ \ __/ __| '_ \
  |  __/| | | (_) | |  __/ (__| |_  | (_| (_) | | | |  _|  __/ || (__| | | |
  |_|   |_|  \___// |\___|\___|\__|  \___\___/|_| |_|_|  \___|\__\___|_| |_|
-               |__/                                                        
-               
+               |__/
+
 ######################################################################################################
 ##                                                                                                  ##
 ##   Note -- Please do not use this script if you are not sure of what you are doing.               ##
@@ -75,7 +73,7 @@ version = "2.7.0"
 
 # Parser args
 parser = argparse.ArgumentParser(
-    description="Citrix Support Bundle Show Script")
+    description="Citrix Support Bundle Show Script", formatter_class=argparse.RawTextHelpFormatter)
 parser.add_argument('--author', action="store_true",
                     help=argparse.SUPPRESS)
 parser.add_argument('-i', action="store_true",
@@ -102,10 +100,18 @@ parser.add_argument('-case', action="store_true",
                     help=argparse.SUPPRESS)
 parser.add_argument('-ha', action="store_true",
                     help=argparse.SUPPRESS)
-parser.add_argument('--about', action="store_true",
-                    help="About Show Script")
 parser.add_argument('-G', action="append",
                     choices={"cpu", "mem", "ha"}, help="Generate HTML Graph for all newnslog(s)")
+parser.add_argument('-g', action="append",
+                    choices={"cpu", "mem", "ha"}, help="Generate HTML Graph for specific newnslog")
+parser.add_argument('-K', action="append",
+                    metavar="newnslog filename", help=argparse.SUPPRESS)
+parser.add_argument('-s', action="append",
+                    metavar="newnslog starttime", help=argparse.SUPPRESS)
+parser.add_argument('-e', action="append",
+                    metavar="newnslog endtime", help=argparse.SUPPRESS)
+parser.add_argument('--about', action="store_true",
+                    help="About Show Script")
 args = parser.parse_args()
 
 # Logme the user
@@ -852,6 +858,196 @@ elif args.G:
                     url, data=parse.urlencode(payload).encode()))
     finally:
         pass
+elif args.g:
+    try:
+        adchostname = sp.run("awk '{print $2}' shell/uname-a.out",
+                             shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        collector_bundle_name = sp.run(
+            "pwd", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.split("/")[4]
+        if args.s:
+            starttime = args.s[0]
+        else:
+            starttime = '.'
+        if args.e:
+            endtime = args.e[0]
+        else:
+            endtime = '.'
+    finally:
+        if args.K:
+            newnslogFile = args.K[0]
+        else:
+            print(style.RED + "Please use -K <newnslog>" + style.RESET)
+            quit()
+    try:
+        path = "conFetch"
+        isExist = os.path.exists(path)
+        if not isExist:
+            os.makedirs(path)
+        else:
+            pass
+        if "cpu" in args.g:
+            try:
+                time_range = sp.run(
+                    "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=\"\"; printf $0}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                master_cpu_use = sp.run(
+                    "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -g master_cpu_use -s disptime=1 | awk 'BEGIN{q=\"\\047\"; printf \"[\"q\"Time\"q\",\"q\"CPU\"q\"],\"}/master/{q=\"\\047\"; printf \"[\"q$10q\",\" $3/10\"],\"}' | sed 's/,$//'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                cc_cpu_use = sp.run(
+                    "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -g cc_cpu_use -s disptime=1 | awk '/cc_cpu/{print $11, $3/10, $7}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"[\\047%s\\047%s\", \"Time\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"\\047%s\\047%s\", cpu, (cpuNr<numCpus ? OFS : \"]\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \",%s[\\047%s\\047%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]\");prev_vals[cpu] = val;};};print \"\";}' | awk '{printf}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                if len(master_cpu_use.stdout) < 23:
+                    master_cpu_use = "['Time', 'dummy'],['', ]"
+                else:
+                    master_cpu_use.stdout = re.findall(
+                        '\[\'Time\'.*\'].|\[\''+starttime+'.*\[\''+endtime+'.{2,30}]', master_cpu_use.stdout)
+                    master_cpu_use = master_cpu_use.stdout[0] + \
+                        master_cpu_use.stdout[1]
+                if len(cc_cpu_use.stdout) < 23:
+                    cc_cpu_use = "['Time', 'dummy'],['', ]"
+                else:
+                    cc_cpu_use.stdout = re.findall(
+                        '\[\'Time\'.*\'].|\[\''+starttime+'.*\[\''+endtime+'.{2,30}]', cc_cpu_use.stdout)
+                    cc_cpu_use = cc_cpu_use.stdout[0] + cc_cpu_use.stdout[1]
+                if True:
+                    file = open(path+"/"+newnslogFile+"_cpu_Usage.html", "w")
+                    file.write('''<html><head><script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script><script src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@latest/scripts4internal/conFetch.js"></script><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@latest/scripts4internal/conFetch.css"></link><script type="text/javascript">google.charts.load('current', {'packages':['corechart']});
+                                google.charts.setOnLoadCallback(master_cpu_use);
+                                google.charts.setOnLoadCallback(cc_cpu_use);
+                                function master_cpu_use()
+                                {var data = google.visualization.arrayToDataTable(['''+master_cpu_use+''']);
+                                var options = {title: 'master_cpu_use',curveType: 'function',animation:{duration: 1000,easing: 'out',startup:true},explorer:{axis: 'horizontal',actions: ['dragToZoom', 'rightClickToReset'],keepInBounds: true},vAxis:{title:'Percent',titleTextStyle:{italic:false}},legend: { position: 'bottom' }};
+                                var chart = new google.visualization.LineChart(document.getElementById('master_cpu_use_curve_chart'));
+                                chart.draw(data, options);}
+                                function cc_cpu_use()
+                                {var data = google.visualization.arrayToDataTable(['''+cc_cpu_use+''']);
+                                var options = {title: 'cc_cpu_use',curveType: 'function',animation:{duration: 1000,easing: 'out',startup:true},explorer:{axis: 'horizontal',actions: ['dragToZoom', 'rightClickToReset'],keepInBounds: true},vAxis:{title:'Percent',titleTextStyle:{italic:false}},legend: { position: 'bottom' }};
+                                var chart = new google.visualization.LineChart(document.getElementById('cc_cpu_use_curve_chart'));
+                                chart.draw(data, options);}
+                                </script><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous"><script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script></head><body>
+                                <h1 class="text-primary d-flex justify-content-center">CPU Graph</h1>
+                                <hr>
+                                <h6 class="d-inline-block">Collector_Bundle_Name: '''+collector_bundle_name+'''</h6><h6>Device_Name: '''+adchostname+'''</h6><h6>Log_file: '''+newnslogFile+'''</h6><h6>Log_Timestamp: '''+time_range+'''</h6>
+                                <hr>
+                                <div id="master_cpu_use_curve_chart" class="w-auto" style="height:450px"></div>
+                                <div id="cc_cpu_use_curve_chart" class="w-auto" style="height:450px"></div>
+                                <div class="bg-dark text-primary fw-bold footer">Project conFetch</div>
+                                </body></html>''')
+                    file.close()
+            finally:
+                os.popen("fixperms ./conFetch").read()
+                payload = {"version": version, "user": username, "action": "show -g " + ''.join(args.K) + " --> " + os.getcwd() + " --> " + str(
+                    int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+                resp = request.urlopen(request.Request(
+                    url, data=parse.urlencode(payload).encode()))
+        elif "ha" in args.g:
+            try:
+                time_range = sp.run(
+                    "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=\"\"; printf $0}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                ha_tot_pkt_rx_tx = sp.run(
+                    "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -s disptime=1 -g ha_tot_pkt_rx -g ha_tot_pkt_tx | awk '/ha_tot/{print $10, $4, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"[\\047%s\\047%s\", \"Time\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"\\047%s\\047%s\", cpu, (cpuNr<numCpus ? OFS : \"]\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \",%s[\\047%s\\047%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]\");prev_vals[cpu] = val;};};print \"\";}' | awk '{printf}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                ha_err_heartbeat = sp.run(
+                    "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -s disptime=1 -g ha_err_heartbeat | awk '/ha_/{print $10, $4, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"[\\047%s\\047%s\", \"Time\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"\\047%s\\047%s\", cpu, (cpuNr<numCpus ? OFS : \"]\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \",%s[\\047%s\\047%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]\");prev_vals[cpu] = val;};};print \"\";}' | awk '{printf}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                ha_tot_macresolve_requests = sp.run(
+                    "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -s disptime=1 -g ha_tot_macresolve_requests | awk '/ha_/{print $10, $4, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"[\\047%s\\047%s\", \"Time\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"\\047%s\\047%s\", cpu, (cpuNr<numCpus ? OFS : \"]\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \",%s[\\047%s\\047%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]\");prev_vals[cpu] = val;};};print \"\";}' | awk '{printf}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                if len(ha_tot_pkt_rx_tx.stdout) < 23:
+                    ha_tot_pkt_rx_tx = "['Time', 'dummy'],['', ]"
+                else:
+                    ha_tot_pkt_rx_tx.stdout = re.findall(
+                        '\[\'Time\'.*\'].|\[\''+starttime+'.*\[\''+endtime+'.{2,30}]', ha_tot_pkt_rx_tx.stdout)
+                    ha_tot_pkt_rx_tx = ha_tot_pkt_rx_tx.stdout[0] + \
+                        ha_tot_pkt_rx_tx.stdout[1]
+                if len(ha_tot_macresolve_requests.stdout) < 23:
+                    ha_tot_macresolve_requests = "['Time', 'dummy'],['', ]"
+                else:
+                    ha_tot_macresolve_requests.stdout = re.findall(
+                        '\[\'Time\'.*\'].|\[\''+starttime+'.*\[\''+endtime+'.{2,30}]', ha_tot_macresolve_requests.stdout)
+                    ha_tot_macresolve_requests = ha_tot_macresolve_requests.stdout[0] + \
+                        ha_tot_macresolve_requests.stdout[1]
+                if len(ha_err_heartbeat.stdout) < 23:
+                    ha_err_heartbeat = "['Time', 'dummy'],['', ]"
+                else:
+                    ha_err_heartbeat.stdout = re.findall(
+                        '\[\'Time\'.*\'].|\[\''+starttime+'.*\[\''+endtime+'.{2,30}]', ha_err_heartbeat.stdout)
+                    ha_err_heartbeat = ha_err_heartbeat.stdout[0] + \
+                        ha_err_heartbeat.stdout[1]
+                if True:
+                    file = open(path+"/"+newnslogFile+"_HA.html", "w")
+                    file.write('''<html><head><script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script><script src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@latest/scripts4internal/conFetch.js"></script><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@latest/scripts4internal/conFetch.css"></link><script type="text/javascript">google.charts.load('current', {'packages':['corechart']});
+                                google.charts.setOnLoadCallback(ha_tot_pkt_rx_tx);
+                                google.charts.setOnLoadCallback(ha_err_heartbeat);
+                                google.charts.setOnLoadCallback(ha_tot_macresolve_requests);
+                                function ha_tot_pkt_rx_tx()
+                                {var data = google.visualization.arrayToDataTable(['''+ha_tot_pkt_rx_tx+''']);
+                                var options = {title: 'ha_tot_pkt_rx_tx',curveType: 'function',animation:{duration: 1000,easing: 'out',startup:true},explorer:{axis: 'horizontal',actions: ['dragToZoom', 'rightClickToReset'],keepInBounds: true},vAxis:{title:'pkts/sec',titleTextStyle:{italic:false}},legend: { position: 'bottom' }};
+                                var chart = new google.visualization.LineChart(document.getElementById('ha_tot_pkt_rx_tx_curve_chart'));
+                                chart.draw(data, options);}
+                                function ha_err_heartbeat()
+                                {var data = google.visualization.arrayToDataTable(['''+ha_err_heartbeat+''']);
+                                var options = {title: 'ha_err_heartbeat',curveType: 'function',animation:{duration: 1000,easing: 'out',startup:true},explorer:{axis: 'horizontal',actions: ['dragToZoom', 'rightClickToReset'],keepInBounds: true},vAxis:{title:'Err_Hartbeats/sec',titleTextStyle:{italic:false}},legend: { position: 'bottom' }};
+                                var chart = new google.visualization.LineChart(document.getElementById('ha_err_heartbeat_curve_chart'));
+                                chart.draw(data, options);}
+                                function ha_tot_macresolve_requests()
+                                {var data = google.visualization.arrayToDataTable(['''+ha_tot_macresolve_requests+''']);
+                                var options = {title: 'ha_tot_macresolve_requests',curveType: 'function',animation:{duration: 1000,easing: 'out',startup:true},explorer:{axis: 'horizontal',actions: ['dragToZoom', 'rightClickToReset'],keepInBounds: true},vAxis:{title:'ARP_Requests/sec',titleTextStyle:{italic:false}},legend: { position: 'bottom' }};
+                                var chart = new google.visualization.LineChart(document.getElementById('ha_tot_macresolve_requests_curve_chart'));
+                                chart.draw(data, options);}
+                                </script><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous"><script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script></head><body>
+                                <h1 class="text-primary d-flex justify-content-center">HA Graph</h1>
+                                <hr>
+                                <h6 class="d-inline-block">Collector_Bundle_Name: '''+collector_bundle_name+'''</h6><h6>Device_Name: '''+adchostname+'''</h6><h6>Log_file: '''+newnslogFile+'''</h6><h6>Log_Timestamp: '''+time_range+'''</h6>
+                                <hr>
+                                <div id="ha_tot_pkt_rx_tx_curve_chart" class="w-auto" style="height:450px"></div>
+                                <div id="ha_err_heartbeat_curve_chart" class="w-auto" style="height:450px"></div>
+                                <div id="ha_tot_macresolve_requests_curve_chart" class="w-auto" style="height:450px"></div>
+                                <div class="bg-dark text-primary fw-bold footer">Project conFetch</div>
+                                </body></html>''')
+                    file.close()
+            finally:
+                os.popen("fixperms ./conFetch").read()
+                payload = {"version": version, "user": username, "action": "show -g " + ''.join(args.K) + " --> " + os.getcwd() + " --> " + str(
+                    int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+                resp = request.urlopen(request.Request(
+                    url, data=parse.urlencode(payload).encode()))
+        elif "mem" in args.g:
+            print(args.g + "".split(" ") + args.K)
+            try:
+                time_range = sp.run(
+                    "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=\"\"; printf $0}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                mem_cur_usedsize_freesize = sp.run(
+                    "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -s disptime=1  -g mem_cur_usedsize -g mem_cur_freesize | awk '!/actual/&&/mem_cur/{print $10, $3/1000000, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"[\\047%s\\047%s\", \"Time\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"\\047%s\\047%s\", cpu, (cpuNr<numCpus ? OFS : \"]\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \",%s[\\047%s\\047%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]\");prev_vals[cpu] = val;};};print \"\";}' | awk '{printf}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                if len(mem_cur_usedsize_freesize.stdout) < 23:
+                    mem_cur_usedsize_freesize = "['Time', 'dummy'],['', ]"
+                else:
+                    mem_cur_usedsize_freesize.stdout = re.findall(
+                        '\[\'Time\'.*\'].|\[\''+starttime+'.*\[\''+endtime+'.{2,30}]', mem_cur_usedsize_freesize.stdout)
+                    mem_cur_usedsize_freesize = mem_cur_usedsize_freesize.stdout[0] + \
+                        mem_cur_usedsize_freesize.stdout[1]
+                if True:
+                    file = open(path+"/"+newnslogFile+"_memory.html", "w")
+                    file.write('''<html><head><script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script><script src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@latest/scripts4internal/conFetch.js"></script><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@latest/scripts4internal/conFetch.css"></link><script type="text/javascript">google.charts.load('current', {'packages':['corechart']});
+                                google.charts.setOnLoadCallback(mem_cur_usedsize_freesize);
+                                function mem_cur_usedsize_freesize()
+                                {var data = google.visualization.arrayToDataTable(['''+mem_cur_usedsize_freesize+''']);
+                                var options = {title: 'mem_cur_usedsize_freesize',curveType: 'function',animation:{duration: 1000,easing: 'out',startup:true},explorer:{axis: 'horizontal',actions: ['dragToZoom', 'rightClickToReset'],keepInBounds: true},vAxis:{title:'Megabytes',titleTextStyle:{italic:false}},legend: { position: 'bottom' }};
+                                var chart = new google.visualization.LineChart(document.getElementById('mem_cur_usedsize_freesize_curve_chart'));
+                                chart.draw(data, options);}
+                                </script><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous"><script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script></head><body>
+                                <h1 class="text-primary d-flex justify-content-center">Memory Graph</h1>
+                                <hr>
+                                <h6 class="d-inline-block">Collector_Bundle_Name: '''+collector_bundle_name+'''</h6><h6>Device_Name: '''+adchostname+'''</h6><h6>Log_file: '''+newnslogFile+'''</h6><h6>Log_Timestamp: '''+time_range+'''</h6>
+                                <hr>
+                                <div id="mem_cur_usedsize_freesize_curve_chart" class="w-auto" style="height:450px"></div>
+                                <div class="bg-dark text-primary fw-bold footer">Project conFetch</div>
+                                </body></html>''')
+                    file.close()
+            finally:
+                os.popen("fixperms ./conFetch").read()
+                payload = {"version": version, "user": username, "action": "show -g " + ''.join(args.g + "".split(" ") + args.K) + " --> " + os.getcwd() + " --> " + str(
+                    int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+                resp = request.urlopen(request.Request(
+                    url, data=parse.urlencode(payload).encode()))
+    finally:
+        pass
+
+
 else:
     print("Please use -h for help")
     logger.error(os.getcwd() + " - No switch")

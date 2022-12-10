@@ -8,8 +8,21 @@
         'packages': ['corechart']
     });
     google.charts.setOnLoadCallback(ha_tot_pkt_rx_tx);
-    google.charts.setOnLoadCallback(ha_err_heartbeat);
-    google.charts.setOnLoadCallback(ha_tot_macresolve_requests);
+
+    var cpudata = [
+        ['10:22:50', 0, 0],
+        ['10:22:57', 0, 0],
+        ['10:23:04', 0, 0],
+        ['10:23:11', 0, 0],
+        ['10:38:01', 0, 0],
+        ['10:38:08', 0, 0],
+        ['10:38:15', 0, 0],
+        ['10:38:22', 0, 0],
+        ['10:38:29', 0, 0],
+        ['10:38:36', 0, 0],
+        ['10:38:43', 0, 0],
+    ]
+    console.log(cpudata)
 
     function ha_tot_pkt_rx_tx() {
         var data = google.visualization.arrayToDataTable([
@@ -164,6 +177,10 @@
                     italic: false
                 }
             },
+            explorer: {
+                actions: ['dragToZoom', 'rightClickToReset'],
+                keepInBounds: true,
+            },
             legend: {
                 position: 'bottom'
             }
@@ -171,34 +188,10 @@
         var chart = new google.visualization.LineChart(document.getElementById('ha_tot_pkt_rx_tx_curve_chart'));
         chart.draw(data, options);
 
-
-
-        function createNewCheckboxt(id) {
-            var checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.id = id;
-            return checkbox;
-        }
-        for (let i = 1; i < (data.bf).length; i++) {
-            var series = data.bf[i].label
-            document.body.appendChild(createNewCheckboxt(series))
-            document.getElementById(series).innerHTML = series
-            console.log(series)
-
-            var toggleSales = document.getElementById(series);
-            var salesHidden = false;
-            toggleSales.onclick = function() {
-                salesHidden = !salesHidden;
-                view = new google.visualization.DataView(data);
-                if (salesHidden) {
-                    view.hideColumns([1]);
-                }
-                chart.draw(view, options);
-            }
-        }
-
     }
 </script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous">
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
 </head>
@@ -210,9 +203,8 @@
     <h6>Log_file: newnslog.52:</h6>
     <h6>Log_Timestamp: Thu Nov 24 05:49:25 2022 Thu Nov 24 06:09:22 2022</h6>
     <hr>
-    <div id="ha_tot_pkt_rx_tx_curve_chart" class="w-auto" style="height:450px"></div>
-    <div id="ha_err_heartbeat_curve_chart" class="w-auto" style="height:450px"></div>
-    <div id="ha_tot_macresolve_requests_curve_chart" class="w-auto" style="height:450px"></div>
+    <div id="ha_tot_pkt_rx_tx_curve_chart" class="container-fluid" style="height:450px"></div>
+
 
     <div class="bg-dark text-primary fw-bold footer">Project conFetch</div>
 </body>
