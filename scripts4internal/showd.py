@@ -103,7 +103,7 @@ parser.add_argument('-ha', action="store_true",
 parser.add_argument('-G', action="append",
                     choices={"cpu", "mem", "ha"}, help="Generate HTML Graph for all newnslog(s)")
 parser.add_argument('-g', action="append",
-                    choices={"cpu", "mem", "ha"}, help="Generate HTML Graph for specific newnslog")
+                    choices={"cpu", "mem", "ha"}, help="Generate HTML Graph for specific newnslog\n-K <newnslog> --> newnslog Filename\n-s <HH:MM> --> Graph Start Time\n-e <HH:MM> --> Graph End Time")
 parser.add_argument('-K', action="append",
                     metavar="newnslog filename", help=argparse.SUPPRESS)
 parser.add_argument('-s', action="append",
