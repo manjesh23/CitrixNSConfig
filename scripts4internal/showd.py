@@ -1007,7 +1007,6 @@ elif args.g:
                 resp = request.urlopen(request.Request(
                     url, data=parse.urlencode(payload).encode()))
         elif "mem" in args.g:
-            print(args.g + "".split(" ") + args.K)
             try:
                 time_range = sp.run(
                     "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=\"\"; printf $0}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
@@ -1040,7 +1039,7 @@ elif args.g:
                     file.close()
             finally:
                 os.popen("fixperms ./conFetch").read()
-                payload = {"version": version, "user": username, "action": "show -g " + ''.join(args.g + "".split(" ") + args.K) + " --> " + os.getcwd() + " --> " + str(
+                payload = {"version": version, "user": username, "action": "show -g " + ''.join(args.g + " -- ".split() + args.K) + " --> " + os.getcwd() + " --> " + str(
                     int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
                 resp = request.urlopen(request.Request(
                     url, data=parse.urlencode(payload).encode()))
