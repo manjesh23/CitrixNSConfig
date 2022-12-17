@@ -16,6 +16,24 @@ body {
     font-family: "Helvetica Neue", Arial, sans-serif;
 }
 
-h1 {
-    color: green;
+.txt-primary {
+    width: 100%;
+    color: rgb(38, 85, 214);
+    text-align: center;
+}
+
+h6 {
+    width: 100%;
+    color: rgb(38, 85, 214);
+    block-size: 1;
+}
+
+.footer {
+    font-weight: bold;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    background-color: rgb(41, 37, 37);
+    color: rgb(42, 133, 207);
+    text-align: center;
 }

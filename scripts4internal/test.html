@@ -2,6 +2,8 @@
 
 <head>
     <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <script type="text/javascript" src="conFetch.js"></script>
+    <link rel="stylesheet" href="conFetch.css">
     <script type="text/javascript">
         google.charts.load('current', {
             'packages': ['annotationchart']
@@ -111,9 +113,9 @@
 </head>
 
 <body>
-    <h1 class="text-primary d-flex justify-content-center">CPU Graph</h1>
+    <h1 class="txt-primary">CPU Graph</h1>
     <hr>
-    <h6 class="d-inline-block">collector_P_169.175.148.131_9Dec2022_09_39
+    <h6>collector_P_169.175.148.131_9Dec2022_09_39
     </h6>
     <h6>Device_Name: lgbrdc-cxw01-8005
     </h6>
@@ -121,11 +123,11 @@
     <h6>Log_Timestamp: Fri Dec 9 03:54:23 2022 Fri Dec 9 09:40:24 2022</h6>
     <hr>
     <div style="width: 100%">
-        <div id="master_cpu" class="w-auto" style="height:450px"></div>
-        <div id="cc_cpu" class="w-auto" style="height:450px"></div>
+        <div id="master_cpu" style="height:450px"></div>
+        <div id="cc_cpu" style="height:450px"></div>
 
     </div>
-    <div class="bg-dark text-primary fw-bold footer">Project conFetch</div>
+    <div class="txt-primary footer">Project conFetch</div>
 </body>
 
 </html>
