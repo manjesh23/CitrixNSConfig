@@ -15,3 +15,7 @@ body {
     min-height: 100%;
     font-family: "Helvetica Neue", Arial, sans-serif;
 }
+
+h1 {
+    color: green;
+}

@@ -317,7 +317,7 @@ elif args.p:
                           shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         nsppepid = sp.run("awk '/NSPPE/{print}' shell/nsp.out | sed \"s/^[ \t]*//\"",
                           shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        core = sp.run("awk '/NSPPE-/&&!/gz/{printf \"[%s-%s/%s --> %s --> %s]\\n\",  $6, $7, $8, $NF, $5}' shell/ls_lRtrp_var.out | sed \"s/^[ \t]*//\"",
+        core = sp.run("awk '/NSPPE-/&&!/20../{printf \"[%s-%s/%s --> %s --> %s]\\n\",  $6, $7, $8, $NF, $5}' shell/ls_lRtrp_var.out | sed \"s/^[ \t]*//\"",
                       shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
     finally:
         print(style.YELLOW + '{:-^87}'.format('ADC Process Information'))
@@ -724,9 +724,8 @@ elif args.G:
                     time_range = sp.run(
                         "nsconmsg -K "+newnslog_file+" -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=\"\"; printf $0}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                     master_cpu_use = sp.run(
-                        "nsconmsg -K "+newnslog_file+" -d current -g master_cpu_use -s disptime=1 | awk 'BEGIN{q=\"\\047\"; printf \"[\"q\"Time\"q\",\"q\"CPU\"q\"],\"}/master/{q=\"\\047\"; printf \"[\"q$10q\",\" $3/10\"],\"}' | sed 's/,$//'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                    cc_cpu_use = sp.run(
-                        "nsconmsg -K "+newnslog_file+" -d current -g cc_cpu_use -s disptime=1 | awk '/cc_cpu/{print $11, $3/10, $7}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"[\\047%s\\047%s\", \"Time\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"\\047%s\\047%s\", cpu, (cpuNr<numCpus ? OFS : \"]\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \",%s[\\047%s\\047%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]\");prev_vals[cpu] = val;};};print \"\";}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                        "nsconmsg -K "+newnslog_file+" -d current -s disptime=1 -g master_cpu | awk '/master_cpu/{print $8\"-\"$9\",\"$11\"-\"$10, $3, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g' | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                    cc_cpu_use = sp.run("nsconmsg -K "+newnslog_file+" -d current -s disptime=1 -g cc_cpu | awk '/cc_cpu/{print $9\"-\"$10\",\"$12\"-\"$11, $3, $7}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\\n\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g' | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                     if len(master_cpu_use.stdout) < 23:
                         master_cpu_use.stdout = "['Time', 'dummy']"
                     if len(cc_cpu_use.stdout) < 23:
@@ -734,28 +733,8 @@ elif args.G:
                     if True:
                         file = open(path+"/"+newnslog_file.split("/")
                                     [2]+"_cpu_Usage.html", "w")
-                        file.write('''<html><head><script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script><script src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@latest/scripts4internal/conFetch.js"></script><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@latest/scripts4internal/conFetch.css"></link><script type="text/javascript">google.charts.load('current', {'packages':['corechart']});
-                                google.charts.setOnLoadCallback(master_cpu_use);
-                                google.charts.setOnLoadCallback(cc_cpu_use);
-                                function master_cpu_use()
-                                {var data = google.visualization.arrayToDataTable(['''+master_cpu_use.stdout+''']);
-                                var options = {title: 'master_cpu_use',curveType: 'function',animation:{duration: 1000,easing: 'out',startup:true},explorer:{axis: 'horizontal',actions: ['dragToZoom', 'rightClickToReset'],keepInBounds: true},vAxis:{title:'Percent',titleTextStyle:{italic:false}},legend: { position: 'bottom' }};
-                                var chart = new google.visualization.LineChart(document.getElementById('master_cpu_use_curve_chart'));
-                                chart.draw(data, options);}
-                                function cc_cpu_use()
-                                {var data = google.visualization.arrayToDataTable(['''+cc_cpu_use.stdout+''']);
-                                var options = {title: 'cc_cpu_use',curveType: 'function',animation:{duration: 1000,easing: 'out',startup:true},explorer:{axis: 'horizontal',actions: ['dragToZoom', 'rightClickToReset'],keepInBounds: true},vAxis:{title:'Percent',titleTextStyle:{italic:false}},legend: { position: 'bottom' }};
-                                var chart = new google.visualization.LineChart(document.getElementById('cc_cpu_use_curve_chart'));
-                                chart.draw(data, options);}
-                                </script><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous"><script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script></head><body>
-                                <h1 class="text-primary d-flex justify-content-center">CPU Graph</h1>
-                                <hr>
-                                <h6 class="d-inline-block">Collector_Bundle_Name: '''+collector_bundle_name+'''</h6><h6>Device_Name: '''+adchostname+'''</h6><h6>Log_file: '''+newnslog_file.split("/")[2]+'''</h6><h6>Log_Timestamp: '''+time_range+'''</h6>
-                                <hr>
-                                <div id="master_cpu_use_curve_chart" class="w-auto" style="height:450px"></div>
-                                <div id="cc_cpu_use_curve_chart" class="w-auto" style="height:450px"></div>
-                                <div class="bg-dark text-primary fw-bold footer">Project conFetch</div>
-                                </body></html>''')
+                        file.write('''<html><head> <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script> <script src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@latest/scripts4internal/conFetch.js"></script> <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@latest/scripts4internal/conFetch.css"></link> <script type="text/javascript">google.charts.load('current',{'packages':['annotationchart']}); google.charts.setOnLoadCallback(master_cpu_use); google.charts.setOnLoadCallback(cc_cpu_use); function master_cpu_use(){var data=new google.visualization.DataTable();'''+master_cpu_use.stdout+''' var chart=new google.visualization.AnnotationChart(document.getElementById('master_cpu')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy',}; chart.draw(data, options);}function cc_cpu_use(){var data=new google.visualization.DataTable();'''+cc_cpu_use.stdout +
+                                   ''' var chart=new google.visualization.AnnotationChart(document.getElementById('cc_cpu')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy',}; chart.draw(data, options);}</script> <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous"> <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script> </head> <body> <h1 class="text-primary d-flex justify-content-center">CPU Graph</h1> <hr> <h6 class="d-inline-block">'''+collector_bundle_name+''' </h6> <h6>Device_Name: '''+adchostname+''' </h6> <h6>Log_file: '''+newnslog_file.split("/")[2]+'''</h6> <h6>Log_Timestamp: '''+time_range+'''</h6> <hr> <div id="master_cpu" class="w-auto" style="height:450px"></div><div id="cc_cpu" class="w-auto" style="height:450px"></div><div class="bg-dark text-primary fw-bold footer">Project conFetch</div></body></html>''')
                         file.close()
                         print("Processed "+newnslog_file)
             finally:
