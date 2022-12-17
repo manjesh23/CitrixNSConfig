@@ -724,12 +724,12 @@ elif args.G:
                     time_range = sp.run(
                         "nsconmsg -K "+newnslog_file+" -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=\"\"; printf $0}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                     master_cpu_use = sp.run(
-                        "nsconmsg -K "+newnslog_file+" -d current -s disptime=1 -g master_cpu | awk '/master_cpu/{print $8\"-\"$9\",\"$11\"-\"$10, $3, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g' | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                        "nsconmsg -K "+newnslog_file+" -d current -s disptime=1 -g master_cpu | awk '/master_cpu/{print $8\"-\"$9\",\"$11\"-\"$10, $3/10, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g' | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                     cc_cpu_use = sp.run("nsconmsg -K "+newnslog_file+" -d current -s disptime=1 -g cc_cpu | awk '/cc_cpu/{print $9\"-\"$10\",\"$12\"-\"$11, $3, $7}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\\n\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g' | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                     if len(master_cpu_use.stdout) < 23:
-                        master_cpu_use.stdout = "['Time', 'dummy']"
+                        master_cpu_use.stdout = "data.addColumn('date', 'Manjesh');data.addRow('');"
                     if len(cc_cpu_use.stdout) < 23:
-                        cc_cpu_use.stdout = "['Time', 'dummy']"
+                        cc_cpu_use.stdout = "data.addColumn('date', 'Manjesh');data.addRow('');"
                     if True:
                         file = open(path+"/"+newnslog_file.split("/")
                                     [2]+"_cpu_Usage.html", "w")
@@ -755,11 +755,11 @@ elif args.G:
                     ha_tot_macresolve_requests = sp.run(
                         "nsconmsg -K "+newnslog_file+" -d current -s disptime=1 -g ha_tot_macresolve_requests | awk '/ha_/{print $10, $4, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"[\\047%s\\047%s\", \"Time\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"\\047%s\\047%s\", cpu, (cpuNr<numCpus ? OFS : \"]\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \",%s[\\047%s\\047%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]\");prev_vals[cpu] = val;};};print \"\";}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                     if len(ha_tot_pkt_rx_tx.stdout) < 23:
-                        ha_tot_pkt_rx_tx.stdout = "['Time', 'dummy']"
+                        ha_tot_pkt_rx_tx.stdout = "data.addColumn('date', 'Manjesh');data.addRow('');"
                     if len(ha_tot_macresolve_requests.stdout) < 23:
-                        ha_tot_macresolve_requests.stdout = "['Time', 'dummy']"
+                        ha_tot_macresolve_requests.stdout = "data.addColumn('date', 'Manjesh');data.addRow('');"
                     if len(ha_err_heartbeat.stdout) < 23:
-                        ha_err_heartbeat.stdout = "['Time', 'dummy']"
+                        ha_err_heartbeat.stdout = "data.addColumn('date', 'Manjesh');data.addRow('');"
                     if True:
                         file = open(path+"/"+newnslog_file.split("/")
                                     [2]+"_HA.html", "w")
@@ -808,7 +808,7 @@ elif args.G:
                     mem_cur_usedsize_freesize = sp.run(
                         "nsconmsg -K "+newnslog_file+" -d current -s disptime=1  -g mem_cur_usedsize -g mem_cur_freesize | awk '!/actual/&&/mem_cur/{print $10, $3/1000000, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"[\\047%s\\047%s\", \"Time\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"\\047%s\\047%s\", cpu, (cpuNr<numCpus ? OFS : \"]\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \",%s[\\047%s\\047%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]\");prev_vals[cpu] = val;};};print \"\";}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                     if len(mem_cur_usedsize_freesize.stdout) < 23:
-                        mem_cur_usedsize_freesize.stdout = "['Time', 'dummy']"
+                        mem_cur_usedsize_freesize.stdout = "data.addColumn('date', 'Manjesh');data.addRow('');"
                     if True:
                         file = open(path+"/"+newnslog_file.split("/")
                                     [2]+"_memory.html", "w")
@@ -873,14 +873,14 @@ elif args.g:
                 cc_cpu_use = sp.run(
                     "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -g cc_cpu_use -s disptime=1 | awk '/cc_cpu/{print $11, $3/10, $7}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"[\\047%s\\047%s\", \"Time\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"\\047%s\\047%s\", cpu, (cpuNr<numCpus ? OFS : \"]\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \",%s[\\047%s\\047%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]\");prev_vals[cpu] = val;};};print \"\";}' | awk '{printf}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                 if len(master_cpu_use.stdout) < 23:
-                    master_cpu_use = "['Time', 'dummy'],['', ]"
+                    master_cpu_use = "data.addColumn('date', 'Manjesh');data.addRow('');,['', ]"
                 else:
                     master_cpu_use.stdout = re.findall(
                         '\[\'Time\'.*\'].|\[\''+starttime+'.*\[\''+endtime+'.{2,30}]', master_cpu_use.stdout)
                     master_cpu_use = master_cpu_use.stdout[0] + \
                         master_cpu_use.stdout[1]
                 if len(cc_cpu_use.stdout) < 23:
-                    cc_cpu_use = "['Time', 'dummy'],['', ]"
+                    cc_cpu_use = "data.addColumn('date', 'Manjesh');data.addRow('');,['', ]"
                 else:
                     cc_cpu_use.stdout = re.findall(
                         '\[\'Time\'.*\'].|\[\''+starttime+'.*\[\''+endtime+'.{2,30}]', cc_cpu_use.stdout)
@@ -927,21 +927,21 @@ elif args.g:
                 ha_tot_macresolve_requests = sp.run(
                     "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -s disptime=1 -g ha_tot_macresolve_requests | awk '/ha_/{print $10, $4, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"[\\047%s\\047%s\", \"Time\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"\\047%s\\047%s\", cpu, (cpuNr<numCpus ? OFS : \"]\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \",%s[\\047%s\\047%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]\");prev_vals[cpu] = val;};};print \"\";}' | awk '{printf}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                 if len(ha_tot_pkt_rx_tx.stdout) < 23:
-                    ha_tot_pkt_rx_tx = "['Time', 'dummy'],['', ]"
+                    ha_tot_pkt_rx_tx = "data.addColumn('date', 'Manjesh');data.addRow('');,['', ]"
                 else:
                     ha_tot_pkt_rx_tx.stdout = re.findall(
                         '\[\'Time\'.*\'].|\[\''+starttime+'.*\[\''+endtime+'.{2,30}]', ha_tot_pkt_rx_tx.stdout)
                     ha_tot_pkt_rx_tx = ha_tot_pkt_rx_tx.stdout[0] + \
                         ha_tot_pkt_rx_tx.stdout[1]
                 if len(ha_tot_macresolve_requests.stdout) < 23:
-                    ha_tot_macresolve_requests = "['Time', 'dummy'],['', ]"
+                    ha_tot_macresolve_requests = "data.addColumn('date', 'Manjesh');data.addRow('');,['', ]"
                 else:
                     ha_tot_macresolve_requests.stdout = re.findall(
                         '\[\'Time\'.*\'].|\[\''+starttime+'.*\[\''+endtime+'.{2,30}]', ha_tot_macresolve_requests.stdout)
                     ha_tot_macresolve_requests = ha_tot_macresolve_requests.stdout[0] + \
                         ha_tot_macresolve_requests.stdout[1]
                 if len(ha_err_heartbeat.stdout) < 23:
-                    ha_err_heartbeat = "['Time', 'dummy'],['', ]"
+                    ha_err_heartbeat = "data.addColumn('date', 'Manjesh');data.addRow('');,['', ]"
                 else:
                     ha_err_heartbeat.stdout = re.findall(
                         '\[\'Time\'.*\'].|\[\''+starttime+'.*\[\''+endtime+'.{2,30}]', ha_err_heartbeat.stdout)
@@ -992,7 +992,7 @@ elif args.g:
                 mem_cur_usedsize_freesize = sp.run(
                     "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -s disptime=1  -g mem_cur_usedsize -g mem_cur_freesize | awk '!/actual/&&/mem_cur/{print $10, $3/1000000, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"[\\047%s\\047%s\", \"Time\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"\\047%s\\047%s\", cpu, (cpuNr<numCpus ? OFS : \"]\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \",%s[\\047%s\\047%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]\");prev_vals[cpu] = val;};};print \"\";}' | awk '{printf}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                 if len(mem_cur_usedsize_freesize.stdout) < 23:
-                    mem_cur_usedsize_freesize = "['Time', 'dummy'],['', ]"
+                    mem_cur_usedsize_freesize = "data.addColumn('date', 'Manjesh');data.addRow('');,['', ]"
                 else:
                     mem_cur_usedsize_freesize.stdout = re.findall(
                         '\[\'Time\'.*\'].|\[\''+starttime+'.*\[\''+endtime+'.{2,30}]', mem_cur_usedsize_freesize.stdout)

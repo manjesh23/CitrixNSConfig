@@ -3,7 +3,7 @@
 <head>
     <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
     <script type="text/javascript" src="conFetch.js"></script>
-    <link rel="stylesheet" href="conFetch.css">
+    <link rel="stylesheet" href="https://cdn.statically.io/gh/manjesh23/CitrixNSConfig/main/scripts4internal/conFetch.css">
     <script type="text/javascript">
         google.charts.load('current', {
             'packages': ['annotationchart']
@@ -15,8 +15,6 @@
             var data = new google.visualization.DataTable();
             data.addColumn('date', 'Manjesh');
             data.addColumn('number', 'master_cpu_use');
-            data.addRow([new Date('Dec 9,2022 03:54:37'), 27]);
-            data.addRow([new Date('Dec 9,2022 03:54:44'), 24]);
             data.addRow([new Date('Dec 9,2022 09:35:02'), 41]);
             data.addRow([new Date('Dec 9,2022 09:35:09'), 38]);
             data.addRow([new Date('Dec 9,2022 09:35:16'), 32]);
@@ -62,6 +60,8 @@
                 displayAnnotations: true,
                 displayZoomButtons: false,
                 dateFormat: 'HH:mm:ss MMMM dd, yyyy',
+                thickness: 2,
+
             };
             chart.draw(data, options);
         }
@@ -71,9 +71,7 @@
             data.addColumn('date', 'Manjesh');
             data.addColumn('number', 'cpu(1)', );
             data.addColumn('number', 'cpu(2)');
-            data.addRow([new Date('Dec 9,2022 03:54:37'), 27, 27]);
-            data.addRow([new Date('Dec 9,2022 03:54:44'), 25, 23]);
-            data.addRow([new Date('Dec 9,2022 09:37:22'), 37, 36]);
+
             data.addRow([new Date('Dec 9,2022 09:37:29'), 30, 29]);
             data.addRow([new Date('Dec 9,2022 09:37:36'), 32, 30]);
             data.addRow([new Date('Dec 9,2022 09:37:43'), 30, 30]);
