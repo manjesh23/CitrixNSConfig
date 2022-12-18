@@ -1,13 +1,8 @@
-// showMe script//
-function showMe(box) {
-
-    var chboxs = document.getElementsByName("manjesh");
-    var vis = "none";
-    for (var i = 0; i < chboxs.length; i++) {
-        if (chboxs[i].checked) {
-            vis = "block";
-            break;
-        }
+function hideDiv() {
+    var x = document.getElementById("divElement");
+    if (x.style.display === "none") {
+        x.style.display = "block";
+    } else {
+        x.style.display = "none";
     }
-    document.getElementById(box).style.display = vis;
 }
