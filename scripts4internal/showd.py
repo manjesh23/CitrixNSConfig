@@ -830,46 +830,25 @@ elif args.g:
                 time_range = sp.run(
                     "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=\"\"; printf \" --%s\", $0}' | sed -r 's/^.{9}//'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                 master_cpu_use = sp.run(
-                    "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -g master_cpu_use -s disptime=1 | awk 'BEGIN{q=\"\\047\"; printf \"[\"q\"Time\"q\",\"q\"CPU\"q\"],\"}/master/{q=\"\\047\"; printf \"[\"q$10q\",\" $3/10\"],\"}' | sed 's/,$//'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                    "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -s disptime=1 -g master_cpu | awk '/master_cpu/{print $8\"-\"$9\",\"$11\"-\"$10, $3/10, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g' | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                 cc_cpu_use = sp.run(
-                    "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -g cc_cpu_use -s disptime=1 | awk '/cc_cpu/{print $11, $3/10, $7}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"[\\047%s\\047%s\", \"Time\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"\\047%s\\047%s\", cpu, (cpuNr<numCpus ? OFS : \"]\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \",%s[\\047%s\\047%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]\");prev_vals[cpu] = val;};};print \"\";}' | awk '{printf}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                    "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -s disptime=1 -g cc_cpu | awk '/cc_cpu/{print $9\"-\"$10\",\"$12\"-\"$11, $3/10, $7}' | tail -n +10  | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\\n\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g' | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                 if len(master_cpu_use.stdout) < 52:
                     master_cpu_use = "data.addColumn('date', 'Manjesh');data.addColumn('Manjesh', 'Manjesh');,['', ]"
                 else:
-                    master_cpu_use.stdout = re.findall(
-                        '\[\'Time\'.*\'].|\[\''+starttime+'.*\[\''+endtime+'.{2,30}]', master_cpu_use.stdout)
-                    master_cpu_use = master_cpu_use.stdout[0] + \
-                        master_cpu_use.stdout[1]
+                    master_cpu_use.stdout = re.findall('data.addColumn.{0,52}\);|data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s' +
+                                                       starttime+'..*data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s'+endtime+'..{2,16}\);', master_cpu_use.stdout)
+                    master_cpu_use = ''.join(master_cpu_use.stdout)
                 if len(cc_cpu_use.stdout) < 52:
                     cc_cpu_use = "data.addColumn('date', 'Manjesh');data.addColumn('Manjesh', 'Manjesh');,['', ]"
                 else:
-                    cc_cpu_use.stdout = re.findall(
-                        '\[\'Time\'.*\'].|\[\''+starttime+'.*\[\''+endtime+'.{2,30}]', cc_cpu_use.stdout)
-                    cc_cpu_use = cc_cpu_use.stdout[0] + cc_cpu_use.stdout[1]
+                    cc_cpu_use.stdout = re.findall('data.addColumn.{0,52}\);|data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s' +
+                                                   starttime+'..*data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s'+endtime+'..{2,16}\);', cc_cpu_use.stdout)
+                    cc_cpu_use = ''.join(cc_cpu_use.stdout)
                 if True:
                     file = open(path+"/"+newnslogFile+"_cpu_Usage.html", "w")
-                    file.write('''<html><head><script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script><script src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@latest/scripts4internal/conFetch.js"></script><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@latest/scripts4internal/conFetch.css"></link><script type="text/javascript">google.charts.load('current', {'packages':['corechart']});
-                                google.charts.setOnLoadCallback(master_cpu_use);
-                                google.charts.setOnLoadCallback(cc_cpu_use);
-                                function master_cpu_use()
-                                {var data = google.visualization.arrayToDataTable(['''+master_cpu_use+''']);
-                                var options = {title: 'master_cpu_use',curveType: 'function',animation:{duration: 1000,easing: 'out',startup:true},explorer:{axis: 'horizontal',actions: ['dragToZoom', 'rightClickToReset'],keepInBounds: true},vAxis:{title:'Percent',titleTextStyle:{italic:false}},legend: { position: 'bottom' }};
-                                var chart = new google.visualization.LineChart(document.getElementById('master_cpu_use_curve_chart'));
-                                chart.draw(data, options);}
-                                function cc_cpu_use()
-                                {var data = google.visualization.arrayToDataTable(['''+cc_cpu_use+''']);
-                                var options = {title: 'cc_cpu_use',curveType: 'function',animation:{duration: 1000,easing: 'out',startup:true},explorer:{axis: 'horizontal',actions: ['dragToZoom', 'rightClickToReset'],keepInBounds: true},vAxis:{title:'Percent',titleTextStyle:{italic:false}},legend: { position: 'bottom' }};
-                                var chart = new google.visualization.LineChart(document.getElementById('cc_cpu_use_curve_chart'));
-                                chart.draw(data, options);}
-                                </script><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous"><script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script></head><body>
-                                <h1 class="text-primary d-flex justify-content-center">CPU Graph</h1>
-                                <hr>
-                                <h6 class="d-inline-block">Collector_Bundle_Name: '''+collector_bundle_name+'''</h6><h6>Device_Name: '''+adchostname+'''</h6><h6>Log_file: '''+newnslogFile+'''</h6><h6>Log_Timestamp: '''+time_range+'''</h6>
-                                <hr>
-                                <div id="master_cpu_use_curve_chart" class="w-auto" style="height:450px"></div>
-                                <div id="cc_cpu_use_curve_chart" class="w-auto" style="height:450px"></div>
-                                <div class="bg-dark text-primary fw-bold footer">Project conFetch</div>
-                                </body></html>''')
+                    file.write('''<html><head> <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script> <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.js"></script> <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.css"> <script type="text/javascript">google.charts.load('current',{'packages': ['annotationchart']}); google.charts.setOnLoadCallback(master_cpu_use); google.charts.setOnLoadCallback(cc_cpu_use); function master_cpu_use(){var data=new google.visualization.DataTable(); '''+master_cpu_use +
+                               ''' var chart=new google.visualization.AnnotationChart(document.getElementById('master_cpu')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}function cc_cpu_use(){var data=new google.visualization.DataTable(); '''+cc_cpu_use + ''' var chart=new google.visualization.AnnotationChart(document.getElementById('cc_cpu')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}</script></head><body> <h1 class="txt-primary">CPU Graph</h1> <hr> <p class="txt-title">Collector_Bundle_Name: '''+collector_bundle_name+'''<br>Device_Name: '''+adchostname+'''<br>Log_file: '''+"var/nslog/"+newnslogFile+'''<br>Log_Timestamp: '''+time_range+'''</p><hr><div style="width: 100%"><p class="txt-primary">master_cpu_use</p><div id="master_cpu" style="height:450px"></div><hr><p class="txt-primary">cc_cpu_use</p><div id="cc_cpu" style="height:450px"></div></div><div class="footer">Project conFetch</div></body></html>''')
                     file.close()
             finally:
                 os.popen("fixperms ./conFetch").read()
@@ -882,64 +861,37 @@ elif args.g:
                 time_range = sp.run(
                     "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=\"\"; printf \" --%s\", $0}' | sed -r 's/^.{9}//'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                 ha_tot_pkt_rx_tx = sp.run(
-                    "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -s disptime=1 -g ha_tot_pkt_rx -g ha_tot_pkt_tx | awk '/ha_tot/{print $10, $4, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"[\\047%s\\047%s\", \"Time\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"\\047%s\\047%s\", cpu, (cpuNr<numCpus ? OFS : \"]\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \",%s[\\047%s\\047%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]\");prev_vals[cpu] = val;};};print \"\";}' | awk '{printf}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                    "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -s disptime=1 -g ha_tot_pkt_rx -g ha_tot_pkt_tx  |awk '/ha_tot/{print $8\"-\"$9\",\"$11\"-\"$10, $4, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\\n\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g' | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                 ha_err_heartbeat = sp.run(
-                    "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -s disptime=1 -g ha_err_heartbeat | awk '/ha_/{print $10, $4, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"[\\047%s\\047%s\", \"Time\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"\\047%s\\047%s\", cpu, (cpuNr<numCpus ? OFS : \"]\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \",%s[\\047%s\\047%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]\");prev_vals[cpu] = val;};};print \"\";}' | awk '{printf}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                    "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -s disptime=1 -g ha_err_heartbeat | awk '/ha_err_heartbeat/{print $8\"-\"$9\",\"$11\"-\"$10, $4, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\\n\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g' | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                 ha_tot_macresolve_requests = sp.run(
-                    "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -s disptime=1 -g ha_tot_macresolve_requests | awk '/ha_/{print $10, $4, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"[\\047%s\\047%s\", \"Time\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"\\047%s\\047%s\", cpu, (cpuNr<numCpus ? OFS : \"]\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \",%s[\\047%s\\047%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]\");prev_vals[cpu] = val;};};print \"\";}' | awk '{printf}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                    "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -s disptime=1 -g ha_tot_macresolve_requests | awk '/ha_tot_macresolve_requests/{print $8\"-\"$9\",\"$11\"-\"$10, $4, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\\n\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g' | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                 if len(ha_tot_pkt_rx_tx.stdout) < 52:
                     ha_tot_pkt_rx_tx = "data.addColumn('date', 'Manjesh');data.addColumn('Manjesh', 'Manjesh');,['', ]"
                 else:
-                    ha_tot_pkt_rx_tx.stdout = re.findall(
-                        '\[\'Time\'.*\'].|\[\''+starttime+'.*\[\''+endtime+'.{2,30}]', ha_tot_pkt_rx_tx.stdout)
-                    ha_tot_pkt_rx_tx = ha_tot_pkt_rx_tx.stdout[0] + \
-                        ha_tot_pkt_rx_tx.stdout[1]
+                    ha_tot_pkt_rx_tx.stdout = re.findall('data.addColumn.{0,52}\);|data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s' +
+                                                         starttime+'..*data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s'+endtime+'..{2,20}\);', ha_tot_pkt_rx_tx.stdout)
+                    ha_tot_pkt_rx_tx = ''.join(
+                        ha_tot_pkt_rx_tx.stdout)
                 if len(ha_tot_macresolve_requests.stdout) < 52:
                     ha_tot_macresolve_requests = "data.addColumn('date', 'Manjesh');data.addColumn('Manjesh', 'Manjesh');,['', ]"
                 else:
-                    ha_tot_macresolve_requests.stdout = re.findall(
-                        '\[\'Time\'.*\'].|\[\''+starttime+'.*\[\''+endtime+'.{2,30}]', ha_tot_macresolve_requests.stdout)
-                    ha_tot_macresolve_requests = ha_tot_macresolve_requests.stdout[0] + \
-                        ha_tot_macresolve_requests.stdout[1]
+                    ha_tot_macresolve_requests.stdout = re.findall('data.addColumn.{0,52}\);|data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s' +
+                                                                   starttime+'..*data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s'+endtime+'..{2,20}\);', ha_tot_macresolve_requests.stdout)
+                    ha_tot_macresolve_requests = ''.join(
+                        ha_tot_macresolve_requests.stdout)
                 if len(ha_err_heartbeat.stdout) < 52:
                     ha_err_heartbeat = "data.addColumn('date', 'Manjesh');data.addColumn('Manjesh', 'Manjesh');,['', ]"
                 else:
-                    ha_err_heartbeat.stdout = re.findall(
-                        '\[\'Time\'.*\'].|\[\''+starttime+'.*\[\''+endtime+'.{2,30}]', ha_err_heartbeat.stdout)
-                    ha_err_heartbeat = ha_err_heartbeat.stdout[0] + \
-                        ha_err_heartbeat.stdout[1]
+                    ha_err_heartbeat.stdout = re.findall('data.addColumn.{0,52}\);|data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s' +
+                                                         starttime+'..*data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s'+endtime+'..{2,20}\);', ha_err_heartbeat.stdout)
+                    ha_err_heartbeat = ''.join(
+                        ha_err_heartbeat.stdout)
                 if True:
                     file = open(path+"/"+newnslogFile+"_HA.html", "w")
-                    file.write('''<html><head><script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script><script src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@latest/scripts4internal/conFetch.js"></script><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@latest/scripts4internal/conFetch.css"></link><script type="text/javascript">google.charts.load('current', {'packages':['corechart']});
-                                google.charts.setOnLoadCallback(ha_tot_pkt_rx_tx);
-                                google.charts.setOnLoadCallback(ha_err_heartbeat);
-                                google.charts.setOnLoadCallback(ha_tot_macresolve_requests);
-                                function ha_tot_pkt_rx_tx()
-                                {var data = google.visualization.arrayToDataTable(['''+ha_tot_pkt_rx_tx+''']);
-                                var options = {title: 'ha_tot_pkt_rx_tx',curveType: 'function',animation:{duration: 1000,easing: 'out',startup:true},explorer:{axis: 'horizontal',actions: ['dragToZoom', 'rightClickToReset'],keepInBounds: true},vAxis:{title:'pkts/sec',titleTextStyle:{italic:false}},legend: { position: 'bottom' }};
-                                var chart = new google.visualization.LineChart(document.getElementById('ha_tot_pkt_rx_tx_curve_chart'));
-                                chart.draw(data, options);}
-                                function ha_err_heartbeat()
-                                {var data = google.visualization.arrayToDataTable(['''+ha_err_heartbeat+''']);
-                                var options = {title: 'ha_err_heartbeat',curveType: 'function',animation:{duration: 1000,easing: 'out',startup:true},explorer:{axis: 'horizontal',actions: ['dragToZoom', 'rightClickToReset'],keepInBounds: true},vAxis:{title:'Err_Hartbeats/sec',titleTextStyle:{italic:false}},legend: { position: 'bottom' }};
-                                var chart = new google.visualization.LineChart(document.getElementById('ha_err_heartbeat_curve_chart'));
-                                chart.draw(data, options);}
-                                function ha_tot_macresolve_requests()
-                                {var data = google.visualization.arrayToDataTable(['''+ha_tot_macresolve_requests+''']);
-                                var options = {title: 'ha_tot_macresolve_requests',curveType: 'function',animation:{duration: 1000,easing: 'out',startup:true},explorer:{axis: 'horizontal',actions: ['dragToZoom', 'rightClickToReset'],keepInBounds: true},vAxis:{title:'ARP_Requests/sec',titleTextStyle:{italic:false}},legend: { position: 'bottom' }};
-                                var chart = new google.visualization.LineChart(document.getElementById('ha_tot_macresolve_requests_curve_chart'));
-                                chart.draw(data, options);}
-                                </script><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous"><script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script></head><body>
-                                <h1 class="text-primary d-flex justify-content-center">HA Graph</h1>
-                                <hr>
-                                <h6 class="d-inline-block">Collector_Bundle_Name: '''+collector_bundle_name+'''</h6><h6>Device_Name: '''+adchostname+'''</h6><h6>Log_file: '''+newnslogFile+'''</h6><h6>Log_Timestamp: '''+time_range+'''</h6>
-                                <hr>
-                                <div id="ha_tot_pkt_rx_tx_curve_chart" class="w-auto" style="height:450px"></div>
-                                <div id="ha_err_heartbeat_curve_chart" class="w-auto" style="height:450px"></div>
-                                <div id="ha_tot_macresolve_requests_curve_chart" class="w-auto" style="height:450px"></div>
-                                <div class="bg-dark text-primary fw-bold footer">Project conFetch</div>
-                                </body></html>''')
-                    file.close()
+                file.write('''<html><head> <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script> <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.js"></script> <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.css"> <script type="text/javascript">google.charts.load('current',{'packages': ['annotationchart']}); google.charts.setOnLoadCallback(ha_tot_pkt_rx_tx); google.charts.setOnLoadCallback(ha_err_heartbeat); google.charts.setOnLoadCallback(ha_tot_macresolve_requests); function ha_tot_pkt_rx_tx(){var data=new google.visualization.DataTable();'''+ha_tot_pkt_rx_tx + ''' var chart=new google.visualization.AnnotationChart(document.getElementById('ha_tot_pkt_rx_tx')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}function ha_err_heartbeat(){var data=new google.visualization.DataTable();'''+ha_err_heartbeat +
+                           ''' var chart=new google.visualization.AnnotationChart(document.getElementById('ha_err_heartbeat')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}function ha_tot_macresolve_requests(){var data=new google.visualization.DataTable();'''+ha_tot_macresolve_requests + ''' var chart=new google.visualization.AnnotationChart(document.getElementById('ha_tot_macresolve_requests')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}</script></head><body> <h1 class="txt-primary">High Availability Graph</h1> <hr> <p class="txt-title">Collector_Bundle_Name: '''+collector_bundle_name+'''<br>Device_Name: '''+adchostname+'''<br>Log_file: '''+newnslogFile+'''<br>Log_Timestamp: '''+time_range+'''</p><hr> <div style="width: 100%"><p class="txt-primary">ha_tot_pkt_rx_tx</p><div id="ha_tot_pkt_rx_tx" style="height:450px"></div></div><div style="width: 100%"><p class="txt-primary">ha_err_heartbeat</p><div id="ha_err_heartbeat" style="height:450px"></div></div><div style="width: 100%"><p class="txt-primary">ha_tot_macresolve_requests</p><div id="ha_tot_macresolve_requests" style="height:450px"></div></div><div class="footer">Project conFetch</div></body></html>''')
+                file.close()
             finally:
                 os.popen("fixperms ./conFetch").read()
                 payload = {"version": version, "user": username, "action": "show -g " + ''.join(args.K) + " --> " + os.getcwd() + " --> " + str(
@@ -951,32 +903,19 @@ elif args.g:
                 time_range = sp.run(
                     "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=\"\"; printf \" --%s\", $0}' | sed -r 's/^.{9}//'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                 mem_cur_usedsize_freesize_avail = sp.run(
-                    "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -s disptime=1  -g mem_cur_usedsize -g mem_cur_freesize | awk '!/actual/&&/mem_cur/{print $10, $3/1000000, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"[\\047%s\\047%s\", \"Time\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"\\047%s\\047%s\", cpu, (cpuNr<numCpus ? OFS : \"]\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \",%s[\\047%s\\047%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]\");prev_vals[cpu] = val;};};print \"\";}' | awk '{printf}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                    "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -s disptime=1 -g mem_tot_avail -g mem_cur_usedsize -g mem_cur_freesize | awk '!/actual/&&/mem_cur/||/tot_available/{print $8\"-\"$9\",\"$11\"-\"$10, $3/1000000, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\\n\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g' | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                 if len(mem_cur_usedsize_freesize_avail.stdout) < 52:
                     mem_cur_usedsize_freesize_avail = "data.addColumn('date', 'Manjesh');data.addColumn('Manjesh', 'Manjesh');,['', ]"
                 else:
-                    mem_cur_usedsize_freesize_avail.stdout = re.findall(
-                        '\[\'Time\'.*\'].|\[\''+starttime+'.*\[\''+endtime+'.{2,30}]', mem_cur_usedsize_freesize_avail.stdout)
-                    mem_cur_usedsize_freesize_avail = mem_cur_usedsize_freesize_avail.stdout[0] + \
-                        mem_cur_usedsize_freesize_avail.stdout[1]
+                    mem_cur_usedsize_freesize_avail.stdout = re.findall('data.addColumn.{0,52}\);|data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s' +
+                                                                        starttime+'..*data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s'+endtime+'..{2,60}\);', mem_cur_usedsize_freesize_avail.stdout)
+                    mem_cur_usedsize_freesize_avail = ''.join(
+                        mem_cur_usedsize_freesize_avail.stdout)
                 if True:
                     file = open(path+"/"+newnslogFile+"_memory.html", "w")
-                    file.write('''<html><head><script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script><script src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@latest/scripts4internal/conFetch.js"></script><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@latest/scripts4internal/conFetch.css"></link><script type="text/javascript">google.charts.load('current', {'packages':['corechart']});
-                                google.charts.setOnLoadCallback(mem_cur_usedsize_freesize_avail);
-                                function mem_cur_usedsize_freesize_avail()
-                                {var data = google.visualization.arrayToDataTable(['''+mem_cur_usedsize_freesize_avail+''']);
-                                var options = {title: 'mem_cur_usedsize_freesize_avail',curveType: 'function',animation:{duration: 1000,easing: 'out',startup:true},explorer:{axis: 'horizontal',actions: ['dragToZoom', 'rightClickToReset'],keepInBounds: true},vAxis:{title:'Megabytes',titleTextStyle:{italic:false}},legend: { position: 'bottom' }};
-                                var chart = new google.visualization.LineChart(document.getElementById('mem_cur_usedsize_freesize_avail_curve_chart'));
-                                chart.draw(data, options);}
-                                </script><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous"><script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script></head><body>
-                                <h1 class="text-primary d-flex justify-content-center">Memory Graph</h1>
-                                <hr>
-                                <h6 class="d-inline-block">Collector_Bundle_Name: '''+collector_bundle_name+'''</h6><h6>Device_Name: '''+adchostname+'''</h6><h6>Log_file: '''+newnslogFile+'''</h6><h6>Log_Timestamp: '''+time_range+'''</h6>
-                                <hr>
-                                <div id="mem_cur_usedsize_freesize_avail_curve_chart" class="w-auto" style="height:450px"></div>
-                                <div class="bg-dark text-primary fw-bold footer">Project conFetch</div>
-                                </body></html>''')
-                    file.close()
+                file.write('''<html><head> <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script> <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.js"></script> <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.css"> <script type="text/javascript">google.charts.load('current',{'packages': ['annotationchart']}); google.charts.setOnLoadCallback(mem_free_used_avail); function mem_free_used_avail(){var data=new google.visualization.DataTable();'''+mem_cur_usedsize_freesize_avail +
+                           ''' var chart=new google.visualization.AnnotationChart(document.getElementById('mem_free_used_avail')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}</script></head><body> <h1 class="txt-primary">Memory Graph</h1> <hr> <p class="txt-title">Collector_Bundle_Name: '''+collector_bundle_name+'''<br>Device_Name: '''+adchostname+'''<br>Log_file: '''+newnslogFile+'''<br>Log_Timestamp: '''+time_range+'''</p><hr> <div style="width: 100%"><p class="txt-primary">mem_cur_freesize - mem_cur_usedsize - mem_tot_available</p><div id="mem_free_used_avail" style="height:450px"></div></div><div class="footer">Project conFetch</div></body></html>''')
+                file.close()
             finally:
                 os.popen("fixperms ./conFetch").read()
                 payload = {"version": version, "user": username, "action": "show -g " + ''.join(args.g + " -- ".split() + args.K) + " --> " + os.getcwd() + " --> " + str(
