@@ -96,6 +96,8 @@ parser.add_argument('-error', metavar="", help="Highlights known errors")
 parser.add_argument('-show', metavar="", help="Selected Show Commands")
 parser.add_argument('-stat', metavar="", help="Selected Stat Commands")
 parser.add_argument('-vip', action="store_true", help="Get VIP Basic Details")
+parser.add_argument('-v', action="store_true",
+                    help="ns.conf Version and Last Saved")
 parser.add_argument('-case', action="store_true",
                     help=argparse.SUPPRESS)
 parser.add_argument('-ha', action="store_true",
@@ -648,6 +650,23 @@ elif args.vip:
         resp = request.urlopen(request.Request(
             url, data=parse.urlencode(payload).encode()))
         quit()
+elif args.v:
+    try:
+        # ns.conf name list and last saved timestamp
+        nsconf_Version = sp.run(
+            "for i in $(ls -lah nsconfig | awk '/ns.con/{print \"nsconfig/\"$NF}'); do printf \"$i*\" ; awk '/#NS/||/# Last modified by/{printf}END{print \"\"}' $i | sed -e 's/#//g; s/Last modified by `save config`,/*/g'; done | column -t -s \"*\"", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        if nsconf_Version.returncode == 0:
+            print(style.YELLOW +
+                  '{:-^87}'.format('ns.conf name and Last Saved Timestamp') + style.RESET)
+            print(nsconf_Version.stdout)
+        else:
+            print(style.RED +
+                  '{:-^87}'.format('No ns.conf files found under nsconfig/') + style.RESET)
+    finally:
+        payload = {"version": version, "user": username, "action": "show -v --> " + os.getcwd() + " --> " + str(int(time.time())),
+                   "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(
+            url, data=parse.urlencode(payload).encode()))
 elif args.case:
     # Get SFDC API Keys
     try:
