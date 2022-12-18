@@ -69,7 +69,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "2.7.0"
+version = "3.0.5"
 
 # Parser args
 parser = argparse.ArgumentParser(
