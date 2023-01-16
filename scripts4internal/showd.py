@@ -32,12 +32,16 @@ class style():
 # About script
 showscriptabout = '''
 
-  ____            _           _                     _____    _       _
- |  _ \ _ __ ___ (_) ___  ___| |_    ___ ___  _ __ |  ___|__| |_ ___| |__
- | |_) | '__/ _ \| |/ _ \/ __| __|  / __/ _ \| '_ \| |_ / _ \ __/ __| '_ \
- |  __/| | | (_) | |  __/ (__| |_  | (_| (_) | | | |  _|  __/ || (__| | | |
- |_|   |_|  \___// |\___|\___|\__|  \___\___/|_| |_|_|  \___|\__\___|_| |_|
-               |__/
+
+______          _           _                    ______   _       _     
+| ___ \        (_)         | |                   |  ___| | |     | |    
+| |_/ / __ ___  _  ___  ___| |_    ___ ___  _ __ | |_ ___| |_ ___| |__  
+|  __/ '__/ _ \| |/ _ \/ __| __|  / __/ _ \| '_ \|  _/ _ \ __/ __| '_ \ 
+| |  | | | (_) | |  __/ (__| |_  | (_| (_) | | | | ||  __/ || (__| | | |
+\_|  |_|  \___/| |\___|\___|\__|  \___\___/|_| |_\_| \___|\__\___|_| |_|
+              _/ |                                                      
+             |__/                                                       
+
 
 ######################################################################################################
 ##                                                                                                  ##
@@ -91,7 +95,7 @@ parser.add_argument('-gz', action="store_true",
 parser.add_argument('-im', action="store_true",
                     help="Indexing timestamp of ns.log")
 parser.add_argument('-imall', action="store_true",
-                    help="Indexing timestamp of logs including ns, auth, bash, nitro, notice, nsvpn, sh")
+                    help="Indexing timestamp of logs including ns, auth, bash, nitro, notice, nsvpn, sh, newnslogs")
 parser.add_argument('-error', metavar="", help="Highlights known errors")
 parser.add_argument('-show', metavar="", help="Selected Show Commands")
 parser.add_argument('-stat', metavar="", help="Selected Stat Commands")
@@ -100,7 +104,7 @@ parser.add_argument('-v', action="store_true",
                     help="ns.conf Version and Last Saved")
 parser.add_argument('-case', action="store_true",
                     help=argparse.SUPPRESS)
-parser.add_argument('-ha', action="store_true",
+parser.add_argument('-crash', action="store_true",
                     help=argparse.SUPPRESS)
 parser.add_argument('-G', action="append",
                     choices={"cpu", "mem", "ha"}, help="Generate HTML Graph for all newnslog(s)")
@@ -708,6 +712,50 @@ elif args.case:
             sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore"))['options'][0]['values'][0])["EndDate"]
     finally:
         print(Entitlement_EndDate + CaseAge)
+elif args.crash:
+    try:
+        crashfile = sp.run(
+            "ls -lah ../ | awk '/ns.*[0-9]/||/NS/{print $NF}' | egrep -v \"tar|__\"", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        codebuild = sp.run("awk '/#NS/{print}' shell/ns_running_config.conf | cut -c 4- | sed s/\" Build \"/-/g | sed 's/$/_nc.tgz/' | tr -d '\n'",
+                           shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        if len(crashfile) > 23:
+            if "PPE" in crashfile:
+                print(style.YELLOW +
+                      '{:-^87}'.format('Its a NSPPE Crash') + style.RESET)
+            else:
+                print(style.YELLOW +
+                      '{:-^87}'.format('Its a Process Crash') + style.RESET)
+                for i in (crashfile.split()):
+                    print(i)
+                print("Downloading and Using Debug files " + codebuild)
+                manaq = ("curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_mana/build_mana_" +
+                         codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild + " | awk '/HTTP/{print $2}'")
+                artesaq = ("curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_artesa/build_artesa_" +
+                           codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild + " | awk '/HTTP/{print $2}'")
+                mana = ("curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_mana/build_mana_" +
+                        codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild)
+                artesa = ("curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_artesa/build_artesa_" +
+                          codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild)
+                if "200" in sp.run(manaq, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout:
+                    sp.run(mana, shell=True, text=True,
+                           stdout=sp.PIPE, stderr=sp.PIPE)
+                    print("Extracting " + codebuild)
+                    sp.run("tar -xf dbgbins*", shell=True,
+                           text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                    sp.run("fixperms ./", shell=True, text=True,
+                           stdout=sp.PIPE, stderr=sp.PIPE)
+                else:
+                    sp.run(artesa, shell=True, text=True,
+                           stdout=sp.PIPE, stderr=sp.PIPE)
+                    print("Extracting " + codebuild)
+                    sp.run("tar -xf dbgbins*", shell=True,
+                           text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                    sp.run("fixperms ./", shell=True, text=True,
+                           stdout=sp.PIPE, stderr=sp.PIPE)
+        else:
+            print("Unable to find a crash  / core file under case directory !!!")
+    finally:
+        pass
 elif args.author:
     logger.info(os.getcwd() + " - author")
     print(showscriptauthor)
@@ -745,11 +793,14 @@ elif args.G:
                     master_cpu_use = sp.run(
                         "nsconmsg -K "+newnslog_file+" -d current -s disptime=1 -g master_cpu | awk '/master_cpu/{print $8\"-\"$9\",\"$11\"-\"$10, $3/10, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g' | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                     cc_cpu_use = sp.run(
-                        "nsconmsg -K "+newnslog_file+" -d current -s disptime=1 -g cc_cpu | awk '/cc_cpu/{print $9\"-\"$10\",\"$12\"-\"$11, $3/10, $7}' | tail -n +10  | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\\n\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g' | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                        "nsconmsg -K "+newnslog_file+" -d current -s disptime=1 -g cc_cpu | awk '/cc_cpu/{print $9\"-\"$10\",\"$12\"-\"$11, $3/10, $7}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\\n\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g' | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                     if len(master_cpu_use.stdout) < 52:
                         master_cpu_use.stdout = "data.addColumn('date', 'Manjesh');data.addColumn('Manjesh', 'Manjesh');"
                     if len(cc_cpu_use.stdout) < 52:
                         cc_cpu_use.stdout = "data.addColumn('date', 'Manjesh');data.addColumn('Manjesh', 'Manjesh');"
+                    else:
+                        cc_cpu_use.stdout = re.sub(
+                            'data.addRow\(\[new\s.{10,60}(,\s){1,30}\]\);', '', cc_cpu_use.stdout)
                     if True:
                         file = open(path+"/"+newnslog_file.split("/")
                                     [2]+"_cpu_Usage.html", "w")
@@ -851,7 +902,7 @@ elif args.g:
                 master_cpu_use = sp.run(
                     "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -s disptime=1 -g master_cpu | awk '/master_cpu/{print $8\"-\"$9\",\"$11\"-\"$10, $3/10, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g' | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                 cc_cpu_use = sp.run(
-                    "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -s disptime=1 -g cc_cpu | awk '/cc_cpu/{print $9\"-\"$10\",\"$12\"-\"$11, $3/10, $7}' | tail -n +10  | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\\n\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g' | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                    "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -s disptime=1 -g cc_cpu | awk '/cc_cpu/{print $9\"-\"$10\",\"$12\"-\"$11, $3/10, $7}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\\n\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g' | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                 if len(master_cpu_use.stdout) < 52:
                     master_cpu_use = "data.addColumn('date', 'Manjesh');data.addColumn('Manjesh', 'Manjesh');,['', ]"
                 else:
@@ -862,8 +913,10 @@ elif args.g:
                     cc_cpu_use = "data.addColumn('date', 'Manjesh');data.addColumn('Manjesh', 'Manjesh');,['', ]"
                 else:
                     cc_cpu_use.stdout = re.findall('data.addColumn.{0,52}\);|data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s' +
-                                                   starttime+'..*data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s'+endtime+'..{2,16}\);', cc_cpu_use.stdout)
+                                                   starttime+'..*data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s'+endtime+'..{2,100}\);', cc_cpu_use.stdout)
                     cc_cpu_use = ''.join(cc_cpu_use.stdout)
+                    cc_cpu_use = re.sub(
+                        'data.addRow\(\[new\s.{10,60}(,\s){1,30}\]\);', '', cc_cpu_use)
                 if True:
                     file = open(path+"/"+newnslogFile+"_cpu_Usage.html", "w")
                     file.write('''<html><head> <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script> <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.js"></script> <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.css"> <script type="text/javascript">google.charts.load('current',{'packages': ['annotationchart']}); google.charts.setOnLoadCallback(master_cpu_use); google.charts.setOnLoadCallback(cc_cpu_use); function master_cpu_use(){var data=new google.visualization.DataTable(); '''+master_cpu_use +
