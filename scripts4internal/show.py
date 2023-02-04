@@ -33,14 +33,14 @@ class style():
 showscriptabout = '''
 
 
-______          _           _                    ______   _       _     
-| ___ \        (_)         | |                   |  ___| | |     | |    
-| |_/ / __ ___  _  ___  ___| |_    ___ ___  _ __ | |_ ___| |_ ___| |__  
-|  __/ '__/ _ \| |/ _ \/ __| __|  / __/ _ \| '_ \|  _/ _ \ __/ __| '_ \ 
-| |  | | | (_) | |  __/ (__| |_  | (_| (_) | | | | ||  __/ || (__| | | |
-\_|  |_|  \___/| |\___|\___|\__|  \___\___/|_| |_\_| \___|\__\___|_| |_|
-              _/ |                                                      
-             |__/                                                       
+  _____           _           _                     ______   _       _     
+ |  __ \         (_)         | |                   |  ____| | |     | |    
+ | |__) | __ ___  _  ___  ___| |_    ___ ___  _ __ | |__ ___| |_ ___| |__  
+ |  ___/ '__/ _ \| |/ _ \/ __| __|  / __/ _ \| '_ \|  __/ _ \ __/ __| '_ \ 
+ | |   | | | (_) | |  __/ (__| |_  | (_| (_) | | | | | |  __/ || (__| | | |
+ |_|   |_|  \___/| |\___|\___|\__|  \___\___/|_| |_|_|  \___|\__\___|_| |_|
+                _/ |                                                       
+               |__/                                                        
 
 
 ######################################################################################################
@@ -88,7 +88,7 @@ parser.add_argument('-p', action="store_true",
                     help="ADC Process Related Information")
 parser.add_argument('-E', action="store_true",
                     help="Match well known error with KB articles")
-parser.add_argument('-fu', action="store_true",
+parser.add_argument('-fw', action="store_true",
                     help="Display Latest RTM Firmware Code")
 parser.add_argument('-gz', action="store_true",
                     help="Unzip *.gz files under /var/log and vsr/nslog")
@@ -104,7 +104,7 @@ parser.add_argument('-v', action="store_true",
                     help="ns.conf Version and Last Saved")
 parser.add_argument('-case', action="store_true",
                     help=argparse.SUPPRESS)
-parser.add_argument('-ha', action="store_true",
+parser.add_argument('-crash', action="store_true",
                     help=argparse.SUPPRESS)
 parser.add_argument('-G', action="append",
                     choices={"cpu", "mem", "ha"}, help="Generate HTML Graph for all newnslog(s)")
@@ -176,7 +176,7 @@ if args.i:
         adcfirmware = sp.run("cat shell/ns_running_config.conf | grep \"#NS\" | cut -c 2-",
                              shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         firmwarehistory = sp.run(
-            "awk -F'NetScaler' 'BEGIN{nores=1;}/upgrade from NetScaler/{if ($0 ~ \"build\") history=$2; nores=0} END {if (nores) print \"None found recently\"; else print history}' shell/dmesg-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+            "awk -F'NetScaler' 'BEGIN{nores=1;}/upgrade from NetScaler/{if ($0 ~ \"upgrade|build\") history=$2; nores=0} END {if (nores) print \"None found recently\"; else print history}' shell/dmesg-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         nsinstall = sp.run(
             "awk '/VERSION/||/_TIME/{$1=\"\"; printf \"%s -->\", $0}' var/nsinstall/installns_state | sed -E 's/^\s|[0-9]{9,15}.|-->$//g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         platformserial = sp.run(
@@ -349,7 +349,7 @@ elif args.E:
         resp = request.urlopen(request.Request(
             url, data=parse.urlencode(payload).encode()))
         quit()
-elif args.fu:
+elif args.fw:
     try:
         logger.info(os.getcwd() + " - show -fu")
         adcfirmwareRTM = sp.run(
@@ -401,7 +401,7 @@ elif args.fu:
         for sdxrelease in adcfirmwareRTM.splitlines():
             if "SDX Bundle" in sdxrelease and "Maintenance Phase" in sdxrelease:
                 print(style.LIGHTRED + sdxrelease + style.RESET)
-        payload = {"version": version, "user": username, "action": "show -fu --> " + os.getcwd() + " --> " + str(
+        payload = {"version": version, "user": username, "action": "show -fw --> " + os.getcwd() + " --> " + str(
             int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
         resp = request.urlopen(request.Request(
             url, data=parse.urlencode(payload).encode()))
@@ -871,7 +871,6 @@ elif args.g:
                     cc_cpu_use.stdout = re.findall('data.addColumn.{0,52}\);|data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s' +
                                                    starttime+'..*data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s'+endtime+'..{2,100}\);', cc_cpu_use.stdout)
                     cc_cpu_use = ''.join(cc_cpu_use.stdout)
-
                     cc_cpu_use = re.sub(
                         'data.addRow\(\[new\s.{10,60}(,\s){1,30}\]\);', '', cc_cpu_use)
                 if True:
