@@ -29,30 +29,6 @@ class style():
     RESET = '\033[0m'
 
 
-# About script
-showscriptabout = '''
-
-
-  _____           _           _                     ______   _       _     
- |  __ \         (_)         | |                   |  ____| | |     | |    
- | |__) | __ ___  _  ___  ___| |_    ___ ___  _ __ | |__ ___| |_ ___| |__  
- |  ___/ '__/ _ \| |/ _ \/ __| __|  / __/ _ \| '_ \|  __/ _ \ __/ __| '_ \ 
- | |   | | | (_) | |  __/ (__| |_  | (_| (_) | | | | | |  __/ || (__| | | |
- |_|   |_|  \___/| |\___|\___|\__|  \___\___/|_| |_|_|  \___|\__\___|_| |_|
-                _/ |                                                       
-               |__/                                                        
-
-
-######################################################################################################
-##                                                                                                  ##
-##   Note -- Please do not use this script if you are not sure of what you are doing.               ##
-##   Product -- Only for Citrix NetScaler TAC Use.                                                  ##
-##   Unauthorized usage of this script / sharing for personal use will be considered as offence.    ##
-##   This script is designed to extract data from support bundle -- "script based troubleshooting". ##
-##                                                                                                  ##
-######################################################################################################
-'''
-
 # About Author
 showscriptauthor = '''
 ___  ___            _           _       _____      _   _
@@ -73,25 +49,51 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "3.0.5"
+version = "3.10"
+
+# About script
+showscriptabout = '''
+
+
+  _____           _           _                     ______   _       _     
+ |  __ \         (_)         | |                   |  ____| | |     | |    
+ | |__) | __ ___  _  ___  ___| |_    ___ ___  _ __ | |__ ___| |_ ___| |__  
+ |  ___/ '__/ _ \| |/ _ \/ __| __|  / __/ _ \| '_ \|  __/ _ \ __/ __| '_ \ 
+ | |   | | | (_) | |  __/ (__| |_  | (_| (_) | | | | | |  __/ || (__| | | |
+ |_|   |_|  \___/| |\___|\___|\__|  \___\___/|_| |_|_|  \___|\__\___|_| |_|
+                _/ |                                                       
+               |__/                                                        
+
+######################################################################################################
+##                                                                                                  ##
+##   Note -- Please do not use this script if you are not sure of what you are doing.               ##
+##   Product -- Only for NetScaler TAC Use.                                                         ##
+##   Unauthorized usage of this script / sharing for personal use will be considered as offence.    ##
+##   This script is designed to extract data from support bundle -- "script based troubleshooting". ##
+##                                                                                                  ##
+##                                                                                                  ##
+##                                    Version: 3.10                                                 ##
+##                                                                                                  ##
+######################################################################################################
+'''
 
 # Parser args
 parser = argparse.ArgumentParser(
-    description="Citrix Support Bundle Show Script", formatter_class=argparse.RawTextHelpFormatter)
+    description="NetScaler Support Bundle Show Script", formatter_class=argparse.RawTextHelpFormatter)
 parser.add_argument('--author', action="store_true",
                     help=argparse.SUPPRESS)
 parser.add_argument('-i', action="store_true",
-                    help="ADC Basic Information")
+                    help="NetScaler Basic Information")
 parser.add_argument('-n', action="store_true",
-                    help="ADC Networking Information")
+                    help="NetScaler Networking Information")
 parser.add_argument('-p', action="store_true",
-                    help="ADC Process Related Information")
+                    help="NetScaler Process Related Information")
 parser.add_argument('-E', action="store_true",
                     help="Match well known error with KB articles")
 parser.add_argument('-fw', action="store_true",
                     help="Display Latest RTM Firmware Code")
 parser.add_argument('-gz', action="store_true",
-                    help="Unzip *.gz files under /var/log and vsr/nslog")
+                    help="Unzip *.gz files under /var/log and var/nslog")
 parser.add_argument('-im', action="store_true",
                     help="Indexing timestamp of ns.log")
 parser.add_argument('-imall', action="store_true",
@@ -104,10 +106,12 @@ parser.add_argument('-v', action="store_true",
                     help="ns.conf Version and Last Saved")
 parser.add_argument('-case', action="store_true",
                     help=argparse.SUPPRESS)
-parser.add_argument('-crash', action="store_true",
-                    help=argparse.SUPPRESS)
+parser.add_argument('-bt', action="store_true",
+                    help="Auto bt for both NSPPE and Process core files")
+parser.add_argument('-bbt', action="store_true",
+                    help="Auto bt for both NSPPE and Process core files")
 parser.add_argument('-G', action="append",
-                    choices={"cpu", "mem", "ha"}, help="Generate HTML Graph for all newnslog(s)")
+                    choices={"cpu", "mem", "ha", "nic"}, help="Generate HTML Graph for all newnslog(s)")
 parser.add_argument('-g', action="append",
                     choices={"cpu", "mem", "ha"}, help="Generate HTML Graph for specific newnslog\n-K <newnslog> --> newnslog Filename\n-s <HH:MM> --> Graph Start Time\n-e <HH:MM> --> Graph End Time")
 parser.add_argument('-K', action="append",
@@ -167,8 +171,8 @@ if args.i:
     try:
         logger.info(os.getcwd() + " - show -i")
         # Printing system essential details
-        print(style.YELLOW + '{:-^87}'.format('ADC Show Configuration'))
-        print(style.RESET)
+        print(style.YELLOW +
+              '{:-^87}'.format('NetScaler Show Configuration') + style.RESET)
         adchostname = sp.run("awk '{print $2}' shell/uname-a.out",
                              shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         adcha = sp.run(
@@ -197,7 +201,7 @@ if args.i:
             "sed -n '/ns config/,/Done/p' shell/showcmds.txt | grep \"NetScaler IP\" | egrep -o \"[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\" | grep -v 255", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         nsipsubnet = sp.run(
             "sed -n '/ns config/,/Done/p' shell/showcmds.txt | grep \"NetScaler IP\" | egrep -o \"[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\" | grep 255", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        nsfeatures = sp.run("awk '/ns feature/{$1=$2=$3=\"\";print $0}' nsconfig/ns.conf",
+        nsfeatures = sp.run("awk '$0 ~ /^enable/&&/enable ns feature/{$1=$2=$3=\"\";print $0}' shell/ns_running_config.conf",
                             shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         nsmode = sp.run("awk '/ns mode/{$1=$2=$3=\"\";print $0}' nsconfig/ns.conf",
                         shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
@@ -211,6 +215,8 @@ if args.i:
                          shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         loadaverage = sp.run("awk '/load average/{printf \"%s %s %s\", \"1 min: \"$6, \"5 min: \"$7, \"15 min: \"$8}' shell/top-b.out",
                              shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        mgmtcpu = sp.run(
+            "awk '!/100% idle/{printf \"%s User: %s | Nice: %s | System: %s | Interrupt: %s | Idle: %s\", $1, $2, $4, $6, $8, $(NF-1)}' shell/mgmtcpupercent.txt | awk '{if($NF>75) print $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, \"\033[32m\"$15\"\033[0m\"; else print $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, \"\033[31m\"$15\"\033[0m\"}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         memoryinfo = sp.run(
             "awk '(/real memory/ && ORS=\" ,\") || (/avail memory/ && ORS=RS)' var/nslog/dmesg.boot | head -n1 | awk '{printf \"%s | %s\", \"Total Memory: \"$5$6, \"Available Memory: \"$11$12}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         varsize = sp.run(
@@ -236,9 +242,9 @@ if args.i:
         print(nstimes.stdout.strip())
         print("Collector pack generated @ " + collectorpacktime.stdout.strip())
         print("")
-        print("ADC Hostname: " + adchostname.stdout.strip())
-        print("ADC HA State: " + adcha.stdout.strip())
-        print("ADC Firmware version: " + adcfirmware.stdout.strip())
+        print("NetScaler Hostname: " + adchostname.stdout.strip())
+        print("NetScaler HA State: " + adcha.stdout.strip())
+        print("NetScaler Firmware version: " + adcfirmware.stdout.strip())
         print("Firmware history: " + firmwarehistory.stdout.strip())
         print("Last Upgrade Stats: " + nsinstall.stdout.strip())
         print("")
@@ -260,6 +266,7 @@ if args.i:
         print("")
         print("CPU Info: " + cpuinfo.stdout.strip())
         print("Load Average: " + loadaverage.stdout.strip())
+        print("Management " + mgmtcpu.stdout.strip())
         try:
             if memfreepercent > 40:
                 print("Memory Info: " + memoryinfo.stdout.strip() +
@@ -283,7 +290,7 @@ elif args.n:
         logger.info(os.getcwd() + " - show -n")
         # Prining Network related information on ADC
         print(style.YELLOW +
-              '{:-^87}'.format('ADC Network Information') + style.RESET+"\n")
+              '{:-^87}'.format('NetScaler Network Information') + style.RESET+"\n")
         adcnetinfo = sp.run(
             "awk '/exec: show ns ip$/{flag=1;next}/Done/{flag=0}flag' shell/showcmds.txt", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         adcroute = sp.run(
@@ -323,14 +330,23 @@ elif args.p:
                           shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         nsppepid = sp.run("awk '/NSPPE/{print}' shell/nsp.out | sed \"s/^[ \t]*//\"",
                           shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        core = sp.run("awk '/NSPPE-/&&!/20../{printf \"[%s-%s/%s --> %s --> %s]\\n\",  $6, $7, $8, $NF, $5}' shell/ls_lRtrp_var.out | sed \"s/^[ \t]*//\"",
+        core = sp.run("awk '/NSPPE-/{printf \"[%s-%s/%s --> %s --> %s]\\n\",  $6, $7, $8, $NF, $5}' shell/ls_lRtrp_var.out | sed \"s/^[ \t]*//\"",
                       shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        processcore = sp.run(
+            "awk '/ns/&&/d-[0-9][0-9]/&&/-rw-------/{printf \"[%s-%s/%s --> %s --> %s]\\n\",  $6, $7, $8, $NF, $5}' shell/ls_lRtrp.out | sed \"s/^[ \t]*//\"", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
     finally:
         print(style.YELLOW + '{:-^87}'.format('ADC Process Information'))
         print(style.RESET)
         print("Number of vCPU: " + vcpu.stdout.strip())
         print("NSPPE Details: " + nsppenum.stdout + "\n" + nsppepid.stdout)
-        print("Core files: " + "\n" + core.stdout.strip())
+        if len(core.stdout) > 10:
+            print(style.LIGHTRED + "Core files: " +
+                  "\n" + style.RESET + core.stdout.strip())
+            print("")
+        if len(processcore.stdout) > 10:
+            print(style.LIGHTRED + "Process Core files: " +
+                  "\n" + style.RESET + processcore.stdout.strip())
+            print("")
         print("")
     payload = {"version": version, "user": username, "action": "show -p --> " + os.getcwd() + " --> " + str(
         int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
@@ -357,17 +373,17 @@ elif args.fw:
         admadcfirmwareRTM = sp.run(
             "curl -s 'https://www.citrix.com/downloads/citrix-application-management/' | egrep -C2 \"<a href=\\\"\/downloads\/citrix-application-management.*\" | awk '/citrix-application-management|\/p/{print}' | paste - - | sed -E 's/<\/.|<a href=|\\\"|NEW/ /g' | awk -F'>' '{printf \"%s|%s\\n\", $3, $2}' | awk '{$1=$1};1' | sed -E 's-\| \|- \|-g' | column -t -s'|' | sort -k4n -k2M -k3n", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip().replace('\n\n', '\n')
     finally:
-        # ADC Release
+        # NetScaler Release
         print(style.YELLOW +
-              '{:-^87}'.format('ADC Released RTM Code Version and Date') + style.RESET+"\n")
+              '{:-^87}'.format('NetScaler Released RTM Code Version and Date') + style.RESET+"\n")
         print(style.YELLOW +
-              '{:-^87}'.format('ADC Release Feature Phase Code Details') + style.RESET+"\n")
+              '{:-^87}'.format('NetScaler Release Feature Phase Code Details') + style.RESET+"\n")
         for adcrelease in adcfirmwareRTM.splitlines():
             if "ADC Release" in adcrelease and "Feature Phase" in adcrelease:
                 print(style.LIGHTGREEN + adcrelease + style.RESET)
         print("\n")
         print(style.YELLOW +
-              '{:-^87}'.format('ADC Release Maintenance Phase Code Details') + style.RESET+"\n")
+              '{:-^87}'.format('NetScaler Release Maintenance Phase Code Details') + style.RESET+"\n")
         for adcrelease in adcfirmwareRTM.splitlines():
             if "ADC Release" in adcrelease and "Maintenance Phase" in adcrelease:
                 print(style.LIGHTRED + adcrelease + style.RESET)
@@ -451,7 +467,7 @@ elif args.im:
         finally:
             if nslog.returncode == 0:
                 print(style.YELLOW +
-                      '{:-^87}\n'.format('ADC ns.log timestamp IndexMessages') + style.RESET + nslog.stdout)
+                      '{:-^87}\n'.format('NetScaler ns.log timestamp IndexMessages') + style.RESET + nslog.stdout)
             else:
                 print(
                     style.RED + '{:-^87}\n'.format('Unable to read ns.log') + style.RESET)
@@ -485,49 +501,49 @@ elif args.imall:
         finally:
             if nslog.returncode == 0:
                 print(style.YELLOW +
-                      '{:-^87}\n'.format('ADC ns.log timestamp IndexMessages') + style.RESET + nslog.stdout)
+                      '{:-^87}\n'.format('NetScaler ns.log timestamp IndexMessages') + style.RESET + nslog.stdout)
             else:
                 print(
                     style.RED + '{:-^87}\n'.format('Unable to read ns.log') + style.RESET)
             if authlog.returncode == 0:
                 print(style.YELLOW +
-                      '{:-^87}\n'.format('ADC auth.log timestamp IndexMessages') + style.RESET + authlog.stdout)
+                      '{:-^87}\n'.format('NetScaler auth.log timestamp IndexMessages') + style.RESET + authlog.stdout)
             else:
                 print(
                     style.RED + '{:-^87}\n'.format('Unable to read auth.log') + style.RESET)
             if bashlog.returncode == 0:
                 print(style.YELLOW +
-                      '{:-^87}\n'.format('ADC bash.log timestamp IndexMessages') + style.RESET + bashlog.stdout)
+                      '{:-^87}\n'.format('NetScaler bash.log timestamp IndexMessages') + style.RESET + bashlog.stdout)
             else:
                 print(
                     style.RED + '{:-^87}\n'.format('Unable to read bash.log') + style.RESET)
             if nitrolog.returncode == 0:
                 print(style.YELLOW +
-                      '{:-^87}\n'.format('ADC nitro.log timestamp IndexMessages') + style.RESET + nitrolog.stdout)
+                      '{:-^87}\n'.format('NetScaler nitro.log timestamp IndexMessages') + style.RESET + nitrolog.stdout)
             else:
                 print(
                     style.RED + '{:-^87}\n'.format('Unable to read nitro.log') + style.RESET)
             if noticelog.returncode == 0:
                 print(style.YELLOW +
-                      '{:-^87}\n'.format('ADC notice.log timestamp IndexMessages') + style.RESET + noticelog.stdout)
+                      '{:-^87}\n'.format('NetScaler notice.log timestamp IndexMessages') + style.RESET + noticelog.stdout)
             else:
                 print(
                     style.RED + '{:-^87}\n'.format('Unable to read notice.log') + style.RESET)
             if nsvpnlog.returncode == 0:
                 print(style.YELLOW +
-                      '{:-^87}\n'.format('ADC nsvpn.log timestamp IndexMessages') + style.RESET + nsvpnlog.stdout)
+                      '{:-^87}\n'.format('NetScaler nsvpn.log timestamp IndexMessages') + style.RESET + nsvpnlog.stdout)
             else:
                 print(
                     style.RED + '{:-^87}\n'.format('Unable to read nsvpn.log') + style.RESET)
             if shlog.returncode == 0:
                 print(style.YELLOW +
-                      '{:-^87}\n'.format('ADC sh.log timestamp IndexMessages') + style.RESET + shlog.stdout)
+                      '{:-^87}\n'.format('NetScaler sh.log timestamp IndexMessages') + style.RESET + shlog.stdout)
             else:
                 print(
                     style.RED + '{:-^87}\n'.format('Unable to read sh.log') + style.RESET)
             if newnslog.returncode == 0:
                 print(style.YELLOW +
-                      '{:-^87}\n'.format('ADC newnslog timestamp IndexMessages') + style.RESET + newnslog.stdout)
+                      '{:-^87}\n'.format('NetScaler newnslog timestamp IndexMessages') + style.RESET + newnslog.stdout)
             else:
                 print(
                     style.RED + '{:-^87}\n'.format('Unable to read newnslog') + style.RESET)
@@ -712,83 +728,163 @@ elif args.case:
             sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore"))['options'][0]['values'][0])["EndDate"]
     finally:
         print(Entitlement_EndDate + CaseAge)
-elif args.crash:
+elif args.bbt:
     try:
-        crashfile = sp.run(
-            "ls -lah ../ | awk '/ns.*[0-9]/||/NS/{print $NF}' | egrep -v \"tar|__\"", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
-        codebuild = sp.run("awk '/#NS/{print}' shell/ns_running_config.conf | cut -c 4- | sed s/\" Build \"/-/g | sed 's/$/_nc.tgz/' | tr -d '\n'",
-                           shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
-        collectorcrashfile = sp.run(
-            "awk '/d-[0-9][0-9][0-9]/&&/-rw------/{print $NF}' shell/ls_lRtrp.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
-        if len(crashfile) > 23:
-            if "PPE" in crashfile:
-                print(style.YELLOW +
-                      '{:-^87}'.format('Its a NSPPE Crash') + style.RESET)
-            else:
-                processcore = []
-                print(style.YELLOW +
-                      '{:-^87}'.format('Its a Process Crash') + style.RESET)
-                for i in (crashfile.split()):
-                    processcore.append(i)
-                print("Downloading and Using Debug files " + codebuild)
-                manaq = ("curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_mana/build_mana_" +
-                         codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild + " | awk '/HTTP/{print $2}'")
-                artesaq = ("curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_artesa/build_artesa_" +
-                           codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild + " | awk '/HTTP/{print $2}'")
-                mana = ("curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_mana/build_mana_" +
-                        codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild)
-                artesa = ("curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_artesa/build_artesa_" +
-                          codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild)
-                if "200" in sp.run(manaq, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout:
-                    sp.run(mana, shell=True, text=True,
-                           stdout=sp.PIPE, stderr=sp.PIPE)
-                    print("Extracting " + codebuild)
-                    sp.run("tar -xf dbgbins*", shell=True,
-                           text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                    sp.run("rm -rf dbgbins*.tgz", shell=True,
-                           text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                    sp.run("fixperms ./", shell=True, text=True,
-                           stdout=sp.PIPE, stderr=sp.PIPE)
-                    print("Moving " + str(processcore))
-                    for i in processcore:
-                        sp.run("cp ../"+i + " dbgbins-" +
-                               codebuild[:-4], shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                        print(sp.run("pwd", shell=True, text=True,
-                              stdout=sp.PIPE, stderr=sp.PIPE))
-                        sp.run("cd dbgbins-" + codebuild[:-4], shell=True,
-                               text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                        print(sp.run("pwd", shell=True, text=True,
-                              stdout=sp.PIPE, stderr=sp.PIPE))
-                        print(style.GREEN + "GDB for " + i + style.RESET)
-                        sp.run("gdb "+i.split("-")[0] + i, shell=True,
-                               text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
-                else:
-                    sp.run(artesa, shell=True, text=True,
-                           stdout=sp.PIPE, stderr=sp.PIPE)
-                    print("Extracting " + codebuild)
-                    sp.run("tar -xf dbgbins*", shell=True,
-                           text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                    sp.run("rm -rf dbgbins*.tgz", shell=True,
-                           text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                    sp.run("fixperms ./", shell=True, text=True,
-                           stdout=sp.PIPE, stderr=sp.PIPE)
-                    print("Moving " + str(processcore))
-                    for i in processcore:
-                        sp.run("cp ../"+i + " dbgbins-" +
-                               codebuild[:-4], shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                        print(sp.run("pwd", shell=True, text=True,
-                              stdout=sp.PIPE, stderr=sp.PIPE))
-                        sp.run("cd dbgbins-" + codebuild[:-4], shell=True,
-                               text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                        print(sp.run("pwd", shell=True, text=True,
-                              stdout=sp.PIPE, stderr=sp.PIPE))
-                        print(style.GREEN + "GDB for " + i + style.RESET)
-                        sp.run("gdb "+i.split("-")[0] + i, shell=True,
-                               text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
-        else:
-            print("Unable to find a crash  / core file under case directory !!!")
+        print(style.YELLOW +
+              '{:-^87}'.format('NetScaler Core Auto Backtrace') + style.RESET)
+        nsppecrashfile = sp.run(
+            "find \"$PWD\" $(pwd | cut -d'/' -f2,3,4 | sed 's/^/\//') | awk '/NSPPE-[0-9][0-9]-/&&!/gz|tar|zip|collector|bigfoot/{print }'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.split()
+        collectornsppecrashfile = sp.run(
+            "awk '/NSPPE-[0-9][0-9]-/&&!/gz|tar/&&/-rw------/{print $NF}' shell/ls_lRtrp.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.split()
+        if len(nsppecrashfile) != 0:
+            print(style.YELLOW +
+                  '{:-^87}'.format('Its a NSPPE Crash'))
+            print("\nAvailable Core files in Case directory " + style.RESET)
+            print(style.CYAN + '\n'.join(nsppecrashfile) + style.RESET)
+            print(
+                style.YELLOW + "\nAvailable Core files in this collector bundle: " + style.RESET)
+            print(style.CYAN + '\n'.join(collectornsppecrashfile) + style.RESET)
+            for nsppecrash in nsppecrashfile:
+                nsppecrash = re.sub("\(", "\(", nsppecrash)
+                nsppecrash = re.sub("\)", "\)", nsppecrash)
+                for collectornscrash in collectornsppecrashfile:
+                    collectornscrash = re.sub("\(", "\(", collectornscrash)
+                    collectornscrash = re.sub("\)", "\)", collectornscrash)
+                    if collectornscrash in nsppecrash:
+                        print(style.GREEN+"\nGenerating BackTrace for: " +
+                              nsppecrash + " --> " + sp.run("what " + nsppecrash + "| awk '/NetScaler/{print substr($2,3) substr($4,1,length($4)-4)}' | sed 's/:/_/g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout + style.RESET)
+                        nsppefw = "nsppe64-"+sp.run(
+                            "what " + nsppecrash + " | awk '/Build/{print $2, $4}' | cut -c 3- | sed s/\": \"/-/g | sed s/.nc/_nc/g | rev | cut -c 2- | rev | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                        print(sp.run("gdb /home/django/nsppe_symbols/"+nsppefw + " " + nsppecrash +
+                                     " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout)
     finally:
         pass
+elif args.bt:
+    try:
+        print(style.YELLOW +
+              '{:-^87}'.format('NetScaler Core Auto Backtrace') + style.RESET)
+        processcrashfile = sp.run(
+            "find \"$PWD\" $(pwd | cut -d'/' -f2,3,4 | sed 's/^/\//')| awk '/metricscollector-[0-9][0-9]/||/d-[0-9][0-9][0-9]/&&!/gz|tar/&&!/bigfoot/{print }'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        nsppecrashfile = sp.run(
+            "find \"$PWD\" $(pwd | cut -d'/' -f2,3,4 | sed 's/^/\//') | awk '/NSPPE-[0-9][0-9]-/&&!/gz|tar|zip/&&!/collector|bigfoot/{print }'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        codebuild = sp.run("awk '/#NS/{print}' shell/ns_running_config.conf | cut -c 4- | sed s/\" Build \"/-/g | sed 's/$/_nc.tgz/' | tr -d '\n'",
+                           shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        collectorprocesscrashfile = sp.run(
+            "awk '/metricscollector-[0-9][0-9]/||/d-[0-9][0-9][0-9]/&&/-rw------/&&!/gz|tar/{print $NF}' shell/ls_lRtrp.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        collectornsppecrashfile = sp.run(
+            "awk '/NSPPE-[0-9][0-9]-/&&!/gz|tar/&&/-rw------/{print $NF}' shell/ls_lRtrp.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        if len(processcrashfile) > 10:
+            print(style.YELLOW +
+                  '{:-^87}'.format('Its a Process Crash') + style.RESET)
+            print("\nAvailable Core files in Case directory")
+            print(style.CYAN + processcrashfile + style.RESET)
+            print(
+                style.YELLOW + "\nAvailable Core file names in Collector Bundle" + style.RESET)
+            print(style.CYAN + collectorprocesscrashfile + style.RESET)
+            processcore = []
+            for i in (processcrashfile.split()):
+                for j in collectorprocesscrashfile.splitlines():
+                    if j in i:
+                        i = re.sub("\(", "\(", i)
+                        i = re.sub("\)", "\)", i)
+                        processcore.append(i)
+                        print("Downloading and Using Debug files " + codebuild)
+                        manaq = ("curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_mana/build_mana_" +
+                                 codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild + " | awk '/HTTP/{print $2}'")
+                        artesaq = ("curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_artesa/build_artesa_" +
+                                   codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild + " | awk '/HTTP/{print $2}'")
+                        mana = ("curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_mana/build_mana_" +
+                                codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild)
+                        artesa = ("curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_artesa/build_artesa_" +
+                                  codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild)
+                        if "200" in sp.run(manaq, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout:
+                            sp.run(mana, shell=True, text=True,
+                                   stdout=sp.PIPE, stderr=sp.PIPE)
+                            print("Extracting " + codebuild)
+                            sp.run("tar -xf dbgbins*", shell=True,
+                                   text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                            sp.run("rm -rf dbgbins*.tgz", shell=True,
+                                   text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                            sp.run("fixperms ./", shell=True, text=True,
+                                   stdout=sp.PIPE, stderr=sp.PIPE)
+                            for i in processcore:
+                                sp.run("cd dbgbins-" + codebuild[:-4], shell=True,
+                                       text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                                print(style.GREEN + "GDB for " + i + style.RESET)
+                                btout = sp.run("gdb " + i.split("-")[0].split(
+                                    "/")[-1] + " " + i + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                                if btout.returncode == 0:
+                                    print(btout.stdout)
+                                    sp.run("rm -rf dbgbins*", shell=True,
+                                           text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                                else:
+                                    btout = sp.run("gdb i386/" + i.split("-")[0].split(
+                                        "/")[-1] + " " + i + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                                    print(btout.stdout)
+                                    sp.run("rm -rf dbgbins*", shell=True,
+                                           text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                        else:
+                            sp.run(artesa, shell=True, text=True,
+                                   stdout=sp.PIPE, stderr=sp.PIPE)
+                            print("Extracting " + codebuild)
+                            sp.run("tar -xf dbgbins*", shell=True,
+                                   text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                            sp.run("rm -rf dbgbins*.tgz", shell=True,
+                                   text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                            sp.run("fixperms ./", shell=True, text=True,
+                                   stdout=sp.PIPE, stderr=sp.PIPE)
+                            for i in processcore:
+                                sp.run("cd dbgbins-" + codebuild[:-4], shell=True,
+                                       text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                                print(style.GREEN + "GDB for " + i + style.RESET)
+                                btout = sp.run("gdb " + i.split("-")[0].split(
+                                    "/")[-1] + " " + i + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                                if btout.returncode == 0:
+                                    print(btout.stdout)
+                                    sp.run("rm -rf dbgbins*", shell=True,
+                                           text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                                else:
+                                    btout = sp.run("gdb i386/" + i.split("-")[0].split(
+                                        "/")[-1] + " " + i + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                                    print(btout.stdout)
+                                    sp.run("rm -rf dbgbins*", shell=True,
+                                           text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        if len(nsppecrashfile) > 10:
+            print(style.YELLOW +
+                  '{:-^87}'.format('Its a NSPPE Crash'))
+            print("\nAvailable Core files in Case directory" + style.RESET)
+            for i in nsppecrashfile.split():
+                i = re.sub("\(", "\(", i)
+                i = re.sub("\)", "\)", i)
+                nsppecrashfiles = i + " --> " + sp.run("what " + i + "| awk '/NetScaler/{print substr($2,3) substr($4,1,length($4)-4)}' | sed 's/:/_/g'", shell=True, text=True,
+                                                       stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                nsppecrashfiles = re.sub(
+                    ".* --> $", "", nsppecrashfiles)
+                print(style.CYAN + nsppecrashfiles, end='' + style.RESET)
+            print(
+                style.YELLOW + "\nAvailable Core file names in Collector Bundle" + style.RESET)
+            print(style.CYAN + collectornsppecrashfile + style.RESET)
+            for i in nsppecrashfile.split():
+                for j in collectornsppecrashfile.splitlines():
+                    if j in i:
+                        i = re.sub("\(", "\(", i)
+                        i = re.sub("\)", "\)", i)
+                        nsppecrashfiles = i + " --> " + sp.run("what " + i + "| awk '/NetScaler/{print substr($2,3) substr($4,1,length($4)-4)}' | sed 's/:/_/g'", shell=True, text=True,
+                                                               stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                        nsppecrashfiles = re.sub(
+                            ".* --> $", "", nsppecrashfiles)
+                        print(
+                            style.YELLOW + "Analysing This Collector Bundle NSPPE Crash and Uploaded NSPPE Crash File: " + style.RESET)
+                        print(style.GREEN + i + style.RESET)
+                        nsppefw = "nsppe64-"+sp.run(
+                            "what " + i + " | awk '/Build/{print $2, $4}' | cut -c 3- | sed s/\": \"/-/g | sed s/.nc/_nc/g | rev | cut -c 2- | rev | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                        print(sp.run("gdb /home/django/nsppe_symbols/"+nsppefw + " "+i +
+                                     " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout)
+    finally:
+        payload = {"version": version, "user": username, "action": "show -bt --> " + os.getcwd() + " --> " + str(
+            int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(
+            url, data=parse.urlencode(payload).encode()))
 elif args.author:
     logger.info(os.getcwd() + " - author")
     print(showscriptauthor)
@@ -825,7 +921,7 @@ elif args.G:
                     time_range = sp.run(
                         "nsconmsg -K "+newnslog_file+" -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=\"\"; printf \" --%s\", $0}' | sed -r 's/^.{9}//'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                     mgmt_cpu_use = sp.run(
-                        "nsconmsg -K "+newnslog_file+" -d current -s disptime=1 -g mgmt_cpu | awk '/mgmt_cpu/&&/use/{print $8\"-\"$9\", \"$11\" -\"$10, $3/10, $6}'  | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g' | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                        "nsconmsg -K "+newnslog_file+" -d current -s disptime=1 -g mgmt_cpu | awk '/mgmt_cpu/&&/use/{print $8\"-\"$9\",\"$11\"-\"$10, $3/10, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g' | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                     master_cpu_use = sp.run(
                         "nsconmsg -K "+newnslog_file+" -d current -s disptime=1 -g master_cpu | awk '/master_cpu/{print $8\"-\"$9\",\"$11\"-\"$10, $3/10, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g' | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                     cc_cpu_use = sp.run(
@@ -845,7 +941,7 @@ elif args.G:
                     if True:
                         file = open(path+"/"+newnslog_file.split("/")
                                     [2]+"_cpu_Usage.html", "w")
-                        file.write('''<html><head> <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script> <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.js"></script> <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.css"> <script type="text/javascript">google.charts.load('current',{'packages': ['annotationchart']}); google.charts.setOnLoadCallback(mgmt_cpu_use);google.charts.setOnLoadCallback(master_cpu_use); google.charts.setOnLoadCallback(cc_cpu_use);function mgmt_cpu_use(){var data=new google.visualization.DataTable(); '''+mgmt_cpu_use.stdout + ''' var chart=new google.visualization.AnnotationChart(document.getElementById('master_cpu')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}function master_cpu_use(){var data=new google.visualization.DataTable(); '''+master_cpu_use.stdout +
+                        file.write('''<html><head> <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script> <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.js"></script> <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.css"> <script type="text/javascript">google.charts.load('current',{'packages': ['annotationchart']}); google.charts.setOnLoadCallback(mgmt_cpu_use);google.charts.setOnLoadCallback(master_cpu_use); google.charts.setOnLoadCallback(cc_cpu_use);function mgmt_cpu_use(){var data=new google.visualization.DataTable(); '''+mgmt_cpu_use.stdout + ''' var chart=new google.visualization.AnnotationChart(document.getElementById('mgmt_cpu')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}function master_cpu_use(){var data=new google.visualization.DataTable(); '''+master_cpu_use.stdout +
                                    ''' var chart=new google.visualization.AnnotationChart(document.getElementById('master_cpu')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}function cc_cpu_use(){var data=new google.visualization.DataTable(); '''+cc_cpu_use.stdout + ''' var chart=new google.visualization.AnnotationChart(document.getElementById('cc_cpu')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}</script></head><body> <h1 class="txt-primary">CPU Graph</h1> <hr> <p class="txt-title">Collector_Bundle_Name: '''+collector_bundle_name+'''<br>Device_Name: '''+adchostname+'''<br>Log_file: '''+newnslog_file.split("/")[2]+'''<br>Log_Timestamp: '''+time_range+'''</p><hr><div style="width: 100%"><p class="txt-primary">mgmt_cpu_use</p><div id="mgmt_cpu" style="height:450px"></div><hr><p class="txt-primary">master_cpu_use</p><div id="master_cpu" style="height:450px"></div><hr><p class="txt-primary">cc_cpu_use</p><div id="cc_cpu" style="height:450px"></div></div><div class="footer">Project conFetch</div></body></html>''')
                         file.close()
                         print("Processed "+newnslog_file)
@@ -907,6 +1003,28 @@ elif args.G:
                     int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
                 resp = request.urlopen(request.Request(
                     url, data=parse.urlencode(payload).encode()))
+        elif "nic" in args.G:
+            try:
+                for newnslog_file in glob('var/nslog/newnslo*[!z]'):
+                    time_range = sp.run(
+                        "nsconmsg -K "+newnslog_file+" -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=\"\"; printf \" --%s\", $0}' | sed -r 's/^.{9}//'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                    allnic_tot_rx_tx_mbits = sp.run(
+                        "nsconmsg -K "+newnslog_file+" -s disptime=1 -d current -g allnic | awk '/allnic_tot_rx_mbits/||/allnic_tot_tx_mbits/{print $8\"-\"$9\",\"$11\"-\"$10, $5, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\\n\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                    if len(allnic_tot_rx_tx_mbits.stdout) < 52:
+                        allnic_tot_rx_tx_mbits.stdout = "data.addColumn('date', 'Manjesh');data.addColumn('Manjesh', 'Manjesh');"
+                    if True:
+                        file = open(path+"/"+newnslog_file.split("/")
+                                    [2]+"_nic.html", "w")
+                        file.write('''<html><head> <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script> <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.js"></script> <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.css"> <script type="text/javascript">google.charts.load('current',{'packages': ['annotationchart']}); google.charts.setOnLoadCallback(allnic_tot_rx_tx_mbits); function allnic_tot_rx_tx_mbits(){var data=new google.visualization.DataTable();'''+allnic_tot_rx_tx_mbits.stdout +
+                                   ''' var chart=new google.visualization.AnnotationChart(document.getElementById('allnic_tot_rx_tx_mbits')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}</script></head><body> <h1 class="txt-primary">NIC Graph</h1> <hr> <p class="txt-title">Collector_Bundle_Name: '''+collector_bundle_name+'''<br>Device_Name: '''+adchostname+'''<br>Log_file: '''+newnslog_file.split("/")[2]+'''<br>Log_Timestamp: '''+time_range+'''</p><hr> <div style="width: 100%"><p class="txt-primary">allnic_tot_rx_mbits - allnic_tot_tx_mbits</p><div id="allnic_tot_rx_tx_mbits" style="height:450px"></div></div><div class="footer">Project conFetch</div></body></html>''')
+                        file.close()
+                        print("Processed "+newnslog_file)
+            finally:
+                os.popen("fixperms ./conFetch").read()
+                payload = {"version": version, "user": username, "action": "show -G " + ''.join(args.G) + " --> " + os.getcwd() + " --> " + str(
+                    int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+                resp = request.urlopen(request.Request(
+                    url, data=parse.urlencode(payload).encode()))
     finally:
         pass
 elif args.g:
@@ -941,10 +1059,18 @@ elif args.g:
             try:
                 time_range = sp.run(
                     "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=\"\"; printf \" --%s\", $0}' | sed -r 's/^.{9}//'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                mgmt_cpu_use = sp.run(
+                    "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -s disptime=1 -g mgmt_cpu | awk '/mgmt_cpu/&&/use/{print $8\"-\"$9\",\"$11\"-\"$10, $3/10, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g' | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                 master_cpu_use = sp.run(
                     "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -s disptime=1 -g master_cpu | awk '/master_cpu/{print $8\"-\"$9\",\"$11\"-\"$10, $3/10, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g' | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                 cc_cpu_use = sp.run(
-                    "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -s disptime=1 -g cc_cpu | awk '/cc_cpu/{print $9\"-\"$10\",\"$12\"-\"$11, $3/10, $7}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\\n\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g' | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                    "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -s disptime=1 -g cc_cpu | awk '/cc_cpu/{print $9\"-\"$10\",\"$12\"-\"$11, $3/10, $7}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\\n\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                if len(mgmt_cpu_use.stdout) < 52:
+                    mgmt_cpu_use = "data.addColumn('date', 'Manjesh');data.addColumn('Manjesh', 'Manjesh');,['', ]"
+                else:
+                    mgmt_cpu_use.stdout = re.findall('data.addColumn.{0,52}\);|data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s' +
+                                                     starttime+'..*data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s'+endtime+'..{2,16}\);', mgmt_cpu_use.stdout)
+                    mgmt_cpu_use = ''.join(mgmt_cpu_use.stdout)
                 if len(master_cpu_use.stdout) < 52:
                     master_cpu_use = "data.addColumn('date', 'Manjesh');data.addColumn('Manjesh', 'Manjesh');,['', ]"
                 else:
@@ -952,18 +1078,24 @@ elif args.g:
                                                        starttime+'..*data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s'+endtime+'..{2,16}\);', master_cpu_use.stdout)
                     master_cpu_use = ''.join(master_cpu_use.stdout)
                 if len(cc_cpu_use.stdout) < 52:
-                    cc_cpu_use = "data.addColumn('date', 'Manjesh');data.addColumn('Manjesh', 'Manjesh');,['', ]"
+                    cc_cpu_use.stdout = "data.addColumn('date', 'Manjesh');data.addColumn('Manjesh', 'Manjesh');,['', ]"
                 else:
+                    cc_cpu_use.stdout = re.sub(
+                        '.*,\s,.*', '', cc_cpu_use.stdout)
+                    cc_cpu_use.stdout = re.sub(
+                        '.*,\s\].*', '', cc_cpu_use.stdout)
+                    cc_cpu_use.stdout = cc_cpu_use.stdout.replace("\n", "")
                     cc_cpu_use.stdout = re.findall('data.addColumn.{0,52}\);|data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s' +
                                                    starttime+'..*data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s'+endtime+'..{2,100}\);', cc_cpu_use.stdout)
-                    cc_cpu_use = ''.join(cc_cpu_use.stdout)
-                    cc_cpu_use = re.sub(
-                        'data.addRow\(\[new\s.{10,60}(,\s){1,30}\]\);', '', cc_cpu_use)
+                    cc_cpu_use.stdout = ''.join(cc_cpu_use.stdout)
+                    cc_cpu_use.stdout = re.sub(
+                        'data.addRow\(\[new\s.{10,60}(,\s){1,30}\]\);', '', cc_cpu_use.stdout)
                 if True:
                     file = open(path+"/"+newnslogFile+"_cpu_Usage.html", "w")
-                    file.write('''<html><head> <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script> <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.js"></script> <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.css"> <script type="text/javascript">google.charts.load('current',{'packages': ['annotationchart']}); google.charts.setOnLoadCallback(master_cpu_use); google.charts.setOnLoadCallback(cc_cpu_use); function master_cpu_use(){var data=new google.visualization.DataTable(); '''+master_cpu_use +
-                               ''' var chart=new google.visualization.AnnotationChart(document.getElementById('master_cpu')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}function cc_cpu_use(){var data=new google.visualization.DataTable(); '''+cc_cpu_use + ''' var chart=new google.visualization.AnnotationChart(document.getElementById('cc_cpu')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}</script></head><body> <h1 class="txt-primary">CPU Graph</h1> <hr> <p class="txt-title">Collector_Bundle_Name: '''+collector_bundle_name+'''<br>Device_Name: '''+adchostname+'''<br>Log_file: '''+"var/nslog/"+newnslogFile+'''<br>Log_Timestamp: '''+time_range+'''</p><hr><div style="width: 100%"><p class="txt-primary">master_cpu_use</p><div id="master_cpu" style="height:450px"></div><hr><p class="txt-primary">cc_cpu_use</p><div id="cc_cpu" style="height:450px"></div></div><div class="footer">Project conFetch</div></body></html>''')
+                    file.write('''<html><head> <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script> <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.js"></script> <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.css"> <script type="text/javascript">google.charts.load('current',{'packages': ['annotationchart']}); google.charts.setOnLoadCallback(mgmt_cpu_use);google.charts.setOnLoadCallback(master_cpu_use); google.charts.setOnLoadCallback(cc_cpu_use);function mgmt_cpu_use(){var data=new google.visualization.DataTable(); '''+mgmt_cpu_use + ''' var chart=new google.visualization.AnnotationChart(document.getElementById('mgmt_cpu')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}function master_cpu_use(){var data=new google.visualization.DataTable(); '''+master_cpu_use +
+                               ''' var chart=new google.visualization.AnnotationChart(document.getElementById('master_cpu')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}function cc_cpu_use(){var data=new google.visualization.DataTable(); '''+cc_cpu_use.stdout+''' var chart=new google.visualization.AnnotationChart(document.getElementById('cc_cpu')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}</script></head><body> <h1 class="txt-primary">CPU Graph</h1> <hr> <p class="txt-title">Collector_Bundle_Name: '''+collector_bundle_name+'''<br>Device_Name: '''+adchostname+'''<br>Log_file: '''+"var/nslog/"+newnslogFile+'''<br>Log_Timestamp: '''+time_range+'''</p><hr><div style="width: 100%"><p class="txt-primary">mgmt_cpu_use</p><div id="mgmt_cpu" style="height:450px"></div><hr><div style="width: 100%"><p class="txt-primary">master_cpu_use</p><div id="master_cpu" style="height:450px"></div><hr><p class="txt-primary">cc_cpu_use</p><div id="cc_cpu" style="height:450px"></div></div><div class="footer">Project conFetch</div></body></html>''')
                     file.close()
+                    print("Processed "+newnslogFile)
             finally:
                 os.popen("fixperms ./conFetch").read()
                 payload = {"version": version, "user": username, "action": "show -g " + ''.join(args.K) + " --> " + os.getcwd() + " --> " + str(
@@ -1006,6 +1138,7 @@ elif args.g:
                 file.write('''<html><head> <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script> <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.js"></script> <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.css"> <script type="text/javascript">google.charts.load('current',{'packages': ['annotationchart']}); google.charts.setOnLoadCallback(ha_tot_pkt_rx_tx); google.charts.setOnLoadCallback(ha_err_heartbeat); google.charts.setOnLoadCallback(ha_tot_macresolve_requests); function ha_tot_pkt_rx_tx(){var data=new google.visualization.DataTable();'''+ha_tot_pkt_rx_tx + ''' var chart=new google.visualization.AnnotationChart(document.getElementById('ha_tot_pkt_rx_tx')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}function ha_err_heartbeat(){var data=new google.visualization.DataTable();'''+ha_err_heartbeat +
                            ''' var chart=new google.visualization.AnnotationChart(document.getElementById('ha_err_heartbeat')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}function ha_tot_macresolve_requests(){var data=new google.visualization.DataTable();'''+ha_tot_macresolve_requests + ''' var chart=new google.visualization.AnnotationChart(document.getElementById('ha_tot_macresolve_requests')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}</script></head><body> <h1 class="txt-primary">High Availability Graph</h1> <hr> <p class="txt-title">Collector_Bundle_Name: '''+collector_bundle_name+'''<br>Device_Name: '''+adchostname+'''<br>Log_file: '''+newnslogFile+'''<br>Log_Timestamp: '''+time_range+'''</p><hr> <div style="width: 100%"><p class="txt-primary">ha_tot_pkt_rx_tx</p><div id="ha_tot_pkt_rx_tx" style="height:450px"></div></div><div style="width: 100%"><p class="txt-primary">ha_err_heartbeat</p><div id="ha_err_heartbeat" style="height:450px"></div></div><div style="width: 100%"><p class="txt-primary">ha_tot_macresolve_requests</p><div id="ha_tot_macresolve_requests" style="height:450px"></div></div><div class="footer">Project conFetch</div></body></html>''')
                 file.close()
+                print("Processed "+newnslogFile)
             finally:
                 os.popen("fixperms ./conFetch").read()
                 payload = {"version": version, "user": username, "action": "show -g " + ''.join(args.K) + " --> " + os.getcwd() + " --> " + str(
@@ -1030,6 +1163,7 @@ elif args.g:
                 file.write('''<html><head> <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script> <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.js"></script> <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.css"> <script type="text/javascript">google.charts.load('current',{'packages': ['annotationchart']}); google.charts.setOnLoadCallback(mem_free_used_avail); function mem_free_used_avail(){var data=new google.visualization.DataTable();'''+mem_cur_usedsize_freesize_avail +
                            ''' var chart=new google.visualization.AnnotationChart(document.getElementById('mem_free_used_avail')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}</script></head><body> <h1 class="txt-primary">Memory Graph</h1> <hr> <p class="txt-title">Collector_Bundle_Name: '''+collector_bundle_name+'''<br>Device_Name: '''+adchostname+'''<br>Log_file: '''+newnslogFile+'''<br>Log_Timestamp: '''+time_range+'''</p><hr> <div style="width: 100%"><p class="txt-primary">mem_cur_freesize - mem_cur_usedsize - mem_tot_available</p><div id="mem_free_used_avail" style="height:450px"></div></div><div class="footer">Project conFetch</div></body></html>''')
                 file.close()
+                print("Processed "+newnslogFile)
             finally:
                 os.popen("fixperms ./conFetch").read()
                 payload = {"version": version, "user": username, "action": "show -g " + ''.join(args.g + " -- ".split() + args.K) + " --> " + os.getcwd() + " --> " + str(

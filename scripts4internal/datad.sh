@@ -1,7 +1,7 @@
 #!/usr/local/bin/bash
 caseformat="^[0-9]{8}"
 url="https://tooltrack.deva.citrite.net/use/conFetch"
-ver="1.2"
+ver="1.4"
 datad="datad--$1--$(date +%s)"
 s="Success"
 f="Failed"
@@ -15,6 +15,7 @@ if [[ $1 =~ $caseformat ]];
     if [ $? -eq 0 ];
       then
         echo "$(date) -- $(whoami) -- used datad -- OK" >> "/home/CITRITE/manjeshn/manscript/showdata/$(whoami).datad.txt"
+        find * -name "collector_*" | sort -n | awk 'BEGIN{printf "\n\t%s\n\n", "\033[1;97mCollector_Bundles\033[0m"}!/tar|gz/{printf "%s%s\n", "\033[36m","./"$0"\033[0m"}'
         curl --silent --data $successq $url >/dev/null 2>&1
       else
         echo -e "\e[31m/upload/ftp/$1 unable to navigate to case directory\e[0m"
