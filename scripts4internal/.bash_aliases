@@ -4,6 +4,7 @@ alias datad="source /home/CITRITE/manjeshn/manscript/datad.sh"
 # conFetch alias
 alias show="python /home/CITRITE/manjeshn/manscript/show.py"
 alias showd="python /home/CITRITE/manjeshn/manscript/showd.py"
+alias conFetch="python /home/CITRITE/manjeshn/manscript/conFetch_Wrapper.py"
 
 # bigCap alias
 alias bigcap="python /home/CITRITE/manjeshn/manscript/bigcap.py"

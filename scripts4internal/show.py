@@ -49,11 +49,10 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "3.10"
+version = "3.15"
 
 # About script
 showscriptabout = '''
-
 
   _____           _           _                     ______   _       _     
  |  __ \         (_)         | |                   |  ____| | |     | |    
@@ -72,7 +71,11 @@ showscriptabout = '''
 ##   This script is designed to extract data from support bundle -- "script based troubleshooting". ##
 ##                                                                                                  ##
 ##                                                                                                  ##
-##                                    Version: 3.10                                                 ##
+##                                      Version: 3.20                                               ##
+##                   https://info.citrite.net/display/supp/Project_conFetch                         ##
+##                                                                                                  ##
+##                                                                                                  ##
+##                                    show --author                                                 ##
 ##                                                                                                  ##
 ######################################################################################################
 '''
@@ -189,7 +192,7 @@ if args.i:
                           shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         hwplatform = sp.run("egrep \"netscaler.descr\" shell/sysctl-a.out | awk -F':' '{print $2}'",
                             shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        vmplatform = sp.run("egrep \"platform\" var/nslog/dmesg.boot | head -2 | tail -1 | awk -F':' '{if ($2 ~ \"bios\") print \"No Hypervisor found\"; else print $2}'",
+        vmplatform = sp.run("egrep \"platform\" var/nslog/dmesg.boot | grep -iE \"hyper-v|vmware\" | head -2 | tail -1 | awk -F':' '{if ($2 ~ \"bios\") print \"No Hypervisor found\"; else print $2}'",
                             shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         licensetype = sp.run("awk '/License Type/{$1=$2=\"\"; print}' shell/showcmds.txt",
                              shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
@@ -331,12 +334,13 @@ elif args.p:
         core = sp.run("awk '/NSPPE-/{printf \"[%s-%s/%s --> %s --> %s]\\n\",  $6, $7, $8, $NF, $5}' shell/ls_lRtrp_var.out | sed \"s/^[ \t]*//\"",
                       shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         processcore = sp.run(
-            "awk '/ns/&&/d-[0-9][0-9]/&&/-rw-------/{printf \"[%s-%s/%s --> %s --> %s]\\n\",  $6, $7, $8, $NF, $5}' shell/ls_lRtrp.out | sed \"s/^[ \t]*//\"", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+            "awk '/bgpd-[0-9]|httpd-[0-9]|iked-[0-9]|imi-[0-9]|imish-[0-9]|iprep-[0-9]|iprep_tool-[0-9]|isisd-[0-9]|metricscollector-[0-9]|nsaaad-[0-9]|nscopo-[0-9]|nskrb_debug-[0-9]|nsm-[0-9]|ospf6d-[0-9]|ospfd-[0-9]|ripd-[0-9]|ripngd-[0-9]|snmpd-[0-9]|nsaggregatord-[0-9]|nscfsyncd-[0-9]|nscollect-[0-9]|nsconfigd-[0-9]|nsconmsg-[0-9]|nslped-[0-9]|nsnetsvc-[0-9]|nsnewstat-[0-9]|nssetup-[0-9]|nstraceaggregator-[0-9]|syshealthd-[0-9]|pitboss-[0-9]|sshd-[0-9]/&&/-rw-------/{printf \"[%s-%s/%s --> %s --> %s]\\n\",  $6, $7, $8, $NF, $5}' shell/ls_lRtrp.out | sed \"s/^[ \t]*//\"", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
     finally:
         print(style.YELLOW + '{:-^87}'.format('ADC Process Information'))
         print(style.RESET)
         print("Number of vCPU: " + vcpu.stdout.strip())
-        print("NSPPE Details: " + nsppenum.stdout + "\n" + nsppepid.stdout)
+        print("NSPPE Count: " + nsppenum.stdout + "\n" + style.GREEN +
+              "Current Running NSPPE:\n" + style.RESET + nsppepid.stdout)
         if len(core.stdout) > 10:
             print(style.LIGHTRED + "Core files: " +
                   "\n" + style.RESET + core.stdout.strip())
@@ -445,7 +449,7 @@ elif args.gz:
             sp.run("fixperms ./",
                    shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
             print(style.YELLOW +
-                  '{:-^87}\n'.format('Gunzip all .gz files under /var/log') + style.RESET)
+                  '{:-^87}\n'.format('Gunzip all .gz files under /var/nslog') + style.RESET)
             print(style.YELLOW +
                   str(gunzipnewnsresult.stderr.decode('utf-8')) + style.RESET)
             print(style.GREEN + "Extracted all files var/nslog!!!" + style.RESET)
@@ -730,138 +734,247 @@ elif args.bt:
     try:
         print(style.YELLOW +
               '{:-^87}'.format('NetScaler Core Auto Backtrace') + style.RESET)
-        processcrashfile = sp.run(
-            "find \"$PWD\" $(pwd | cut -d'/' -f2,3,4 | sed 's/^/\//')| awk '/metricscollector-[0-9][0-9]/||/d-[0-9][0-9][0-9]/&&!/gz|tar/&&!/bigfoot/{print }'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
         nsppecrashfile = sp.run(
-            "find \"$PWD\" $(pwd | cut -d'/' -f2,3,4 | sed 's/^/\//') | awk '/NSPPE-[0-9][0-9]-/&&!/gz|tar|zip/&&!/collector|bigfoot/{print }'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+            "find \"$PWD\" $(pwd | cut -d'/' -f2,3,4 | sed 's/^/\//') | awk '/NSPPE-[0-9][0-9]-/&&!/gz|tar|zip|collector|0000|bigfoot|part/{print }'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.splitlines()
+        collectornsppecrashfile = sp.run(
+            "awk '/NSPPE-[0-9][0-9]-/&&/-rw------/{print $NF}' shell/ls_lRtrp.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.split()
         codebuild = sp.run("awk '/#NS/{print}' shell/ns_running_config.conf | cut -c 4- | sed s/\" Build \"/-/g | sed 's/$/_nc.tgz/' | tr -d '\n'",
                            shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        processlist = ["bgpd", "httpd", "iked", "imi", "imish", "iprep", "iprep_tool", "isisd", "metricscollector", "nsaaad", "nscopo", "nskrb_debug", "nsm", "ospf6d", "ospfd", "ripd",
+                       "ripngd", "snmpd", "nsaggregatord", "nscfsyncd", "nscollect", "nsconfigd", "nsconmsg", "nslped", "nsnetsvc", "nsnewstat", "nssetup", "nstraceaggregator", "syshealthd", "pitboss", "sshd"]
+        processcrashfile = sp.run(
+            "find \"$PWD\" $(pwd | cut -d'/' -f2,3,4 | sed 's/^/\//')| awk '/bgpd-[0-9][0-9]|httpd-[0-9][0-9]|iked-[0-9][0-9]|imi-[0-9][0-9]|imish-[0-9][0-9]|iprep-[0-9][0-9]|iprep_tool-[0-9][0-9]|isisd-[0-9][0-9]|metricscollector-[0-9][0-9]|nsaaad-[0-9][0-9]|nscopo-[0-9][0-9]|nskrb_debug-[0-9][0-9]|nsm-[0-9][0-9]|ospf6d-[0-9][0-9]|ospfd-[0-9][0-9]|ripd-[0-9][0-9]|ripngd-[0-9][0-9]|snmpd-[0-9][0-9]|nsaggregatord-[0-9][0-9]|nscfsyncd-[0-9][0-9]|nscollect-[0-9][0-9]|nsconfigd-[0-9][0-9]|nsconmsg-[0-9][0-9]|nslped-[0-9][0-9]|nsnetsvc-[0-9][0-9]|nsnewstat-[0-9][0-9]|nssetup-[0-9][0-9]|nstraceaggregator-[0-9][0-9]|syshealthd-[0-9][0-9]|pitboss-[0-9][0-9]/&&!/gz|tar/&&!/bigfoot/{print | \"sort -r| uniq\"}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.split()
+        count_collectorprocesscrashfile = sp.run(
+            "awk '/bgpd-[0-9]|httpd-[0-9]|iked-[0-9]|imi-[0-9]|imish-[0-9]|iprep-[0-9]|iprep_tool-[0-9]|isisd-[0-9]|metricscollector-[0-9]|nsaaad-[0-9]|nscopo-[0-9]|nskrb_debug-[0-9]|nsm-[0-9]|ospf6d-[0-9]|ospfd-[0-9]|ripd-[0-9]|ripngd-[0-9]|snmpd-[0-9]|nsaggregatord-[0-9]|nscfsyncd-[0-9]|nscollect-[0-9]|nsconfigd-[0-9]|nsconmsg-[0-9]|nslped-[0-9]|nsnetsvc-[0-9]|nsnewstat-[0-9]|nssetup-[0-9]|nstraceaggregator-[0-9]|syshealthd-[0-9]|pitboss-[0-9]|sshd-[0-9]/&&/-rw------/{print $NF | \"sort -r| uniq -c\"}' shell/ls_lRtrp.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
         collectorprocesscrashfile = sp.run(
-            "awk '/metricscollector-[0-9][0-9]/||/d-[0-9][0-9][0-9]/&&/-rw------/&&!/gz|tar/{print $NF}' shell/ls_lRtrp.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
-        collectornsppecrashfile = sp.run(
-            "awk '/NSPPE-[0-9][0-9]-/&&!/gz|tar/&&/-rw------/{print $NF}' shell/ls_lRtrp.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
-        if len(processcrashfile) > 10:
-            print(style.YELLOW +
-                  '{:-^87}'.format('Its a Process Crash') + style.RESET)
-            print("\nAvailable Core files in Case directory")
-            print(style.CYAN + processcrashfile + style.RESET)
-            print(
-                style.YELLOW + "\nAvailable Core file names in Collector Bundle" + style.RESET)
-            print(style.CYAN + collectorprocesscrashfile + style.RESET)
-            processcore = []
-            for i in (processcrashfile.split()):
-                for j in collectorprocesscrashfile.splitlines():
-                    if j in i:
-                        i = re.sub("\(", "\(", i)
-                        i = re.sub("\)", "\)", i)
-                        processcore.append(i)
-                        print("Downloading and Using Debug files " + codebuild)
-                        manaq = ("curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_mana/build_mana_" +
-                                 codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild + " | awk '/HTTP/{print $2}'")
-                        artesaq = ("curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_artesa/build_artesa_" +
-                                   codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild + " | awk '/HTTP/{print $2}'")
-                        mana = ("curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_mana/build_mana_" +
-                                codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild)
-                        artesa = ("curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_artesa/build_artesa_" +
-                                  codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild)
-                        if "200" in sp.run(manaq, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout:
-                            sp.run(mana, shell=True, text=True,
-                                   stdout=sp.PIPE, stderr=sp.PIPE)
-                            print("Extracting " + codebuild)
-                            sp.run("tar -xf dbgbins*", shell=True,
-                                   text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                            sp.run("rm -rf dbgbins*.tgz", shell=True,
-                                   text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                            sp.run("fixperms ./", shell=True, text=True,
-                                   stdout=sp.PIPE, stderr=sp.PIPE)
-                            for i in processcore:
-                                sp.run("cd dbgbins-" + codebuild[:-4], shell=True,
-                                       text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                                print(style.GREEN + "GDB for " + i + style.RESET)
-                                btout = sp.run("gdb " + i.split("-")[0].split(
-                                    "/")[-1] + " " + i + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                                if btout.returncode == 0:
-                                    print(btout.stdout)
-                                    sp.run("rm -rf dbgbins*", shell=True,
-                                           text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                                else:
-                                    btout = sp.run("gdb i386/" + i.split("-")[0].split(
-                                        "/")[-1] + " " + i + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                                    print(btout.stdout)
-                                    sp.run("rm -rf dbgbins*", shell=True,
-                                           text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                        else:
-                            sp.run(artesa, shell=True, text=True,
-                                   stdout=sp.PIPE, stderr=sp.PIPE)
-                            print("Extracting " + codebuild)
-                            sp.run("tar -xf dbgbins*", shell=True,
-                                   text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                            sp.run("rm -rf dbgbins*.tgz", shell=True,
-                                   text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                            sp.run("fixperms ./", shell=True, text=True,
-                                   stdout=sp.PIPE, stderr=sp.PIPE)
-                            for i in processcore:
-                                sp.run("cd dbgbins-" + codebuild[:-4], shell=True,
-                                       text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                                print(style.GREEN + "GDB for " + i + style.RESET)
-                                btout = sp.run("gdb " + i.split("-")[0].split(
-                                    "/")[-1] + " " + i + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                                if btout.returncode == 0:
-                                    print(btout.stdout)
-                                    sp.run("rm -rf dbgbins*", shell=True,
-                                           text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                                else:
-                                    btout = sp.run("gdb i386/" + i.split("-")[0].split(
-                                        "/")[-1] + " " + i + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                                    print(btout.stdout)
-                                    sp.run("rm -rf dbgbins*", shell=True,
-                                           text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        if len(nsppecrashfile) > 10:
+            "awk '/bgpd-[0-9]|httpd-[0-9]|iked-[0-9]|imi-[0-9]|imish-[0-9]|iprep-[0-9]|iprep_tool-[0-9]|isisd-[0-9]|metricscollector-[0-9]|nsaaad-[0-9]|nscopo-[0-9]|nskrb_debug-[0-9]|nsm-[0-9]|ospf6d-[0-9]|ospfd-[0-9]|ripd-[0-9]|ripngd-[0-9]|snmpd-[0-9]|nsaggregatord-[0-9]|nscfsyncd-[0-9]|nscollect-[0-9]|nsconfigd-[0-9]|nsconmsg-[0-9]|nslped-[0-9]|nsnetsvc-[0-9]|nsnewstat-[0-9]|nssetup-[0-9]|nstraceaggregator-[0-9]|syshealthd-[0-9]|pitboss-[0-9]|sshd-[0-9]/&&/-rw------/{print $NF}' shell/ls_lRtrp.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.split()
+        if len(nsppecrashfile) != 0:
+            payload = {"version": version, "user": username, "action": "show -bt --> NSPPE crash" + os.getcwd() + " --> " + str(
+                int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+            resp = request.urlopen(request.Request(
+                url, data=parse.urlencode(payload).encode()))
             print(style.YELLOW +
                   '{:-^87}'.format('Its a NSPPE Crash'))
-            print("\nAvailable Core files in Case directory" + style.RESET)
-            for i in nsppecrashfile.split():
-                i = re.sub("\(", "\(", i)
-                i = re.sub("\)", "\)", i)
-                nsppecrashfiles = i + " --> " + sp.run("what " + i + "| awk '/NetScaler/{print substr($2,3) substr($4,1,length($4)-4)}' | sed 's/:/_/g'", shell=True, text=True,
-                                                       stdout=sp.PIPE, stderr=sp.PIPE).stdout
-                nsppecrashfiles = re.sub(
-                    ".* --> $", "", nsppecrashfiles)
-                print(style.CYAN + nsppecrashfiles, end='' + style.RESET)
             print(
-                style.YELLOW + "\nAvailable Core file names in Collector Bundle" + style.RESET)
-            print(style.CYAN + collectornsppecrashfile + style.RESET)
-            for i in nsppecrashfile.split():
-                for j in collectornsppecrashfile.splitlines():
-                    if j in i:
-                        i = re.sub("\(", "\(", i)
-                        i = re.sub("\)", "\)", i)
-                        nsppecrashfiles = i + " --> " + sp.run("what " + i + "| awk '/NetScaler/{print substr($2,3) substr($4,1,length($4)-4)}' | sed 's/:/_/g'", shell=True, text=True,
-                                                               stdout=sp.PIPE, stderr=sp.PIPE).stdout
-                        nsppecrashfiles = re.sub(
-                            ".* --> $", "", nsppecrashfiles)
-                        print(
-                            style.YELLOW + "Analysing This Collector Bundle NSPPE Crash and Uploaded NSPPE Crash File: " + style.RESET)
-                        print(style.GREEN + i + style.RESET)
+                style.YELLOW + "\nAvailable NSPPE Core files in Case directory " + style.RESET)
+            print(style.CYAN + '\n'.join(nsppecrashfile) + style.RESET)
+            if collectornsppecrashfile:
+                print(
+                    style.YELLOW + "\nAvailable NSPPE Core files in this collector bundle: " + style.RESET)
+                print(style.CYAN + '\n'.join(collectornsppecrashfile) + style.RESET)
+            else:
+                print(
+                    style.RED + "\nUnable to find crash / core file in this collector bundle." + style.RESET)
+                manual_core = input(
+                    style.YELLOW + "\nPlease specify the core file full path for manual analysis: " + style.RESET)
+                if len(manual_core) > 5:
+                    print(style.GREEN+"\nGenerating BackTrace for: " +
+                          manual_core + " --> " + sp.run("what " + manual_core + "| awk '/NetScaler/{print substr($2,3) substr($4,1,length($4)-4)}' | sed 's/:/_/g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout + style.RESET)
+                    nsppefw = "nsppe64-"+sp.run(
+                        "what " + manual_core + " | awk '/Build/{print $2, $4}' | cut -c 3- | sed s/\": \"/-/g | sed s/.nc/_nc/g | rev | cut -c 2- | rev | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                    nsppebtout = (sp.run("gdb /home/django/nsppe_symbols/"+nsppefw + " " + manual_core +
+                                         " -ex 'bt full' -ex quit | awk '/0x[0-9a-z]|symbols from|generated by|terminated with|handler called/{print}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout)
+                    print(nsppebtout)
+                    rawjira = [e[3:] for e in re.findall(
+                        "in\s[a-z_0-9]{3,}", nsppebtout)]
+                    JiraFun = (' '.join(rawjira))
+                    print(style.UNDERLINE + style.GREEN + "Crashing functions:" +
+                          "\n" + style.RESET)
+                    print(JiraFun + "\n")
+                    initialJira = sp.run(
+                        "curl -s -H 'Content-type: application/json' -d '{\"feature\":\"search\", \"parameters\": [{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\"},{\"name\":\"searchstring\",\"value\":\""+JiraFun+"\"}]}' -X POST http://10.14.18.46/SFaaS/api/jira | perl -wnE'say /\"NSHELP-[0-9]{3,9}/g' | sed 's/\"/ /g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                    if len(initialJira) > 5:
+                        print(style.GREEN + "Matching Jira -->" +
+                              style.RESET + initialJira)
+                    else:
+                        print(style.RED + "Unable to match any Jira with the above crashing funcation !!!" +
+                              style.RESET + initialJira)
+                    for i in initialJira.split():
+                        detailedJira = sp.run(
+                            "curl -s -H 'Content-type: application/json' -d '{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\",\"feature\":\"fetchfields\",\"parameters\":[{\"name\":\"id\",\"value\":\""+i+"\",\"isbase64\":false},{\"name\":\"fields\",\"value\":\"summary,versions,status,resolution,fixVersions,created\",\"isbase64\":false}]}' -X POST http://10.14.18.46/SFaaS/api/jira | jq '.options | .[] | .values | .[]' | sed 's/\\\\//g' | awk '{print substr($0, 2, length($0) - 2)}' | jq -r  '\"\\(.key) \\(\"-->\") \\(.fields.summary) \\(\"-->\") \\(.fields.resolution.name) \\(\"-->\") \\(.fields.created[0:10]) \\(\"\\nFound In:\") \\([.fields.versions[].name]) \\(\"--> Fixed In:\") \\([.fields.fixVersions[].name]) \\(\"\\n\")\"'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                        print(detailedJira)
+            for nsppecrash in nsppecrashfile:
+                nsppecrash = re.sub("\(", "\(", nsppecrash)
+                nsppecrash = re.sub("\)", "\)", nsppecrash)
+                nsppecrash = re.sub(" ", "\ ", nsppecrash)
+                for collectornscrash in collectornsppecrashfile:
+                    collectornscrash = re.sub("\(", "\(", collectornscrash)
+                    collectornscrash = re.sub("\)", "\)", collectornscrash)
+                    collectornscrash = re.sub(" ", "\ ", collectornscrash)
+                    collectornscrash = re.sub(".gz", "", collectornscrash)
+                    if collectornscrash in nsppecrash:
+                        print(style.GREEN+"\nGenerating BackTrace for: " +
+                              nsppecrash + " --> " + sp.run("what " + nsppecrash + "| awk '/NetScaler/{print substr($2,3) substr($4,1,length($4)-4)}' | sed 's/:/_/g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout + style.RESET)
                         nsppefw = "nsppe64-"+sp.run(
-                            "what " + i + " | awk '/Build/{print $2, $4}' | cut -c 3- | sed s/\": \"/-/g | sed s/.nc/_nc/g | rev | cut -c 2- | rev | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
-                        print(sp.run("gdb /home/django/nsppe_symbols/"+nsppefw + " "+i +
-                                     " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout)
+                            "what " + nsppecrash + " | awk '/Build/{print $2, $4}' | cut -c 3- | sed s/\": \"/-/g | sed s/.nc/_nc/g | rev | cut -c 2- | rev | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                        nsppebtout = (sp.run("gdb /home/django/nsppe_symbols/"+nsppefw + " " + nsppecrash +
+                                             " -ex 'bt full' -ex quit | awk '/0x[0-9a-z]|symbols from|generated by|terminated with|handler called/{print}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout)
+                        print(nsppebtout)
+                        rawjira = [e[3:] for e in re.findall(
+                            "in\s[a-z_0-9]{3,}", nsppebtout)]
+                        JiraFun = (' '.join(rawjira))
+                        print(style.GREEN + "Crashing functions:" +
+                              "\n" + style.RESET)
+                        print(JiraFun + "\n")
+                        initialJira = sp.run(
+                            "curl -s -H 'Content-type: application/json' -d '{\"feature\":\"search\", \"parameters\": [{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\"},{\"name\":\"searchstring\",\"value\":\""+JiraFun+"\"}]}' -X POST http://10.14.18.46/SFaaS/api/jira | perl -wnE'say /\"NSHELP-[0-9]{3,9}/g' | sed 's/\"/ /g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                        if len(initialJira) > 5:
+                            print(style.GREEN + "Matching Jira -->" +
+                                  style.RESET + initialJira)
+                        else:
+                            print(style.RED + "Unable to match any Jira with the above crashing funcation !!!" +
+                                  style.RESET + initialJira)
+                        for i in initialJira.split():
+                            detailedJira = sp.run(
+                                "curl -s -H 'Content-type: application/json' -d '{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\",\"feature\":\"fetchfields\",\"parameters\":[{\"name\":\"id\",\"value\":\""+i+"\",\"isbase64\":false},{\"name\":\"fields\",\"value\":\"summary,versions,status,resolution,fixVersions,created\",\"isbase64\":false}]}' -X POST http://10.14.18.46/SFaaS/api/jira | jq '.options | .[] | .values | .[]' | sed 's/\\\\//g' | awk '{print substr($0, 2, length($0) - 2)}' | jq -r  '\"\\(.key) \\(\"-->\") \\(.fields.summary) \\(\"-->\") \\(.fields.resolution.name) \\(\"-->\") \\(.fields.created[0:10]) \\(\"\\nFound In:\") \\([.fields.versions[].name]) \\(\"--> Fixed In:\") \\([.fields.fixVersions[].name]) \\(\"\\n\")\"'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                            print(detailedJira)
+
+        elif len(processcrashfile) != 0:
+            print(style.YELLOW +
+                  '{:-^87}'.format('Its a Process Crash') + style.RESET)
+            print(
+                style.YELLOW + "\nAvailable Process Core files in Case directory " + style.RESET)
+            print(style.CYAN + '\n'.join(processcrashfile) + style.RESET)
+            print(
+                style.YELLOW + "\nAvailable Process Core files in this collector bundle: " + style.RESET)
+            print(style.CYAN + count_collectorprocesscrashfile + style.RESET)
+            print("Downloading and Using Debug files " + codebuild)
+            manaq = ("curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_mana/build_mana_" +
+                     codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild + " | awk '/HTTP/{print $2}'")
+            artesaq = ("curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_artesa/build_artesa_" +
+                       codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild + " | awk '/HTTP/{print $2}'")
+            mana = ("curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_mana/build_mana_" +
+                    codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild)
+            artesa = ("curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_artesa/build_artesa_" +
+                      codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild)
+            if "200" in sp.run(manaq, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout:
+                payload = {"version": version, "user": username, "action": "show -bt --> mana process crash" + os.getcwd() + " --> " + str(
+                    int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+                resp = request.urlopen(request.Request(
+                    url, data=parse.urlencode(payload).encode()))
+                sp.run(mana, shell=True, text=True,
+                       stdout=sp.PIPE, stderr=sp.PIPE)
+                print("Extracting " + codebuild)
+                sp.run("tar -xf dbgbins*", shell=True,
+                       text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                sp.run("rm -rf dbgbins*.tgz", shell=True,
+                       text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                sp.run("fixperms ./", shell=True, text=True,
+                       stdout=sp.PIPE, stderr=sp.PIPE)
+                collectorprocesscrashfile = set(collectorprocesscrashfile)
+                for processcrash in processcrashfile:
+                    processcrash = re.sub("\(", "\(", processcrash)
+                    processcrash = re.sub("\)", "\)", processcrash)
+                    for collectorprocesscrash in collectorprocesscrashfile:
+                        collectorprocesscrash = re.sub(
+                            "\(", "\(", collectorprocesscrash)
+                        collectorprocesscrash = re.sub(
+                            "\)", "\)", collectorprocesscrash)
+                        collectorprocesscrash = re.sub(
+                            ".gz", "", collectorprocesscrash)
+                        if collectorprocesscrash in processcrash:
+                            print(style.GREEN+"\nGenerating BackTrace for: " +
+                                  processcrash + style.RESET)
+                            if os.path.isfile("dbgbins-" + codebuild[:-4] + "/" + processcrash.split("-")[0].split("/")[-1]):
+                                os.chdir("dbgbins-" + codebuild[:-4])
+                                btout = sp.run("gdb i386/" + processcrash.split("-")[0].split(
+                                    "/")[-1] + " " + processcrash + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                                print(btout.stdout)
+                                os.chdir("..")
+                            elif os.path.isfile("dbgbins-" + codebuild[:-4] + "/" + "i386/"+processcrash.split("-")[0].split("/")[-1]):
+                                os.chdir("dbgbins-" + codebuild[:-4])
+                                btout = sp.run("gdb i386/" + processcrash.split("-")[0].split(
+                                    "/")[-1] + " " + processcrash + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                                print(btout.stdout)
+                                os.chdir("..")
+                            elif os.path.isfile("dbgbins-" + codebuild[:-4] + "/" + "amd64/" + processcrash.split("-")[0].split("/")[-1]):
+                                os.chdir("dbgbins-" + codebuild[:-4])
+                                btout = sp.run("gdb amd64/" + processcrash.split("-")[0].split(
+                                    "/")[-1] + " " + processcrash + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                                print(btout.stdout)
+                                sp.run("rm -rf dbgbins*", shell=True,
+                                       text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                                os.chdir("..")
+                            else:
+                                print(style.RED + "Unable to find this process: " + processcrash.split(
+                                    "-")[0].split("/")[-1] + " in debug binaries" + style.RESET)
+                                sp.run("rm -rf dbgbins*", shell=True,
+                                       text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                                quit()
+            elif "200" in sp.run(artesaq, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout:
+                payload = {"version": version, "user": username, "action": "show -bt --> artesa process crash" + os.getcwd() + " --> " + str(
+                    int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+                resp = request.urlopen(request.Request(
+                    url, data=parse.urlencode(payload).encode()))
+                sp.run(artesa, shell=True, text=True,
+                       stdout=sp.PIPE, stderr=sp.PIPE)
+                print("Extracting " + codebuild)
+                sp.run("tar -xf dbgbins*", shell=True,
+                       text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                sp.run("rm -rf dbgbins*.tgz", shell=True,
+                       text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                sp.run("fixperms ./", shell=True, text=True,
+                       stdout=sp.PIPE, stderr=sp.PIPE)
+                collectorprocesscrashfile = set(collectorprocesscrashfile)
+                for processcrash in processcrashfile:
+                    processcrash = re.sub("\(", "\(", processcrash)
+                    processcrash = re.sub("\)", "\)", processcrash)
+                    for collectorprocesscrash in collectorprocesscrashfile:
+                        collectorprocesscrash = re.sub(
+                            "\(", "\(", collectorprocesscrash)
+                        collectorprocesscrash = re.sub(
+                            "\)", "\)", collectorprocesscrash)
+                        collectorprocesscrash = re.sub(
+                            ".gz", "", collectorprocesscrash)
+                        if collectorprocesscrash in processcrash:
+                            print(style.GREEN+"\nGenerating BackTrace for: " +
+                                  processcrash + style.RESET)
+                            if os.path.isfile("dbgbins-" + codebuild[:-4] + "/" + processcrash.split("-")[0].split("/")[-1]):
+                                os.chdir("dbgbins-" + codebuild[:-4])
+                                btout = sp.run("gdb i386/" + processcrash.split("-")[0].split(
+                                    "/")[-1] + " " + processcrash + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                                print(btout.stdout)
+                                os.chdir("..")
+                            elif os.path.isfile("dbgbins-" + codebuild[:-4] + "/" + "i386/"+processcrash.split("-")[0].split("/")[-1]):
+                                os.chdir("dbgbins-" + codebuild[:-4])
+                                btout = sp.run("gdb i386/" + processcrash.split("-")[0].split(
+                                    "/")[-1] + " " + processcrash + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                                print(btout.stdout)
+                                os.chdir("..")
+                            elif os.path.isfile("dbgbins-" + codebuild[:-4] + "/" + "amd64/" + processcrash.split("-")[0].split("/")[-1]):
+                                os.chdir("dbgbins-" + codebuild[:-4])
+                                btout = sp.run("gdb amd64/" + processcrash.split("-")[0].split(
+                                    "/")[-1] + " " + processcrash + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                                print(btout.stdout)
+                                sp.run("rm -rf dbgbins*", shell=True,
+                                       text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                                os.chdir("..")
+                            else:
+                                print(style.RED + "Unable to find this process: " + processcrash.split(
+                                    "-")[0].split("/")[-1] + " in debug binaries" + style.RESET)
+                                sp.run("rm -rf dbgbins*", shell=True,
+                                       text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                                quit()
+        else:
+            print(style.RED + "Unable to find Process / NSPPE Crash in Either Collector Bundle or No Core File in Case Directory !!!" + style.RESET)
+            payload = {"version": version, "user": username, "action": "show -bt --> " + os.getcwd() + " --> " + str(
+                int(time.time())), "runtime": 0, "result": "Failed", "format": "string", "sr": os.getcwd().split("/")[3]}
+            resp = request.urlopen(request.Request(
+                url, data=parse.urlencode(payload).encode()))
     finally:
-        payload = {"version": version, "user": username, "action": "show -bt --> " + os.getcwd() + " --> " + str(
-            int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-        resp = request.urlopen(request.Request(
-            url, data=parse.urlencode(payload).encode()))
+        quit()
 elif args.author:
     logger.info(os.getcwd() + " - author")
-    print(showscriptauthor)
+    print(sp.run(["lolcat"], input=showscriptauthor,
+          capture_output=True, text=True).stdout)
     payload = {"version": version, "user": username, "action": "show --author --> " + os.getcwd() + " --> " + str(
         int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
     resp = request.urlopen(request.Request(
         url, data=parse.urlencode(payload).encode()))
 elif args.about:
     logger.info(os.getcwd() + " - about")
-    print(showscriptabout)
+    print(sp.run(["lolcat"], input=showscriptabout,
+          capture_output=True, text=True).stdout)
     payload = {"version": version, "user": username, "action": "show --about --> " + os.getcwd() + " --> " + str(
         int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
     resp = request.urlopen(request.Request(
