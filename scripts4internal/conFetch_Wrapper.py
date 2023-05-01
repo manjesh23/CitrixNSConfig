@@ -1,51 +1,34 @@
-## This is a wrapper script to use show commands under Project conFetch. Advanced to usage within bigfoot ##
+# This is a wrapper script to use show commands under Project conFetch. Advanced to usage within bigfoot
 
 #!/usr/local/bin/python3.9
 import os
 import subprocess as sp
 import argparse
-import pathlib
-
 
 parser = argparse.ArgumentParser(
     description="Project conFetch Wrapper", formatter_class=argparse.RawTextHelpFormatter)
-parser.add_argument('-NSPath', action="append",
-                    help="Provide Collector absolute path")
-parser.add_argument('-Switch', action="append",
-                    help="conFetch Switch")
+parser.add_argument('-i', action="append",
+                    help="Provide Collector bundle absolute path")
 args = parser.parse_args()
 
-# conFetch Dir
-path = "conFetch/Preprocessor"
+# Input file name to variable
+NSPath = ''.join(args.i)
 
-if args.NSPath and args.Switch:
-    try:
-        for NSPath in args.NSPath:
-            os.chdir(NSPath)
-            pathlib.Path(path).mkdir(parents=True, exist_ok=True)
-            os.system("fixperms ./ > /dev/null")
-            os.chdir(path)
-            for Switch in args.Switch:
-                f = open(Switch+".txt", "w")
-                conFetch_Out = sp.run(
-                    "python /home/CITRITE/manjeshn/manscript/show.py -" + Switch, shell=True, text=True, stdout=f, stderr=sp.PIPE)
-    except FileNotFoundError as e:
-        print(e)
-    finally:
-        pass
-elif args.NSPath:
-    try:
-        print("You have provided only Collector bundle. Please input show Switch.")
-    finally:
-        pass
+# show command options
+showcmd = ["i", "stat \"system memory\"", "p", "v"]
 
-elif args.Switch:
+if args.i:
     try:
-        print("You have provided only show Switch. Please input Collector bundle absolute path.")
+        os.chdir(NSPath)
+        os.system("fixperms ./ > /dev/null")
+        for Switch in showcmd:
+            conFetch_Out = sp.run(
+                "python /home/CITRITE/manjeshn/manscript/show.py -" + Switch, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+            print(conFetch_Out.stdout)
     finally:
+        os.system("fixperms ./ > /dev/null")
         pass
+elif args.i:
+    print("You have provided only Collector bundle. Please input Ouput file path and name.")
 else:
-    try:
-        print("For use of ")
-    finally:
-        pass
+    print("For use of conFetch_Wrapper, please use conFetch -h")
