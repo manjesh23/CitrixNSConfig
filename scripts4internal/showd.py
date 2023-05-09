@@ -132,7 +132,7 @@ parser.add_argument('-ha', action="store_true",
                     help="HA Analysis (Potential RCA)")
 parser.add_argument('-N', action="store_true",
                     help="newnslog GMT to System timezone")
-parser.add_argument('-pt', action="store_true",
+parser.add_argument('-pt', metavar="", action="append",
                     help="Check if the given problem time present in the bundle")
 parser.add_argument('--about', action="store_true",
                     help="About Show Script")
@@ -236,7 +236,7 @@ if args.i:
         deviceuptime = sp.run("sed 's/^.*up //' shell/uptime.out | sed 's/,...user.*//'",
                               shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         systemtimezone = sp.run(
-            "awk '{printf \"[%s]: \", $5}' shell/date.out; awk '/local/{print \"GMT \" $3 - substr($6,12); exit}' var/log/ns.log | awk '{if ($NF !~ \"-\") print $1 \" +\" $2; else print $1 \" \"  $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+            "awk '{printf \"[%s]: \", $5}' shell/date.out; awk '/local/&&/GMT/{print \"GMT \" $3 - substr($6,12); exit}' var/log/ns.log | awk '{if ($NF !~ \"-\") print $1 \" +\" $2; else print $1 \" \"  $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         cpuinfo = sp.run("awk '/hw.model/{$1=\"\"; print}' shell/sysctl-a.out",
                          shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         loadaverage = sp.run("awk '/load average/{printf \"%s %s %s\", \"1 min: \"$6, \"5 min: \"$7, \"15 min: \"$8}' shell/top-b.out",
@@ -319,14 +319,25 @@ if args.i:
 elif args.N:
     try:
         newnslog_converted = sp.run(
-            "for i in $(ls -lah var/nslog | awk '/newnslog\./&&!/tar|gz/{print \"var/nslog/\" $NF}END{print \"var/nslog/newnslog\"}'); do printf \"%s | \" $i; nsconmsg -K $i -d setime | awk '!/Displaying|data|NetScaler/&&/time/{$1=$2=\"\"; print $0}' | awk '{if(NR%2!=0){printf(\"%s |\",$0,$4)}else{print}}'; done | column -t", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+            "for i in $(ls -lah var/nslog | awk '/newnslog\./&&!/tar|gz/{print \"var/nslog/\" $NF}END{print \"var/nslog/newnslog\"}'); do printf \"%s | \" $i; nsconmsg -K $i -d setime | awk '!/Displaying|data|NetScaler/&&/time/{$1=$2=\"\"; print $0}' | awk '{if(NR%2!=0){printf(\"%s |\",$0,$4)}else{print}}'; done | column -t", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
     finally:
         print(newnslog_converted)
 elif args.pt:
+    array = []
     try:
-        pass
+        user_dt = datetime.strptime(user_time, "%b %d %H:%M:%S")
+        start_dt = datetime.strptime(start_time, "%b %d %H:%M:%S")
+        end_dt = datetime.strptime(end_time, "%b %d %H:%M:%S")
+        nslog = sp.run(
+            "for i in $(printf '%s\n' var/log/ns.lo* | grep -v gz | grep -v tar); do awk 'NR == 2 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        for logline in nslog.splitlines():
+            log = logline.split(' | ')
+            array.append(log)
+
     finally:
-        pass
+        print(style.YELLOW +
+              '{:-^87}'.format('NetScaler Problem Timestamp and Files') + "\n" + style.RESET)
+        print(array)
 elif args.n:
     try:
         logger.info(os.getcwd() + " - show -n")

@@ -18,14 +18,14 @@ login = thefirstock.firstock_login(userId='JB1885', password='Cms#4567$',
 #quantity = int(input("Enter actual quantity: "))
 
 # Testing
-buystrikeprice = '18300'
-indexenter = 18266
-target = 18400
-stoploss = 18200
+buystrikeprice = '17500'
+indexenter = 18200
+target = 18200
+stoploss = 18300
 putcall = 'C'
 expirydate = '11MAY23'
 optionname = 26000
-quantity = 50
+quantity = 500
 
 # Logic home
 if optionname == 26009:
@@ -44,9 +44,11 @@ if login['status'] == 'Success':
         index_ltp = int(float(thefirstock.firstock_getQuote(exchange='NSE',  token=optionname)[
             'data']['lastTradedPrice']))
         print(index_ltp)
-        # This is a Call option logic
-        if PB['data'][0]['netQuantity'] != quantity:
+        # if str(PB['data'][0]['tradingSymbol']) = str(optionexpiryname):
+        if int(PB['data'][0]['netQuantity']) != quantity:
+            # Treat this a new trade
             if putcall == "C":
+                # This is a Call option logic
                 if index_ltp <= indexenter:
                     print("Index_LTP is less than or equal to (" + str(index_ltp) + ")" +
                           " index entry price (" + str(indexenter) + ")")
@@ -55,49 +57,95 @@ if login['status'] == 'Success':
                     placeOrder = thefirstock.firstock_placeOrder(exchange='NFO', tradingSymbol=optionexpiryname, quantity=quantity, price='',
                                                                  product='C', transactionType='B', priceType='MKT', retention='DAY', triggerPrice='', remarks='Strategy1',)
                     print("Buy Trade executed at " + str(index_ltp))
+                    print(placeOrder)
                     if placeOrder['status'] == "Success":
-
-                        oB = thefirstock.firstock_orderBook()
+                        oB = thefirstock.firstock_orderBook()  # This order book is for future use
                         while True:
                             if PB['data'][0]['tradingSymbol'] == optionexpiryname:
                                 if index_ltp >= target:
                                     placeOrder = thefirstock.firstock_placeOrder(exchange='NFO', tradingSymbol=optionexpiryname, quantity=quantity, price='MKT',
                                                                                  product='C', transactionType='S', priceType='LMT', retention='DAY', triggerPrice='', remarks='Strategy1',)
                                     print("You have achieved your target !!!")
+                                    quit()
                                 elif index_ltp <= stoploss:
                                     placeOrder = thefirstock.firstock_placeOrder(exchange='NFO', tradingSymbol=optionexpiryname, quantity=quantity, price='MKT',
                                                                                  product='C', transactionType='S', priceType='LMT', retention='DAY', triggerPrice='', remarks='Strategy1',)
                                     print("You have hit the stoploss :(")
-                                else:
                                     quit()
                             else:
                                 print(
-                                    "Invalid option exiry name matched with position book name")
+                                    "You do not have any option position with the name " + optionexpiryname)
                                 quit()
                     else:
                         print("Market is not touched your entry point")
-        elif putcall == 'P':
-            # This is a Put option logic
-            if index_ltp >= indexenter:
-                print("Index_LTP is less than or equal to (" + str(index_ltp) + ")" +
-                      " index entry price (" + str(indexenter) + ")")
-                strike_price = thefirstock.firstock_OptionChain(
-                    tradingSymbol=optionexpiryname, exchange='NFO', strikePrice=int(buystrikeprice), count="5")
-                placeOrder = thefirstock.firstock_placeOrder(exchange='NFO', tradingSymbol=optionexpiryname, quantity=quantity, price='',
-                                                             product='C', transactionType='B', priceType='MKT', retention='DAY', triggerPrice='', remarks='Strategy1',)
-                print("Buy Trade executed at " + str(index_ltp))
-                print(placeOrder)
-                while True:
-                    if index_ltp >= target:
-                        placeOrder = thefirstock.firstock_placeOrder(exchange='NFO', tradingSymbol=optionexpiryname, quantity=quantity, price='MKT',
-                                                                     product='C', transactionType='S', priceType='LMT', retention='DAY', triggerPrice='', remarks='Strategy1',)
-                        print("You have achieved your target !!!")
-                    elif index_ltp <= stoploss:
-                        placeOrder = thefirstock.firstock_placeOrder(exchange='NFO', tradingSymbol=optionexpiryname, quantity=quantity, price='MKT',
-                                                                     product='C', transactionType='S', priceType='LMT', retention='DAY', triggerPrice='', remarks='Strategy1',)
-                        print("You have hit the stoploss :(")
+            elif putcall == 'P':
+                # This is a Put option logic
+                if index_ltp >= indexenter:
+                    print("Index_LTP is less than or equal to (" + str(index_ltp) + ")" +
+                          " index entry price (" + str(indexenter) + ")")
+                    strike_price = thefirstock.firstock_OptionChain(
+                        tradingSymbol=optionexpiryname, exchange='NFO', strikePrice=int(buystrikeprice), count="5")
+                    placeOrder = thefirstock.firstock_placeOrder(exchange='NFO', tradingSymbol=optionexpiryname, quantity=quantity, price='',
+                                                                 product='C', transactionType='B', priceType='MKT', retention='DAY', triggerPrice='', remarks='Strategy1',)
+                    print("Buy Trade executed at " + str(index_ltp))
+                    if placeOrder['status'] == "Success":
+                        oB = thefirstock.firstock_orderBook()  # This order book is for future use
+                        while True:
+                            if PB['data'][0]['tradingSymbol'] == optionexpiryname:
+                                if index_ltp <= target:
+                                    placeOrder = thefirstock.firstock_placeOrder(exchange='NFO', tradingSymbol=optionexpiryname, quantity=quantity, price='MKT',
+                                                                                 product='C', transactionType='S', priceType='LMT', retention='DAY', triggerPrice='', remarks='Strategy1',)
+                                    print("You have achieved your target !!!")
+                                    quit()
+                                elif index_ltp >= stoploss:
+                                    placeOrder = thefirstock.firstock_placeOrder(exchange='NFO', tradingSymbol=optionexpiryname, quantity=quantity, price='MKT',
+                                                                                 product='C', transactionType='S', priceType='LMT', retention='DAY', triggerPrice='', remarks='Strategy1',)
+                                    print("You have hit the stoploss :(")
+                                    quit()
+                            else:
+                                print(
+                                    "You do not have any option position with the name " + optionexpiryname)
+                                quit()
                     else:
+                        print("Market is not touched your entry point")
+        else:
+            # This is a existing trade
+            while True:
+                if putcall == "C":
+                    if PB['data'][0]['tradingSymbol'] == optionexpiryname:
+                        if index_ltp >= target:
+                            placeOrder = thefirstock.firstock_placeOrder(exchange='NFO', tradingSymbol=optionexpiryname, quantity=quantity, price='MKT',
+                                                                         product='C', transactionType='S', priceType='LMT', retention='DAY', triggerPrice='', remarks='Strategy1',)
+                            print("You have achieved your target !!!")
+                            print("This is not a new trade")
+                            quit()
+                        elif index_ltp <= stoploss:
+                            placeOrder = thefirstock.firstock_placeOrder(exchange='NFO', tradingSymbol=optionexpiryname, quantity=quantity, price='MKT',
+                                                                         product='C', transactionType='S', priceType='LMT', retention='DAY', triggerPrice='', remarks='Strategy1',)
+                            print("You have hit the stoploss :(")
+                            quit()
+                        else:
+                            quit()
+                    else:
+                        print(
+                            "Invalid option exiry name matched with position book name")
                         quit()
-
-            else:
-                print("Market is not touched your entry point")
+                elif putcall == 'P':
+                    if PB['data'][0]['tradingSymbol'] == optionexpiryname:
+                        if index_ltp <= target:
+                            placeOrder = thefirstock.firstock_placeOrder(exchange='NFO', tradingSymbol=optionexpiryname, quantity=quantity, price='MKT',
+                                                                         product='C', transactionType='S', priceType='LMT', retention='DAY', triggerPrice='', remarks='Strategy1',)
+                            print("You have achieved your target !!!")
+                            print("This is not a new trade")
+                            quit()
+                        elif index_ltp >= stoploss:
+                            placeOrder = thefirstock.firstock_placeOrder(exchange='NFO', tradingSymbol=optionexpiryname, quantity=quantity, price='MKT',
+                                                                         product='C', transactionType='S', priceType='LMT', retention='DAY', triggerPrice='', remarks='Strategy1',)
+                            print("You have hit the stoploss :(")
+                            quit()
+                        else:
+                            quit()
+                    else:
+                        print(
+                            "Invalid option exiry name matched with position book name")
+                        quit()
