@@ -10,6 +10,9 @@ from urllib import request, parse
 import json
 import ast
 import time
+from datetime import datetime, timedelta
+import shutil
+
 
 # Preparing Required color codes
 
@@ -49,7 +52,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "3.25"
+version = "3.50"
 
 # About script
 showscriptabout = '''
@@ -71,7 +74,7 @@ showscriptabout = '''
 ##   This script is designed to extract data from support bundle -- "script based troubleshooting". ##
 ##                                                                                                  ##
 ##                                                                                                  ##
-##                                      Version: 3.25                                               ##
+##                                      Version:  ''' + version + '''                                              ##
 ##                   https://info.citrite.net/display/supp/Project_conFetch                         ##
 ##                                                                                                  ##
 ##                                                                                                  ##
@@ -113,6 +116,8 @@ parser.add_argument('-case', action="store_true",
                     help=argparse.SUPPRESS)
 parser.add_argument('-bt', action="store_true",
                     help="Auto bt for both NSPPE and Process core files")
+parser.add_argument('-bt1', action="store_true",
+                    help="Specify NSPPE Core file absolute path to run a bt")
 parser.add_argument('-G', action="append",
                     choices={"cpu", "mem", "ha", "nic"}, help="Generate HTML Graph for all newnslog(s)")
 parser.add_argument('-g', action="append",
@@ -123,6 +128,8 @@ parser.add_argument('-s', action="append",
                     metavar="newnslog starttime", help=argparse.SUPPRESS)
 parser.add_argument('-e', action="append",
                     metavar="newnslog endtime", help=argparse.SUPPRESS)
+parser.add_argument('-ha', action="store_true",
+                    help="HA Analysis (Potential RCA)")
 parser.add_argument('--about', action="store_true",
                     help="About Show Script")
 args = parser.parse_args()
@@ -224,8 +231,8 @@ if args.i:
             "cat shell/date.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         deviceuptime = sp.run("sed 's/^.*up //' shell/uptime.out | sed 's/,...user.*//'",
                               shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        systemtimezone = sp.run(" awk '{printf \"[%s]: \", $5}' shell/date.out; awk '/local/{print \"GMT \" $3 - substr($6,12); exit}' var/log/ns.log | awk '{if ($NF !~ \"-\") print $1 \" +\" $2; else print $1 \" \"  $2}'",
-                                shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        systemtimezone = sp.run(
+            "awk '{printf \"[%s]: \", $5}' shell/date.out; awk '/local/{print \"GMT \" $3 - substr($6,12); exit}' var/log/ns.log | awk '{if ($NF !~ \"-\") print $1 \" +\" $2; else print $1 \" \"  $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         cpuinfo = sp.run("awk '/hw.model/{$1=\"\"; print}' shell/sysctl-a.out",
                          shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         loadaverage = sp.run("awk '/load average/{printf \"%s %s %s\", \"1 min: \"$6, \"5 min: \"$7, \"15 min: \"$8}' shell/top-b.out",
@@ -257,7 +264,8 @@ if args.i:
         print(nstimes.stdout.strip())
         print("Collector pack generated @ " + collectorpacktime.stdout.strip())
         print("System TimeZone: " + systemtimezone.stdout.strip())
-        print("Newnslog SE_Time: " + newnslogsetime.stdout.strip())
+        print("Newnslog Overall Start_End Time: " +
+              newnslogsetime.stdout.strip())
         print("")
         print("NetScaler Hostname: " + adchostname.stdout.strip())
         print("NetScaler HA State: " + adcha.stdout.strip())
@@ -375,8 +383,8 @@ elif args.p:
 elif args.c:
     try:
         newnslog_counter = ''
-        if os.path.isfile("conFetch/nsconmsg/nsconmsg_counters.txt"):
-            with open("conFetch/nsconmsg/nsconmsg_counters.txt", "r") as nsconmsg_counter:
+        if os.path.isfile("conFetch/nsconmsg/newnslog_counters.txt"):
+            with open("conFetch/nsconmsg/newnslog_counters.txt", "r") as nsconmsg_counter:
                 for i in nsconmsg_counter.readlines():
                     if str(args.c) in i:
                         newnslog_counter += i
@@ -525,81 +533,90 @@ elif args.im:
             url, data=parse.urlencode(payload).encode()))
         quit()
 elif args.imall:
-    try:
-        logger.info(os.getcwd() + " - show -imall")
-        # Printing Index messages for ns.log, auth.log, bash.log, nitro.log, notice.log, nsvpn.log, sh.log
-        try:
-            nslog = sp.run(
-                "awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/ns.lo* | grep -v gz | grep -v tar); do awk 'NR == 2 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-            authlog = sp.run(
-                "awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/auth.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-            bashlog = sp.run(
-                "awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/bash.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-            nitrolog = sp.run(
-                "awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/nitro.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-            noticelog = sp.run(
-                "awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/notice.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-            nsvpnlog = sp.run(
-                "awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/nsvpn.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-            shlog = sp.run(
-                "awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/sh.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-            newnslog = sp.run(
-                "awk 'BEGIN{printf \"%s\\t\\t | %s\\t\\t    | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\\n' var/nslog/newnslo* | grep -v gz | grep -v tar); do nsconmsg -K $i -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=\"\"; printf \"%s\\t|\", $0}END{printf \"\\n\"}'; echo $i; done | sed 'N;s/\\n/ /' | awk '{$1=$1=\"\"}1' | sed 's/^ //' | sed -r '/^\\s*$/d' | awk '{printf  \"%s %s %02s %s %s %s %s %s %02s %s %s %s %s\\n\", $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        finally:
-            if nslog.returncode == 0:
-                print(style.YELLOW +
-                      '{:-^87}\n'.format('NetScaler ns.log timestamp IndexMessages') + style.RESET + nslog.stdout)
-            else:
-                print(
-                    style.RED + '{:-^87}\n'.format('Unable to read ns.log') + style.RESET)
-            if authlog.returncode == 0:
-                print(style.YELLOW +
-                      '{:-^87}\n'.format('NetScaler auth.log timestamp IndexMessages') + style.RESET + authlog.stdout)
-            else:
-                print(
-                    style.RED + '{:-^87}\n'.format('Unable to read auth.log') + style.RESET)
-            if bashlog.returncode == 0:
-                print(style.YELLOW +
-                      '{:-^87}\n'.format('NetScaler bash.log timestamp IndexMessages') + style.RESET + bashlog.stdout)
-            else:
-                print(
-                    style.RED + '{:-^87}\n'.format('Unable to read bash.log') + style.RESET)
-            if nitrolog.returncode == 0:
-                print(style.YELLOW +
-                      '{:-^87}\n'.format('NetScaler nitro.log timestamp IndexMessages') + style.RESET + nitrolog.stdout)
-            else:
-                print(
-                    style.RED + '{:-^87}\n'.format('Unable to read nitro.log') + style.RESET)
-            if noticelog.returncode == 0:
-                print(style.YELLOW +
-                      '{:-^87}\n'.format('NetScaler notice.log timestamp IndexMessages') + style.RESET + noticelog.stdout)
-            else:
-                print(
-                    style.RED + '{:-^87}\n'.format('Unable to read notice.log') + style.RESET)
-            if nsvpnlog.returncode == 0:
-                print(style.YELLOW +
-                      '{:-^87}\n'.format('NetScaler nsvpn.log timestamp IndexMessages') + style.RESET + nsvpnlog.stdout)
-            else:
-                print(
-                    style.RED + '{:-^87}\n'.format('Unable to read nsvpn.log') + style.RESET)
-            if shlog.returncode == 0:
-                print(style.YELLOW +
-                      '{:-^87}\n'.format('NetScaler sh.log timestamp IndexMessages') + style.RESET + shlog.stdout)
-            else:
-                print(
-                    style.RED + '{:-^87}\n'.format('Unable to read sh.log') + style.RESET)
-            if newnslog.returncode == 0:
-                print(style.YELLOW +
-                      '{:-^87}\n'.format('NetScaler newnslog timestamp IndexMessages') + style.RESET + newnslog.stdout)
-            else:
-                print(
-                    style.RED + '{:-^87}\n'.format('Unable to read newnslog') + style.RESET)
-    finally:
-        payload = {"version": version, "user": username, "action": "show -imall --> " + os.getcwd() + " --> " + str(
-            int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+    if os.path.isfile("conFetch/show_output/show_imall.txt"):
+        with open("conFetch/show_output/show_imall.txt", "r") as show_ha:
+            print(show_ha.read())
+        payload = {"version": version, "user": username, "action": "show -imall pre-data --> " + os.getcwd() + " --> " + str(int(time.time())),
+                   "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
         resp = request.urlopen(request.Request(
             url, data=parse.urlencode(payload).encode()))
         quit()
+    else:
+        try:
+            logger.info(os.getcwd() + " - show -imall")
+            # Printing Index messages for ns.log, auth.log, bash.log, nitro.log, notice.log, nsvpn.log, sh.log
+            try:
+                nslog = sp.run(
+                    "awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/ns.lo* | grep -v gz | grep -v tar); do awk 'NR == 2 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                authlog = sp.run(
+                    "awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/auth.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                bashlog = sp.run(
+                    "awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/bash.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                nitrolog = sp.run(
+                    "awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/nitro.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                noticelog = sp.run(
+                    "awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/notice.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                nsvpnlog = sp.run(
+                    "awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/nsvpn.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                shlog = sp.run(
+                    "awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/sh.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                newnslog = sp.run(
+                    "awk 'BEGIN{printf \"%s\\t\\t | %s\\t\\t    | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\\n' var/nslog/newnslo* | grep -v gz | grep -v tar); do nsconmsg -K $i -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=\"\"; printf \"%s\\t|\", $0}END{printf \"\\n\"}'; echo $i; done | sed 'N;s/\\n/ /' | awk '{$1=$1=\"\"}1' | sed 's/^ //' | sed -r '/^\\s*$/d' | awk '{printf  \"%s %s %02s %s %s %s %s %s %02s %s %s %s %s\\n\", $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+            finally:
+                if nslog.returncode == 0:
+                    print(style.YELLOW +
+                          '{:-^87}\n'.format('NetScaler ns.log timestamp IndexMessages') + style.RESET + nslog.stdout)
+                else:
+                    print(
+                        style.RED + '{:-^87}\n'.format('Unable to read ns.log') + style.RESET)
+                if authlog.returncode == 0:
+                    print(style.YELLOW +
+                          '{:-^87}\n'.format('NetScaler auth.log timestamp IndexMessages') + style.RESET + authlog.stdout)
+                else:
+                    print(
+                        style.RED + '{:-^87}\n'.format('Unable to read auth.log') + style.RESET)
+                if bashlog.returncode == 0:
+                    print(style.YELLOW +
+                          '{:-^87}\n'.format('NetScaler bash.log timestamp IndexMessages') + style.RESET + bashlog.stdout)
+                else:
+                    print(
+                        style.RED + '{:-^87}\n'.format('Unable to read bash.log') + style.RESET)
+                if nitrolog.returncode == 0:
+                    print(style.YELLOW +
+                          '{:-^87}\n'.format('NetScaler nitro.log timestamp IndexMessages') + style.RESET + nitrolog.stdout)
+                else:
+                    print(
+                        style.RED + '{:-^87}\n'.format('Unable to read nitro.log') + style.RESET)
+                if noticelog.returncode == 0:
+                    print(style.YELLOW +
+                          '{:-^87}\n'.format('NetScaler notice.log timestamp IndexMessages') + style.RESET + noticelog.stdout)
+                else:
+                    print(
+                        style.RED + '{:-^87}\n'.format('Unable to read notice.log') + style.RESET)
+                if nsvpnlog.returncode == 0:
+                    print(style.YELLOW +
+                          '{:-^87}\n'.format('NetScaler nsvpn.log timestamp IndexMessages') + style.RESET + nsvpnlog.stdout)
+                else:
+                    print(
+                        style.RED + '{:-^87}\n'.format('Unable to read nsvpn.log') + style.RESET)
+                if shlog.returncode == 0:
+                    print(style.YELLOW +
+                          '{:-^87}\n'.format('NetScaler sh.log timestamp IndexMessages') + style.RESET + shlog.stdout)
+                else:
+                    print(
+                        style.RED + '{:-^87}\n'.format('Unable to read sh.log') + style.RESET)
+                if newnslog.returncode == 0:
+                    print(style.YELLOW +
+                          '{:-^87}\n'.format('NetScaler newnslog timestamp IndexMessages') + style.RESET + newnslog.stdout)
+                else:
+                    print(
+                        style.RED + '{:-^87}\n'.format('Unable to read newnslog') + style.RESET)
+        finally:
+            payload = {"version": version, "user": username, "action": "show -imall --> " + os.getcwd() + " --> " + str(
+                int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+            resp = request.urlopen(request.Request(
+                url, data=parse.urlencode(payload).encode()))
+            quit()
 elif args.error:
     try:
         logger.info(os.getcwd() + " - show -error")
@@ -818,9 +835,9 @@ elif args.bt:
                     style.YELLOW + "\nPlease specify the core file full path for manual analysis: " + style.RESET)
                 if len(manual_core) > 5:
                     print(style.GREEN+"\nGenerating BackTrace for: " +
-                          manual_core + " --> " + sp.run("nswhat " + manual_core + " | cut -c 3- | rev | cut -c 4- | rev |  sed 's/-/_/g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout + style.RESET)
+                          manual_core + " --> " + sp.run("what " + manual_core + "| awk '/NetScaler/{print substr($2,3) substr($4,1,length($4)-4)}' | sed 's/:/_/g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout + style.RESET)
                     nsppefw = "nsppe64-"+sp.run(
-                        "nswhat " + manual_core + " | cut -c 3- | rev | cut -c 4- | rev | sed 's/$/_nc/g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                        "what " + manual_core + " | awk '/Build/{print $2, $4}' | cut -c 3- | sed s/\": \"/-/g | sed s/.nc/_nc/g | rev | cut -c 2- | rev | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                     nsppebtout = (sp.run("gdb /home/django/nsppe_symbols/"+nsppefw + " " + manual_core +
                                          " -ex 'bt full' -ex quit | awk '/0x[0-9a-z]|symbols from|generated by|terminated with|handler called/{print}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout)
                     print(nsppebtout)
@@ -853,9 +870,9 @@ elif args.bt:
                     collectornscrash = re.sub(".gz", "", collectornscrash)
                     if collectornscrash in nsppecrash:
                         print(style.GREEN+"\nGenerating BackTrace for: " +
-                              nsppecrash + " --> " + sp.run("nswhat " + manual_core + " | cut -c 3- | rev | cut -c 4- | rev |  sed 's/-/_/g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout + style.RESET)
+                              nsppecrash + " --> " + sp.run("what " + nsppecrash + "| awk '/NetScaler/{print substr($2,3) substr($4,1,length($4)-4)}' | sed 's/:/_/g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout + style.RESET)
                         nsppefw = "nsppe64-"+sp.run(
-                            "nswhat " + manual_core + " | cut -c 3- | rev | cut -c 4- | rev | sed 's/$/_nc/g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                            "what " + nsppecrash + " | awk '/Build/{print $2, $4}' | cut -c 3- | sed s/\": \"/-/g | sed s/.nc/_nc/g | rev | cut -c 2- | rev | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                         nsppebtout = (sp.run("gdb /home/django/nsppe_symbols/"+nsppefw + " " + nsppecrash +
                                              " -ex 'bt full' -ex quit | awk '/0x[0-9a-z]|symbols from|generated by|terminated with|handler called/{print}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout)
                         print(nsppebtout)
@@ -1012,6 +1029,42 @@ elif args.bt:
                 url, data=parse.urlencode(payload).encode()))
     finally:
         quit()
+elif args.bt1:
+    try:
+        payload = {"version": version, "user": username, "action": "show -bt1 --> NSPPE crash" + os.getcwd() + " --> " + str(
+            int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(
+            url, data=parse.urlencode(payload).encode()))
+        manual_core = input(
+            style.YELLOW + "\nPlease specify the core file full path for manual analysis: " + style.RESET)
+        if len(manual_core) > 5:
+            print(style.GREEN+"\nGenerating BackTrace for: " +
+                  manual_core + " --> " + sp.run("what " + manual_core + "| awk '/NetScaler/{print substr($2,3) substr($4,1,length($4)-4)}' | sed 's/:/_/g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout + style.RESET)
+            nsppefw = "nsppe64-"+sp.run(
+                "what " + manual_core + " | awk '/Build/{print $2, $4}' | cut -c 3- | sed s/\": \"/-/g | sed s/.nc/_nc/g | rev | cut -c 2- | rev | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+            nsppebtout = (sp.run("gdb /home/django/nsppe_symbols/"+nsppefw + " " + manual_core +
+                                 " -ex 'bt full' -ex quit | awk '/0x[0-9a-z]|symbols from|generated by|terminated with|handler called/{print}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout)
+            print(nsppebtout)
+            rawjira = [e[3:] for e in re.findall(
+                "in\s[a-z_0-9]{3,}", nsppebtout)]
+            JiraFun = (' '.join(rawjira))
+            print(style.UNDERLINE + style.GREEN + "Crashing functions:" +
+                  "\n" + style.RESET)
+            print(JiraFun + "\n")
+            initialJira = sp.run(
+                "curl -s -H 'Content-type: application/json' -d '{\"feature\":\"search\", \"parameters\": [{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\"},{\"name\":\"searchstring\",\"value\":\""+JiraFun+"\"}]}' -X POST http://10.14.18.46/SFaaS/api/jira | perl -wnE'say /\"NSHELP-[0-9]{3,9}/g' | sed 's/\"/ /g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+            if len(initialJira) > 5:
+                print(style.GREEN + "Matching Jira -->" +
+                      style.RESET + initialJira)
+            else:
+                print(style.RED + "Unable to match any Jira with the above crashing funcation !!!" +
+                      style.RESET + initialJira)
+            for i in initialJira.split():
+                detailedJira = sp.run(
+                    "curl -s -H 'Content-type: application/json' -d '{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\",\"feature\":\"fetchfields\",\"parameters\":[{\"name\":\"id\",\"value\":\""+i+"\",\"isbase64\":false},{\"name\":\"fields\",\"value\":\"summary,versions,status,resolution,fixVersions,created\",\"isbase64\":false}]}' -X POST http://10.14.18.46/SFaaS/api/jira | jq '.options | .[] | .values | .[]' | sed 's/\\\\//g' | awk '{print substr($0, 2, length($0) - 2)}' | jq -r  '\"\\(.key) \\(\"-->\") \\(.fields.summary) \\(\"-->\") \\(.fields.resolution.name) \\(\"-->\") \\(.fields.created[0:10]) \\(\"\\nFound In:\") \\([.fields.versions[].name]) \\(\"--> Fixed In:\") \\([.fields.fixVersions[].name]) \\(\"\\n\")\"'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                print(detailedJira)
+    finally:
+        pass
 elif args.author:
     logger.info(os.getcwd() + " - author")
     print(sp.run(["lolcat"], input=showscriptauthor,
@@ -1156,6 +1209,137 @@ elif args.G:
                     url, data=parse.urlencode(payload).encode()))
     finally:
         pass
+elif args.ha:
+    if os.path.isfile("conFetch/show_output/show_ha.txt"):
+        with open("conFetch/show_output/show_ha.txt", "r") as show_ha:
+            print(show_ha.read())
+            payload = {"version": version, "user": username, "action": "show -ha pre-data --> " + os.getcwd() + " --> " + str(int(time.time())),
+                       "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+            resp = request.urlopen(request.Request(
+                url, data=parse.urlencode(payload).encode()))
+            quit()
+    else:
+        try:
+            tz_convert_msg_printed = False
+            rca_msg_printed = False
+            ha_transition_timestamp = []
+            timestamp_pattern = r'\b([A-Za-z]{3} \d{1,2} \d{2}:\d{2}:\d{2})\b'
+            print(style.YELLOW +
+                  '{:-^87}'.format('NetScaler HA Analysis') + "\n" + style.RESET)
+            ha_state = sp.run(
+                "sed -n -e \"/show ns version/I,/Done/p\" shell/showcmds.txt | grep Node | awk '{print $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+            print("Currently this Node is: " +
+                  style.GREEN + ha_state + style.RESET + "\n")
+            if "Standalone" in ha_state:
+                print(
+                    style.RED + "Since this is a Standalone node, unable to proceed further !!!" + style.RESET + "\n")
+                payload = {"version": version, "user": username, "action": "show -ha Standalone --> " + os.getcwd() + " --> " + str(int(time.time())),
+                           "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+                resp = request.urlopen(request.Request(
+                    url, data=parse.urlencode(payload).encode()))
+                quit()
+            else:
+                box_time = int(sp.run("awk '/local/&&/GMT/{print $3 - substr($6,12); exit}' var/log/ns.log",
+                                      shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
+                box_timezone = sp.run("awk '{printf \"[%s]\", $5}' shell/date.out",
+                                      shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                ha_initial_state = sp.run(
+                    "i=$(ls -alh var/nslog/ | awk '/newnslog./{print \"var/nslog/\"$NF}' | sort | head -1); nsconmsg -d stats -g ha_cur_master_state -K $i |  awk -v i=\"$i\" '/ha_cur_master_state/{if ($3 == 0) print i \" --> Initial State --> \\033[;32mSecondary\\033[0m\"; else if ($3 == 1) print i \" --> Initial State  --> \\033[;32mClaiming To Primary\\033[0m\"; else if ($3 == 2) print i \" --> Initial State  --> \\033[;32mPrimary\\033[0m\"; else if ($3 == 3) print i \" --> Initial State  --> \\033[;32mStay Secondary\\033[0m\"; else if ($3 == 4) print i \" --> Initial State  --> \\033[;32mForce Change to Primary\\033[0m\"; else print i \" --> Initial State  --> \\033[;32mInvalid\\033[0m\"}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                ha_transition = sp.run(
+                    " for i in $(printf \"%s\\n\" \"var/nslog/newnslog.*\" | grep -v gz | grep -v tar && printf \"var/nslog/newnslog\\n\"); do nsconmsg -d current -s disptime=1 -g ha_cur_master_state -K $i | awk -v i=\"$i\" '/ha_cur_master_state/{if ($3 == 0) print i \" --> Secondary --> \\033[;31mFailed Over Time\\033[0m --> \", $7, $8, $9, $10, $11; else if ($3 == 1) print i \" --> Claiming To Primary --> \\033[;31mFailed Over Time\\033[0m --> \", $7, $8, $9, $10, $11; else if ($3 == 2) print i \" --> Primary --> \\033[;31mFailed Over Time\\033[0m --> \", $7, $8, $9, $10, $11; else if ($3 == 3) print i \" --> Stay Secondary --> \\033[;31mFailed Over Time\\033[0m --> \", $7, $8, $9, $10, $11; else if ($3 == 4) print i \" --> Force Change to Primary --> \\033[;31mFailed Over Time\\033[0m --> \", $7, $8, $9, $10, $11; else print i \" --> Invalid --> \\033[;31mFailed Over Time\\033[0m --> \", $7, $8, $9, $10, $11}'; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                if box_time == 0:
+                    print(ha_initial_state + "\n")
+                    if len(ha_transition) < 23:
+                        print(style.GREEN + "NetScaler did not failover" +
+                              style.RESET + "\n")
+                    else:
+                        print(
+                            style.YELLOW + "NetScaler Time is already in GMT Time" + style.RESET + "\n")
+                        print(ha_transition + "\n")
+                        ha_transition_timestamp = re.findall(
+                            timestamp_pattern, ha_transition)
+                        payload = {"version": version, "user": username, "action": "show -ha Analysis --> " + os.getcwd() + " --> " + str(int(time.time())),
+                                   "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+                        resp = request.urlopen(request.Request(
+                            url, data=parse.urlencode(payload).encode()))
+                else:
+                    ha_transition_string = "'''"+ha_transition+"'''"
+                    ha_transition_timeconvert = ha_transition_string.split(
+                        '\n')
+                    print(ha_initial_state + "\n")
+                    for line in ha_transition_timeconvert:
+                        match = re.search(
+                            r'(\w{3} \w{3} \d{1,2} \d{2}:\d{2}:\d{2} \d{4})', line)
+                        if match:
+                            timestamp = datetime.strptime(
+                                match.group(), '%a %b %d %H:%M:%S %Y')
+                            new_timestamp = timestamp + \
+                                timedelta(hours=box_time)
+                            line = line + " [GMT] --> " + \
+                                new_timestamp.strftime(
+                                    "%a %b %d %H:%M:%S %Y") + " " + box_timezone
+                        if len(line) < 23:
+                            print(style.GREEN + "NetScaler did not failover" +
+                                  style.RESET + "\n")
+                        else:
+                            if not tz_convert_msg_printed:
+                                print(style.GREEN + "Converted from GMT time to NetScaler Time " +
+                                      box_timezone + " Offset: " + str(box_time) + style.RESET + "\n")
+                                tz_convert_msg_printed = True
+                            else:
+                                print(line.replace("'''", ""))
+                                ha_transition_timestamp = re.findall(
+                                    timestamp_pattern, line)
+                    payload = {"version": version, "user": username, "action": "show -ha Analysis --> " + os.getcwd() + " --> " + str(int(time.time())),
+                               "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+                    resp = request.urlopen(request.Request(
+                        url, data=parse.urlencode(payload).encode()))
+        finally:
+            try:
+                print(style.YELLOW +
+                      '{:-^87}'.format('NetScaler HA Root Cause') + "\n" + style.RESET)
+                manual_failover = sp.run(
+                    "for file in var/log/*; do awk '/HA/&&/CMD_EXECUTED/&&/failover/{print}' \"$file\"; done | sort | uniq", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                for line in manual_failover.split('\n'):
+                    if not line.strip():
+                        continue
+                    timestamp = line.split()[0:3]
+                    timestamp_str = ' '.join(timestamp)
+                    for ts in ha_transition_timestamp:
+                        ts_dt = datetime.strptime(ts, '%b %d %H:%M:%S')
+                        line_ts_dt = datetime.strptime(
+                            timestamp_str, '%b %d %H:%M:%S')
+                        diff = line_ts_dt - ts_dt
+                        if abs(diff.total_seconds()) < 300:
+                            if not rca_msg_printed:
+                                print(
+                                    style.YELLOW + "Possible Manual Failover at the time of " + ts + style.RESET)
+                                rca_msg_printed = True
+                            print(line)
+                            break
+                forced = sp.run(
+                    "for file in var/log/*; do awk '/STATECHANGE/&&/forcibly becoming Primary/||/State Primary/{print}' \"$file\"; done | sort | uniq", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                rca_msg_printed = False
+                print("\n")
+                for line in forced.split('\n'):
+                    if not line.strip():
+                        continue
+                    timestamp = line.split()[0:3]
+                    timestamp_str = ' '.join(timestamp)
+                    for ts in ha_transition_timestamp:
+                        ts_dt = datetime.strptime(ts, '%b %d %H:%M:%S')
+                        line_ts_dt = datetime.strptime(
+                            timestamp_str, '%b %d %H:%M:%S')
+                        diff = line_ts_dt - ts_dt
+                        if abs(diff.total_seconds()) < 300:
+                            if not rca_msg_printed:
+                                print(
+                                    style.YELLOW + "Possible Force Failover at the time of " + ts + style.RESET)
+                                rca_msg_printed = True
+                            print(line)
+                            break
+            finally:
+                pass
 elif args.g:
     try:
         adchostname = sp.run("awk '{printf $2}' shell/uname-a.out",

@@ -1,5 +1,6 @@
 # Datad alias
 alias datad="source /home/CITRITE/manjeshn/manscript/datad.sh"
+alias datadd="source /home/CITRITE/manjeshn/manscript/datadd.sh"
 
 # conFetch alias
 alias show="python /home/CITRITE/manjeshn/manscript/show.py"
