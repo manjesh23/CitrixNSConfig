@@ -8,24 +8,24 @@ login = thefirstock.firstock_login(userId='JB1885', password='Cms#4567$',
                                    TOTP='18021985', vendorCode='JB1885_API', apiKey='e8166c98e3daf958972339af552f127e')
 
 # Get user input details for trade
-#buystrikeprice = str(input("Enter Strike Price: "))
-#indexenter = int(input("Enter Index Entry value: "))
-#target = int(input("Enter Index target value: "))
-#stoploss = int(input("Enter Index stoploss value: "))
-#putcall = str(input("Enter C / P: "))
-#expirydate = str(input("Enter the Expiry Details DDMMMYY: "))
-#optionname = int(input("26000 - Nitfy 50 | 26009 - Bank Nifty: "))
-#quantity = int(input("Enter actual quantity: "))
+buystrikeprice = str(input("Enter Strike Price: "))
+indexenter = int(input("Enter Index Entry value: "))
+target = int(input("Enter Index target value: "))
+stoploss = int(input("Enter Index stoploss value: "))
+putcall = str(input("Enter C / P: "))
+expirydate = str(input("Enter the Expiry Details DDMMMYY: "))
+optionname = int(input("26000 - Nitfy 50 | 26009 - Bank Nifty: "))
+quantity = int(input("Enter actual quantity: "))
 
 # Testing
-buystrikeprice = '17500'
-indexenter = 18200
-target = 18200
-stoploss = 18300
-putcall = 'C'
-expirydate = '11MAY23'
-optionname = 26000
-quantity = 500
+#buystrikeprice = '17500'
+#indexenter = 18200
+#target = 18200
+#stoploss = 18300
+#putcall = 'C'
+#expirydate = '11MAY23'
+#optionname = 26000
+#quantity = 500
 
 # Logic home
 if optionname == 26009:
