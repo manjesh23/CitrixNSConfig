@@ -130,10 +130,12 @@ parser.add_argument('-e', action="append",
                     metavar="newnslog endtime", help=argparse.SUPPRESS)
 parser.add_argument('-ha', action="store_true",
                     help="HA Analysis (Potential RCA)")
+parser.add_argument('-N', action="store_true",
+                    help="newnslog GMT to System timezone")
+parser.add_argument('-pt', metavar="", action="append",
+                    help="Check if the given problem time present in the bundle (Aug 02 13:40:00)")
 parser.add_argument('--about', action="store_true",
                     help="About Show Script")
-parser.add_argument('--rebuild', action="store_true",
-                    help="Rebuild conFetch directory with pre-populated data")
 args = parser.parse_args()
 
 # Logme the user
@@ -234,7 +236,7 @@ if args.i:
         deviceuptime = sp.run("sed 's/^.*up //' shell/uptime.out | sed 's/,...user.*//'",
                               shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         systemtimezone = sp.run(
-            "awk '{printf \"[%s]: \", $5}' shell/date.out; awk '/local/{print \"GMT \" $3 - substr($6,12); exit}' var/log/ns.log | awk '{if ($NF !~ \"-\") print $1 \" +\" $2; else print $1 \" \"  $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+            "awk '{printf \"[%s]: \", $5}' shell/date.out; awk '/local/&&/GMT/{print \"GMT \" $3 - substr($6,12); exit}' var/log/ns.log | awk '{if ($NF !~ \"-\") print $1 \" +\" $2; else print $1 \" \"  $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         cpuinfo = sp.run("awk '/hw.model/{$1=\"\"; print}' shell/sysctl-a.out",
                          shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         loadaverage = sp.run("awk '/load average/{printf \"%s %s %s\", \"1 min: \"$6, \"5 min: \"$7, \"15 min: \"$8}' shell/top-b.out",
@@ -314,62 +316,93 @@ if args.i:
         resp = request.urlopen(request.Request(
             url, data=parse.urlencode(payload).encode()))
         quit()
-elif args.rebuild:
+elif args.N:
     try:
-        conFetch_dir = './conFetch'
-        conFetch_sub_childs = ["show_output", "Graph", "nsconmsg"]
-        if os.path.exists(conFetch_dir):
-            mod_time = os.path.getmtime(conFetch_dir)
-            current_time = time.time()
-            if (current_time - mod_time) > 120:
-                sp.run("fixperms ./conFetch", shell=True,
-                       text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                shutil.rmtree(conFetch_dir)
-                print(style.GREEN +
-                      "conFetch directory removed successfully\n" + style.RESET)
-            else:
-                print(
-                    style.RED + "Directory modified within the last 120 minutes, skipping removal" + style.RESET)
-                quit()
-        else:
-            print(style.RED + "Directory does not exist" + "\n" + style.RESET)
+        newnslog_converted = sp.run(
+            "for i in $(ls -lah var/nslog | awk '/newnslog\./&&!/tar|gz/{print \"var/nslog/\" $NF}END{print \"var/nslog/newnslog\"}'); do printf \"%s | \" $i; nsconmsg -K $i -d setime | awk '!/Displaying|data|NetScaler/&&/time/{$1=$2=\"\"; print $0}' | awk '{if(NR%2!=0){printf(\"%s |\",$0,$4)}else{print}}'; done | column -t", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
     finally:
-        print(style.GREEN +
-              "Rebuilding conFecth with fresh data :)" + style.RESET)
-        os.makedirs(conFetch_dir)
-        for dir_name in conFetch_sub_childs:
-            nested_dir_path = os.path.join(conFetch_dir, dir_name)
-            os.makedirs(nested_dir_path, exist_ok=True)
-        try:
-
-            print(style.GREEN + "Creating HA Analysis" + style.RESET)
-            with open("./conFetch/show_output/show_ha.txt", "w", encoding='UTF-8') as a:
-                sp.call("show -ha", shell=True, text=True,
-                        stdout=a, stderr=sp.PIPE)
-
-            print(style.GREEN +
-                  "Creating timestamp index for all messages" + style.RESET)
-            with open("./conFetch/show_output/show_imall.txt", "w", encoding='UTF-8') as b:
-                sp.call("show -imall", shell=True,
-                        text=True, stdout=b, stderr=sp.PIPE)
-
-            print(style.GREEN + "Creating newnslog counters" + style.RESET)
-            with open("./conFetch/nsconmsg/newnslog_counters.txt", "w", encoding='UTF-8') as c:
-                sp.call(
-                    "nsconmsg -K var/nslog/newnslog -d current | awk '!/reltime|Index/{print $6}' | sort | uniq -c | egrep '([a-z].*[_]).*'", shell=True, text=True, stdout=c, stderr=sp.PIPE)
-
-            print(style.GREEN + "Creating newnslog Start & End Time" + style.RESET)
-            with open("./conFetch/nsconmsg/newnslog_setime.txt", "w", encoding='UTF-8') as d:
-                sp.call(
-                    "nsconmsg -K $(ls -lah \"var/nslog/\" | grep -v tar | grep -v gz | awk '/newnslog./{printf \"var/nslog/\" $NF; exit}' | sed -n '1p') -d setime | awk '/start/&&!/Displaying/{$1=$2=\"\"; printf }'; printf \" --> \"; nsconmsg -K var/nslog/newnslog -d setime | awk '/end/&&!/Displaying/{$1=$2=\"\"; printf}'", shell=True, text=True, stdout=d, stderr=sp.PIPE)
-        finally:
-            sp.run("fixperms ./conFetch", shell=True,
-                   text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-            print(style.GREEN + "All Set" + style.RESET)
-            payload = {"version": version, "user": username, "action": "show --rebuild --> " + os.getcwd() + " --> " + str(int(time.time())),
-                       "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-            resp = request.urlopen(request.Request(
-                url, data=parse.urlencode(payload).encode()))
+        print(newnslog_converted)
+elif args.pt:
+    try:
+        user_time = datetime.strptime(args.pt[0], "%b %d %H:%M:%S")
+        final_timestamp_nslog = []
+        final_timestamp_messageslog_line = []
+        final_timestamp_newnslog_line = []
+        nslog = sp.run(
+            "for i in $(printf '%s\n' var/log/ns.lo* | grep -v gz | grep -v tar); do awk 'NR == 2 {printf \"%s %02d %s | \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        messageslog = sp.run(
+            "for i in $(printf '%s\n' var/log/message* | grep -v gz | grep -v tar); do awk 'NR == 2 {printf \"%s %02d %s | \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        newnsloglog = sp.run(
+            "for i in $(printf '%s\n' var/nslog/newnslo* | grep -v gz | grep -v tar); do nsconmsg -K $i -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=\"\"; printf \"%s\\t|\", $0}END{printf \"\\n\"}'; echo $i; done | sed 'N;s/\\n/ /' | awk '{$1=$1=\"\"}1' | sed 's/^ //' | sed -r '/^\\s*$/d' | awk '{printf  \"%s %02s %s %s %s %02s %s %s %s\\n\", $2,$3,$4,$6,$8,$9,$10,$12,$13}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        # ns.log checks
+        nslog_line = nslog.strip().split('\n')
+        for nslog in nslog_line:
+            start = datetime.strptime(nslog.split(" | ")[0], "%b %d %H:%M:%S")
+            end = datetime.strptime(nslog.split(" | ")[1], "%b %d %H:%M:%S")
+            logname = nslog.split(" | ")[2]
+            if start <= user_time <= end:
+                final_timestamp_nslog.append(
+                    str(nslog.split(" | ")[0]) + " <-- " + style.GREEN + str(logname) + style.RESET + " --> " + str(nslog.split(" | ")[1]))
+            else:
+                pass
+        # messages check
+        messageslog_line = messageslog.strip().split('\n')
+        for message in messageslog_line:
+            start = datetime.strptime(
+                message.split(" | ")[0], "%b %d %H:%M:%S")
+            end = datetime.strptime(message.split(" | ")[1], "%b %d %H:%M:%S")
+            logname = message.split(" | ")[2]
+            if start <= user_time <= end:
+                final_timestamp_messageslog_line.append(
+                    str(message.split(" | ")[0]) + " <-- " + style.GREEN + str(logname) + style.RESET + " --> " + str(message.split(" | ")[1]))
+            else:
+                pass
+        # newnslog check
+        newnslog_line = newnsloglog.strip().split('\n')
+        for newnslog in newnslog_line:
+            start = datetime.strptime(newnslog.split(
+                " | ")[0].strip(), "%b %d %H:%M:%S")
+            end = datetime.strptime(newnslog.split(
+                " | ")[1].strip(), "%b %d %H:%M:%S")
+            logname = newnslog.split(" | ")[2]
+            if start <= user_time <= end:
+                final_timestamp_newnslog_line.append(
+                    str(newnslog.split(" | ")[0]) + " <-- " + style.GREEN + str(logname) + style.RESET + " --> " + str(newnslog.split(" | ")[1]))
+            else:
+                pass
+    except ValueError as e:
+        print(style.RED + "Date time format error occured" + style.RESET)
+        payload = {"version": version, "user": username, "action": "show -pt --> " + os.getcwd() + " --> " + str(
+            int(time.time())), "runtime": 0, "result": "Invalid", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(
+            url, data=parse.urlencode(payload).encode()))
+        raise
+    except NameError as e:
+        print(style.RED + "Date time format error occured" + style.RESET)
+        payload = {"version": version, "user": username, "action": "show -pt --> " + os.getcwd() + " --> " + str(
+            int(time.time())), "runtime": 0, "result": "Invalid", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(
+            url, data=parse.urlencode(payload).encode()))
+        raise
+    finally:
+        payload = {"version": version, "user": username, "action": "show -pt --> " + os.getcwd() + " --> " + str(
+            int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(
+            url, data=parse.urlencode(payload).encode()))
+        print(style.YELLOW +
+              '{:-^87}'.format('NetScaler Problem Timestamp and Files') + "\n" + style.RESET)
+        if len(final_timestamp_nslog) >= 1:
+            print(''.join(str(x) for x in final_timestamp_nslog))
+        else:
+            print(style.RED + "Unable to find timestamp in any of ns.log" + style.RESET)
+        if len(final_timestamp_messageslog_line) >= 1:
+            print(''.join(str(x) for x in final_timestamp_messageslog_line))
+        else:
+            print(style.RED + "Unable to find timestamp in any of messages" + style.RESET)
+        if len(final_timestamp_newnslog_line) >= 1:
+            print(''.join(str(x) for x in final_timestamp_newnslog_line))
+        else:
+            print(style.RED + "Unable to find timestamp in any of newnslog" + style.RESET)
 elif args.n:
     try:
         logger.info(os.getcwd() + " - show -n")
@@ -1278,6 +1311,8 @@ elif args.ha:
             quit()
     else:
         try:
+            tz_convert_msg_printed = False
+            rca_msg_printed = False
             ha_transition_timestamp = []
             timestamp_pattern = r'\b([A-Za-z]{3} \d{1,2} \d{2}:\d{2}:\d{2})\b'
             print(style.YELLOW +
@@ -1338,11 +1373,14 @@ elif args.ha:
                             print(style.GREEN + "NetScaler did not failover" +
                                   style.RESET + "\n")
                         else:
-                            print(style.GREEN + "Converted from GMT time to NetScaler Time " +
-                                  box_timezone + " Offset: " + str(box_time) + style.RESET + "\n")
-                            print(line.replace("'''", "")+"\n")
-                            ha_transition_timestamp = re.findall(
-                                timestamp_pattern, line)
+                            if not tz_convert_msg_printed:
+                                print(style.GREEN + "Converted from GMT time to NetScaler Time " +
+                                      box_timezone + " Offset: " + str(box_time) + style.RESET + "\n")
+                                tz_convert_msg_printed = True
+                            else:
+                                print(line.replace("'''", ""))
+                                ha_transition_timestamp = re.findall(
+                                    timestamp_pattern, line)
                     payload = {"version": version, "user": username, "action": "show -ha Analysis --> " + os.getcwd() + " --> " + str(int(time.time())),
                                "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
                     resp = request.urlopen(request.Request(
@@ -1353,7 +1391,6 @@ elif args.ha:
                       '{:-^87}'.format('NetScaler HA Root Cause') + "\n" + style.RESET)
                 manual_failover = sp.run(
                     "for file in var/log/*; do awk '/HA/&&/CMD_EXECUTED/&&/failover/{print}' \"$file\"; done | sort | uniq", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
-                rca_msg_printed = False
                 for line in manual_failover.split('\n'):
                     if not line.strip():
                         continue

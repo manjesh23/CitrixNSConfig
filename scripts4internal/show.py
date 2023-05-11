@@ -130,6 +130,8 @@ parser.add_argument('-e', action="append",
                     metavar="newnslog endtime", help=argparse.SUPPRESS)
 parser.add_argument('-ha', action="store_true",
                     help="HA Analysis (Potential RCA)")
+parser.add_argument('-pt', metavar="", action="append",
+                    help="Check if the given problem time present in the bundle (Aug 02 13:40:00)")
 parser.add_argument('--about', action="store_true",
                     help="About Show Script")
 args = parser.parse_args()
@@ -232,7 +234,7 @@ if args.i:
         deviceuptime = sp.run("sed 's/^.*up //' shell/uptime.out | sed 's/,...user.*//'",
                               shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         systemtimezone = sp.run(
-            "awk '{printf \"[%s]: \", $5}' shell/date.out; awk '/local/{print \"GMT \" $3 - substr($6,12); exit}' var/log/ns.log | awk '{if ($NF !~ \"-\") print $1 \" +\" $2; else print $1 \" \"  $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+            "awk '{printf \"[%s]: \", $5}' shell/date.out; awk '/local/&&/GMT/{print \"GMT \" $3 - substr($6,12); exit}' var/log/ns.log | awk '{if ($NF !~ \"-\") print $1 \" +\" $2; else print $1 \" \"  $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         cpuinfo = sp.run("awk '/hw.model/{$1=\"\"; print}' shell/sysctl-a.out",
                          shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         loadaverage = sp.run("awk '/load average/{printf \"%s %s %s\", \"1 min: \"$6, \"5 min: \"$7, \"15 min: \"$8}' shell/top-b.out",
@@ -312,6 +314,87 @@ if args.i:
         resp = request.urlopen(request.Request(
             url, data=parse.urlencode(payload).encode()))
         quit()
+elif args.pt:
+    try:
+        user_time = datetime.strptime(args.pt[0], "%b %d %H:%M:%S")
+        final_timestamp_nslog = []
+        final_timestamp_messageslog_line = []
+        final_timestamp_newnslog_line = []
+        nslog = sp.run(
+            "for i in $(printf '%s\n' var/log/ns.lo* | grep -v gz | grep -v tar); do awk 'NR == 2 {printf \"%s %02d %s | \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        messageslog = sp.run(
+            "for i in $(printf '%s\n' var/log/message* | grep -v gz | grep -v tar); do awk 'NR == 2 {printf \"%s %02d %s | \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        newnsloglog = sp.run(
+            "for i in $(printf '%s\n' var/nslog/newnslo* | grep -v gz | grep -v tar); do nsconmsg -K $i -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=\"\"; printf \"%s\\t|\", $0}END{printf \"\\n\"}'; echo $i; done | sed 'N;s/\\n/ /' | awk '{$1=$1=\"\"}1' | sed 's/^ //' | sed -r '/^\\s*$/d' | awk '{printf  \"%s %02s %s %s %s %02s %s %s %s\\n\", $2,$3,$4,$6,$8,$9,$10,$12,$13}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        # ns.log checks
+        nslog_line = nslog.strip().split('\n')
+        for nslog in nslog_line:
+            start = datetime.strptime(nslog.split(" | ")[0], "%b %d %H:%M:%S")
+            end = datetime.strptime(nslog.split(" | ")[1], "%b %d %H:%M:%S")
+            logname = nslog.split(" | ")[2]
+            if start <= user_time <= end:
+                final_timestamp_nslog.append(
+                    str(nslog.split(" | ")[0]) + " <-- " + style.GREEN + str(logname) + style.RESET + " --> " + str(nslog.split(" | ")[1]))
+            else:
+                pass
+        # messages check
+        messageslog_line = messageslog.strip().split('\n')
+        for message in messageslog_line:
+            start = datetime.strptime(
+                message.split(" | ")[0], "%b %d %H:%M:%S")
+            end = datetime.strptime(message.split(" | ")[1], "%b %d %H:%M:%S")
+            logname = message.split(" | ")[2]
+            if start <= user_time <= end:
+                final_timestamp_messageslog_line.append(
+                    str(message.split(" | ")[0]) + " <-- " + style.GREEN + str(logname) + style.RESET + " --> " + str(message.split(" | ")[1]))
+            else:
+                pass
+        # newnslog check
+        newnslog_line = newnsloglog.strip().split('\n')
+        for newnslog in newnslog_line:
+            start = datetime.strptime(newnslog.split(
+                " | ")[0].strip(), "%b %d %H:%M:%S")
+            end = datetime.strptime(newnslog.split(
+                " | ")[1].strip(), "%b %d %H:%M:%S")
+            logname = newnslog.split(" | ")[2]
+            if start <= user_time <= end:
+                final_timestamp_newnslog_line.append(
+                    str(newnslog.split(" | ")[0]) + " <-- " + style.GREEN + str(logname) + style.RESET + " --> " + str(newnslog.split(" | ")[1]))
+            else:
+                pass
+    except ValueError as e:
+        print(style.RED + "Date time format error occured" + style.RESET)
+        payload = {"version": version, "user": username, "action": "show -pt --> " + os.getcwd() + " --> " + str(
+            int(time.time())), "runtime": 0, "result": "Invalid", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(
+            url, data=parse.urlencode(payload).encode()))
+        raise
+    except NameError as e:
+        print(style.RED + "Date time format error occured" + style.RESET)
+        payload = {"version": version, "user": username, "action": "show -pt --> " + os.getcwd() + " --> " + str(
+            int(time.time())), "runtime": 0, "result": "Invalid", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(
+            url, data=parse.urlencode(payload).encode()))
+        raise
+    finally:
+        payload = {"version": version, "user": username, "action": "show -pt --> " + os.getcwd() + " --> " + str(
+            int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(
+            url, data=parse.urlencode(payload).encode()))
+        print(style.YELLOW +
+              '{:-^87}'.format('NetScaler Problem Timestamp and Files') + "\n" + style.RESET)
+        if len(final_timestamp_nslog) >= 1:
+            print(''.join(str(x) for x in final_timestamp_nslog))
+        else:
+            print(style.RED + "Unable to find timestamp in any of ns.log" + style.RESET)
+        if len(final_timestamp_messageslog_line) >= 1:
+            print(''.join(str(x) for x in final_timestamp_messageslog_line))
+        else:
+            print(style.RED + "Unable to find timestamp in any of messages" + style.RESET)
+        if len(final_timestamp_newnslog_line) >= 1:
+            print(''.join(str(x) for x in final_timestamp_newnslog_line))
+        else:
+            print(style.RED + "Unable to find timestamp in any of newnslog" + style.RESET)
 elif args.n:
     try:
         logger.info(os.getcwd() + " - show -n")
