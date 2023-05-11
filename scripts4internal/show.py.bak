@@ -52,7 +52,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "3.50"
+version = "4.09"
 
 # About script
 showscriptabout = '''
@@ -130,8 +130,6 @@ parser.add_argument('-e', action="append",
                     metavar="newnslog endtime", help=argparse.SUPPRESS)
 parser.add_argument('-ha', action="store_true",
                     help="HA Analysis (Potential RCA)")
-parser.add_argument('-N', action="store_true",
-                    help="newnslog GMT to System timezone")
 parser.add_argument('-pt', metavar="", action="append",
                     help="Check if the given problem time present in the bundle (Aug 02 13:40:00)")
 parser.add_argument('--about', action="store_true",
@@ -316,12 +314,6 @@ if args.i:
         resp = request.urlopen(request.Request(
             url, data=parse.urlencode(payload).encode()))
         quit()
-elif args.N:
-    try:
-        newnslog_converted = sp.run(
-            "for i in $(ls -lah var/nslog | awk '/newnslog\./&&!/tar|gz/{print \"var/nslog/\" $NF}END{print \"var/nslog/newnslog\"}'); do printf \"%s | \" $i; nsconmsg -K $i -d setime | awk '!/Displaying|data|NetScaler/&&/time/{$1=$2=\"\"; print $0}' | awk '{if(NR%2!=0){printf(\"%s |\",$0,$4)}else{print}}'; done | column -t", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
-    finally:
-        print(newnslog_converted)
 elif args.pt:
     try:
         user_time = datetime.strptime(args.pt[0], "%b %d %H:%M:%S")
