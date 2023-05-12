@@ -52,7 +52,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "4.09"
+version = "4.11"
 
 # About script
 showscriptabout = '''
@@ -118,24 +118,25 @@ args = parser.parse_args()
 # Logme the user
 username = os.popen("whoami").read().strip()
 userfile = "/home/CITRITE/manjeshn/manscript/showdata/"+username+".log"
-logging.basicConfig(filename=userfile,
-                    format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(filename=userfile, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
 # Set correct support bundle path
 try:
     if (os.popen("pwd").read().index("collector") >= 0):
-        os.chdir(
-            re.search('.*\/collecto.*_[0-9]{2}', os.popen("pwd").read()).group(0))
+        os.chdir(re.search('.*\/collecto.*_[0-9]{2}', os.popen("pwd").read()).group(0))
+except AttributeError as e:
+    print(style.RED + "Collector Bundle not in Correct Naming Convention" + style.RESET)
+    os.chdir(re.search('.*\/collecto.*_[0-9|_|\-|a-zA-Z|\.]{1,30}', os.popen("pwd").read()).group(0))
+except FileNotFoundError as e:
+    print(style.RED + "Collector Bundle not in Correct Naming Convention" + style.RESET)
+    os.chdir(re.search('.*\/collecto.*_[0-9|_|\-|a-z|\.]{2,30}', os.popen("pwd").read()).group(0))
 except ValueError:
     print("\nPlease navigate to correct support bundle path")
-    print("Available directories with support bundle names: \n\n" + style.CYAN +
-          "\n".join(re.findall("collect.*", "\n".join(next(os.walk('.'))[1]))) + style.RESET)
-    payload = {"version": version, "user": username, "action": "Out of Support Bundle --> " + os.getcwd() + " --> " + str(int(time.time())),
-               "runtime": 0, "result": "Partial", "format": "string", "sr": os.getcwd().split("/")[3]}
-    resp = request.urlopen(request.Request(
-        url, data=parse.urlencode(payload).encode()))
+    print("Available directories with support bundle names: \n\n" + style.CYAN + "\n".join(re.findall("collect.*", "\n".join(next(os.walk('.'))[1]))) + style.RESET)
+    payload = {"version": version, "user": username, "action": "Out of Support Bundle --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Partial", "format": "string", "sr": os.getcwd().split("/")[3]}
+    resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
     quit()
 
 # Assign correct files and its path to variables
@@ -147,14 +148,12 @@ try:
     uptime = "shell/uptime.out"
     df = "shell/df-akin.out"
     dmesgboot = "var/nslog/dmesg.boot"
-    allrequiredfiles = [nsconf] + [showcmd] + \
-        [statcmd] + [sysctl] + [uptime] + [df] + [dmesgboot]
+    allrequiredfiles = [nsconf] + [showcmd] + [statcmd] + [sysctl] + [uptime] + [df] + [dmesgboot]
     for i in allrequiredfiles:
         if file_exists(i):
             pass
         else:
-            print(style.RED +
-                  "File " + i + " is missing from collector pack and script might not work fully !!" + style.RESET)
+            print(style.RED + "File " + i + " is missing from collector pack and script might not work fully !!" + style.RESET)
 finally:
     pass
 
@@ -162,74 +161,41 @@ if args.i:
     try:
         logger.info(os.getcwd() + " - show -i")
         # Printing system essential details
-        print(style.YELLOW +
-              '{:-^87}'.format('NetScaler Show Configuration') + "\n" + style.RESET)
-        adchostname = sp.run("awk '{print $2}' shell/uname-a.out",
-                             shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        adcha = sp.run(
-            "sed -n -e \"/show ns version/I,/Done/p\" shell/showcmds.txt | grep Node | awk -F':' '{print $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        adcfirmware = sp.run("cat shell/ns_running_config.conf | grep \"#NS\" | cut -c 2-",
-                             shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        firmwarehistory = sp.run(
-            "awk -F'NetScaler' 'BEGIN{nores=1;}/upgrade from NetScaler/{if ($0 ~ \"upgrade|build\") history=$2; nores=0} END {if (nores) print \"None found recently\"; else print history}' shell/dmesg-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        nsinstall = sp.run(
-            "awk '/VERSION/||/_TIME/{$1=\"\"; printf \"%s -->\", $0}' var/nsinstall/installns_state | sed -E 's/^\s|[0-9]{9,15}.|-->$//g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        platformserial = sp.run(
-            "sed -n '/^exec: show ns hardware/,/Done/p' shell/showcmds.txt | awk '/Serial/{print $NF}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        platformmodel = sp.run(
-            "sed -n '/^exec: show ns hardware/,/Done/p' shell/showcmds.txt | awk '/Platform/{print $1=\"\"; print}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        licmodel = sp.run("awk '/Users/{print}' var/log/license.log | awk -F: '{print $1}' | awk '{printf \"%s | \", $NF}' | sed 's/..$//'",
-                          shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        hwplatform = sp.run("egrep \"netscaler.descr\" shell/sysctl-a.out | awk -F':' '{print $2}'",
-                            shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        vmplatform = sp.run("egrep \"platform\" var/nslog/dmesg.boot | grep -iE \"hyper-v|vmware\" | head -2 | tail -1 | awk -F':' '{if ($2 ~ \"bios\") print \"No Hypervisor found\"; else print $2}'",
-                            shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        modelid = sp.run("awk '/Model Number ID:/{print $NF}' shell/showcmds.txt",
-                         shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        licensetype = sp.run("awk '/License Type/{$1=$2=\"\"; print}' shell/showcmds.txt",
-                             shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        licensemode = sp.run(
-            "awk '/Licensing mode/{$1=$2=\"\"; print}' shell/showcmds.txt", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        hostid = sp.run(
-            "awk '/HostID/&&/Server/{print $NF}' var/log/license.log | tail -n1", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        nsip = sp.run(
-            "sed -n '/ns config/,/Done/p' shell/showcmds.txt | grep \"NetScaler IP\" | egrep -o \"[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\" | grep -v 255", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        nsipsubnet = sp.run(
-            "sed -n '/ns config/,/Done/p' shell/showcmds.txt | grep \"NetScaler IP\" | egrep -o \"[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\" | grep 255", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        nsfeatures = sp.run("awk '$0 ~ /^enable/&&/enable ns feature/{$1=$2=$3=\"\";print $0}' shell/ns_running_config.conf",
-                            shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        print(style.YELLOW + '{:-^87}'.format('NetScaler Show Configuration') + "\n" + style.RESET)
+        adchostname = sp.run("awk '{print $2}' shell/uname-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        adcha = sp.run( "sed -n -e \"/show ns version/I,/Done/p\" shell/showcmds.txt | grep Node | awk -F':' '{print $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        adcfirmware = sp.run("cat shell/ns_running_config.conf | grep \"#NS\" | cut -c 2-", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        firmwarehistory = sp.run("awk -F'NetScaler' 'BEGIN{nores=1;}/upgrade from NetScaler/{if ($0 ~ \"upgrade|build\") history=$2; nores=0} END {if (nores) print \"None found recently\"; else print history}' shell/dmesg-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        nsinstall = sp.run("awk '/VERSION/||/_TIME/{$1=\"\"; printf \"%s -->\", $0}' var/nsinstall/installns_state | sed -E 's/^\s|[0-9]{9,15}.|-->$//g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        platformserial = sp.run("sed -n '/^exec: show ns hardware/,/Done/p' shell/showcmds.txt | awk '/Serial/{print $NF}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        platformmodel = sp.run("sed -n '/^exec: show ns hardware/,/Done/p' shell/showcmds.txt | awk '/Platform/{print $1=\"\"; print}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        licmodel = sp.run("awk '/Users/{print}' var/log/license.log | awk -F: '{print $1}' | awk '{printf \"%s | \", $NF}' | sed 's/..$//'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        hwplatform = sp.run("egrep \"netscaler.descr\" shell/sysctl-a.out | awk -F':' '{print $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        vmplatform = sp.run("egrep \"platform\" var/nslog/dmesg.boot | grep -iE \"hyper-v|vmware\" | head -2 | tail -1 | awk -F':' '{if ($2 ~ \"bios\") print \"No Hypervisor found\"; else print $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        modelid = sp.run("awk '/Model Number ID:/{print $NF}' shell/showcmds.txt", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        licensetype = sp.run("awk '/License Type/{$1=$2=\"\"; print}' shell/showcmds.txt", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        licensemode = sp.run("awk '/Licensing mode/{$1=$2=\"\"; print}' shell/showcmds.txt", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        hostid = sp.run("awk '/HostID/&&/Server/{print $NF}' var/log/license.log | tail -n1", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        nsip = sp.run("sed -n '/ns config/,/Done/p' shell/showcmds.txt | grep \"NetScaler IP\" | egrep -o \"[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\" | grep -v 255", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        nsipsubnet = sp.run("sed -n '/ns config/,/Done/p' shell/showcmds.txt | grep \"NetScaler IP\" | egrep -o \"[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\" | grep 255", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        nsfeatures = sp.run("awk '$0 ~ /^enable/&&/enable ns feature/{$1=$2=$3=\"\";print $0}' shell/ns_running_config.conf", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         if os.path.isfile("conFetch/nsconmsg/newnslog_setime.txt"):
-            newnslogsetime = sp.run("cat conFetch/nsconmsg/newnslog_setime.txt",
-                                    shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+            newnslogsetime = sp.run("cat conFetch/nsconmsg/newnslog_setime.txt", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         else:
-            newnslogsetime = sp.run(
-                "echo $(nsconmsg -K $(find ./ -type d -name \"newnslog.*\" | sort |  sed 's/ .\\//\\n.\\//g' | awk -F/ '{print \"var/nslog/\"$NF}' | sed -n '1p') -d setime | awk '/start/&&!/Displaying/{$1=$2=\"\"; printf }' | awk '{$1=$1=\"\"}1'; printf \" --> \"; nsconmsg -K var/nslog/newnslog -d setime | awk '/end/&&!/Displaying/{$1=$2=\"\"; print}' | awk '{$1=$1=\"\"}1')", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        nsmode = sp.run("awk '/ns mode/{$1=$2=$3=\"\";print $0}' nsconfig/ns.conf",
-                        shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        nsboottime = sp.run(
-            "egrep \"nsstart\" var/nslog/ns.log | tail -1 | awk '{$1=$NF=$(NF-1)=\"\"; print}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        collectorpacktime = sp.run(
-            "cat shell/date.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        deviceuptime = sp.run("sed 's/^.*up //' shell/uptime.out | sed 's/,...user.*//'",
-                              shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        systemtimezone = sp.run(
-            "awk '{printf \"[%s]: \", $5}' shell/date.out; awk '/local/&&/GMT/{print \"GMT \" $3 - substr($6,12); exit}' var/log/ns.lo* | awk '{if ($NF !~ \"-\") print $1 \" +\" $2; else print $1 \" \"  $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        cpuinfo = sp.run("awk '/hw.model/{$1=\"\"; print}' shell/sysctl-a.out",
-                         shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        loadaverage = sp.run("awk '/load average/{printf \"%s %s %s\", \"1 min: \"$6, \"5 min: \"$7, \"15 min: \"$8}' shell/top-b.out",
-                             shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        mgmtcpu = sp.run(
-            "awk '!/100% idle/{printf \"%s User: %s | Nice: %s | System: %s | Interrupt: %s | Idle: %s\", $1, $2, $4, $6, $8, $(NF-1)}' shell/mgmtcpupercent.txt | awk '{if($NF>75) print $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, \"\033[32m\"$15\"\033[0m\"; else print $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, \"\033[31m\"$15\"\033[0m\"}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        memoryinfo = sp.run(
-            "awk '(/real memory/ && ORS=\" ,\") || (/avail memory/ && ORS=RS)' var/nslog/dmesg.boot | head -n1 | awk '{printf \"%s | %s\", \"Total Memory: \"$5$6, \"Available Memory: \"$11$12}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        varsize = sp.run(
-            "awk '/\/var$/{printf \"%s -> %s | %s | %s | %s\", $1,\"Total: \"$2,\"Used: \"$3, \"Free: \"$4, \"Capacity Used: \"substr($5, 1, length($5)-1)}' shell/df-akin.out | awk '{if ($NF > 75){printf \"%s\", substr($0, 1, length($0)-2)\"\033[0;31m\"$NF\"%\033[0m\"}else{printf \"%s\", substr($0, 1, length($0)-2)\"\033\[0;32m\"$NF\"%\033[0m\"}}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        sslcards = sp.run(
-            "awk '/SSL cards UP/{printf \"%s%s - \",\"[UP: \" $NF,\"]\"}/SSL cards present/{printf \"%s%s\\n\", \"[Present: \"$NF,\"]\";exit}' shell/statcmds.txt", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        nsppe = sp.run("awk '/NSPPE/{c++}END{print c}' shell/nsp.out",
-                       shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        nstimes = sp.run(
-            "sed -n -e \"/exec: show ns version/I,/Done/ p\" shell/showcmds.txt | grep Time | awk '{$1=$1};1'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+            newnslogsetime = sp.run("echo $(nsconmsg -K $(find ./ -type d -name \"newnslog.*\" | sort |  sed 's/ .\\//\\n.\\//g' | awk -F/ '{print \"var/nslog/\"$NF}' | sed -n '1p') -d setime | awk '/start/&&!/Displaying/{$1=$2=\"\"; printf }' | awk '{$1=$1=\"\"}1'; printf \" --> \"; nsconmsg -K var/nslog/newnslog -d setime | awk '/end/&&!/Displaying/{$1=$2=\"\"; print}' | awk '{$1=$1=\"\"}1')", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        nsmode = sp.run("awk '/ns mode/{$1=$2=$3=\"\";print $0}' nsconfig/ns.conf", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        nsboottime = sp.run("egrep \"nsstart\" var/nslog/ns.log | tail -1 | awk '{$1=$NF=$(NF-1)=\"\"; print}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        collectorpacktime = sp.run("cat shell/date.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        deviceuptime = sp.run("sed 's/^.*up //' shell/uptime.out | sed 's/,...user.*//'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        systemtimezone = sp.run("awk '{printf \"[%s]: \", $5}' shell/date.out; awk '/local/&&/GMT/{print \"GMT \" $3 - substr($6,12); exit}' var/log/ns.lo* | awk '{if ($NF !~ \"-\") print $1 \" +\" $2; else print $1 \" \"  $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        cpuinfo = sp.run("awk '/hw.model/{$1=\"\"; print}' shell/sysctl-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        loadaverage = sp.run("awk '/load average/{printf \"%s %s %s\", \"1 min: \"$6, \"5 min: \"$7, \"15 min: \"$8}' shell/top-b.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        mgmtcpu = sp.run("awk '!/100% idle/{printf \"%s User: %s | Nice: %s | System: %s | Interrupt: %s | Idle: %s\", $1, $2, $4, $6, $8, $(NF-1)}' shell/mgmtcpupercent.txt | awk '{if($NF>75) print $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, \"\033[32m\"$15\"\033[0m\"; else print $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, \"\033[31m\"$15\"\033[0m\"}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        memoryinfo = sp.run("awk '(/real memory/ && ORS=\" ,\") || (/avail memory/ && ORS=RS)' var/nslog/dmesg.boot | head -n1 | awk '{printf \"%s | %s\", \"Total Memory: \"$5$6, \"Available Memory: \"$11$12}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        varsize = sp.run("awk '/\/var$/{printf \"%s -> %s | %s | %s | %s\", $1,\"Total: \"$2,\"Used: \"$3, \"Free: \"$4, \"Capacity Used: \"substr($5, 1, length($5)-1)}' shell/df-akin.out | awk '{if ($NF > 75){printf \"%s\", substr($0, 1, length($0)-2)\"\033[0;31m\"$NF\"%\033[0m\"}else{printf \"%s\", substr($0, 1, length($0)-2)\"\033\[0;32m\"$NF\"%\033[0m\"}}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        sslcards = sp.run("awk '/SSL cards UP/{printf \"%s%s - \",\"[UP: \" $NF,\"]\"}/SSL cards present/{printf \"%s%s\\n\", \"[Present: \"$NF,\"]\";exit}' shell/statcmds.txt", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        nsppe = sp.run("awk '/NSPPE/{c++}END{print c}' shell/nsp.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        nstimes = sp.run("sed -n -e \"/exec: show ns version/I,/Done/ p\" shell/showcmds.txt | grep Time | awk '{$1=$1};1'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         if len(memoryinfo.stdout) > 0:
             memoryinfototal = int(memoryinfo.stdout.split()[2][:-3][1:])
             memoryinfoavail = int(memoryinfo.stdout.split()[6][:-3][1:])
@@ -245,8 +211,7 @@ if args.i:
         print(nstimes.stdout.strip())
         print("Collector pack generated @ " + collectorpacktime.stdout.strip())
         print("System TimeZone: " + systemtimezone.stdout.strip())
-        print("Newnslog Overall Start_End Time: " +
-              newnslogsetime.stdout.strip())
+        print("Newnslog Overall Start_End Time: " + newnslogsetime.stdout.strip())
         print("")
         print("NetScaler Hostname: " + adchostname.stdout.strip())
         print("NetScaler HA State: " + adcha.stdout.strip())
@@ -265,8 +230,7 @@ if args.i:
         print("License Model: " + licmodel.stdout.strip())
         print("HostID: " + hostid.stdout.strip())
         print("")
-        print("NSIP Address: " + nsip.stdout.strip() +
-              " | " + nsipsubnet.stdout.strip())
+        print("NSIP Address: " + nsip.stdout.strip() + " | " + nsipsubnet.stdout.strip())
         print("NS Enabled Feature: " + nsfeatures.stdout.strip())
         print("NS Enabled Mode: " + nsmode.stdout.strip())
         print("NS Last Boot Time: " + nsboottime.stdout.strip())
@@ -277,34 +241,39 @@ if args.i:
         print("Management " + mgmtcpu.stdout.strip())
         try:
             if memfreepercent > 40:
-                print("Memory Info: " + memoryinfo.stdout.strip() +
-                      " Free Percent: " + style.GREEN + str(memfreepercent) + "%" + style.RESET)
+                print("Memory Info: " + memoryinfo.stdout.strip() + " Free Percent: " + style.GREEN + str(memfreepercent) + "%" + style.RESET)
             else:
-                print("Memory Info: " + memoryinfo.stdout.strip() +
-                      " Free Percent: " + style.RED + str(memfreepercent) + "%" + style.RESET)
+                print("Memory Info: " + memoryinfo.stdout.strip() + " Free Percent: " + style.RED + str(memfreepercent) + "%" + style.RESET)
         except NameError:
             pass
         print("var Size: " + varsize.stdout.strip())
         print("SSL Cards: " + sslcards.stdout.strip())
         print("NSPPE Count: " + nsppe.stdout.strip() + "\n")
         # Tooltrack
-        payload = {"version": version, "user": username, "action": "show -i --> " + os.getcwd() + " --> " + str(int(time.time())),
-                   "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-        resp = request.urlopen(request.Request(
-            url, data=parse.urlencode(payload).encode()))
+        payload = {"version": version, "user": username, "action": "show -i --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
         quit()
 elif args.pt:
+    box_time = str(sp.run("awk '/local/&&/GMT/{print $3 - substr($6,12); exit}' var/log/ns.lo* | awk '{if ($0 !~ \"-\") print \"+\"$0; else print $0}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
     try:
         user_time = datetime.strptime(args.pt[0], "%b %d %H:%M:%S")
         final_timestamp_nslog = []
         final_timestamp_messageslog_line = []
         final_timestamp_newnslog_line = []
-        nslog = sp.run(
-            "for i in $(printf '%s\n' var/log/ns.lo* | grep -v gz | grep -v tar); do awk 'NR == 2 {printf \"%s %02d %s | \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
-        messageslog = sp.run(
-            "for i in $(printf '%s\n' var/log/message* | grep -v gz | grep -v tar); do awk 'NR == 2 {printf \"%s %02d %s | \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
-        newnsloglog = sp.run(
-            "for i in $(printf '%s\n' var/nslog/newnslo* | grep -v gz | grep -v tar); do nsconmsg -K $i -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=\"\"; printf \"%s\\t|\", $0}END{printf \"\\n\"}'; echo $i; done | sed 'N;s/\\n/ /' | awk '{$1=$1=\"\"}1' | sed 's/^ //' | sed -r '/^\\s*$/d' | awk '{printf  \"%s %02s %s %s %s %02s %s %s %s\\n\", $2,$3,$4,$6,$8,$9,$10,$12,$13}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        final_timestamp_newnslog_local_line = []
+        nslog = sp.run("for i in $(printf '%s\n' var/log/ns.lo* | grep -v gz | grep -v tar); do awk 'NR == 2 {printf \"%s %02d %s | \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        messageslog = sp.run("for i in $(printf '%s\n' var/log/message* | grep -v gz | grep -v tar); do awk 'NR == 2 {printf \"%s %02d %s | \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        newnsloglog = sp.run("for i in $(printf '%s\n' var/nslog/newnslo* | grep -v gz | grep -v tar); do nsconmsg -K $i -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=\"\"; printf \"%s\\t|\", $0}END{printf \"\\n\"}'; echo $i; done | sed 'N;s/\\n/ /' | awk '{$1=$1=\"\"}1' | sed 's/^ //' | sed -r '/^\\s*$/d' | awk '{printf  \"%s %02s %s %s %s %02s %s %s %s\\n\", $2,$3,$4,$6,$8,$9,$10,$12,$13}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        newnslog_output = []
+        time_format = "%b %d %H:%M:%S"
+        for line in newnsloglog.splitlines():
+            parts = line.split(" | ")
+            start_time = datetime.strptime(parts[0], time_format)
+            end_time = datetime.strptime(parts[1], time_format)
+            start_time += timedelta(hours=int(box_time))
+            end_time += timedelta(hours=int(box_time))
+            updated_line = f"{parts[0]} | {parts[1]} | {parts[2]} | {start_time.strftime(time_format)} | {end_time.strftime(time_format)}"
+            newnslog_output.append(updated_line)
         # ns.log checks
         nslog_line = nslog.strip().split('\n')
         for nslog in nslog_line:
@@ -312,56 +281,45 @@ elif args.pt:
             end = datetime.strptime(nslog.split(" | ")[1], "%b %d %H:%M:%S")
             logname = nslog.split(" | ")[2]
             if start <= user_time <= end:
-                final_timestamp_nslog.append(
-                    str(nslog.split(" | ")[0]) + " <-- " + style.GREEN + str(logname) + style.RESET + " --> " + str(nslog.split(" | ")[1]))
-            else:
-                pass
+                final_timestamp_nslog.append(str(nslog.split(" | ")[0]) + " <-- " + style.GREEN + str(logname) + style.RESET + " --> " + str(nslog.split(" | ")[1]) + style.YELLOW + " (System Timezone)\n" + style.RESET)
         # messages check
         messageslog_line = messageslog.strip().split('\n')
         for message in messageslog_line:
-            start = datetime.strptime(
-                message.split(" | ")[0], "%b %d %H:%M:%S")
+            start = datetime.strptime(message.split(" | ")[0], "%b %d %H:%M:%S")
             end = datetime.strptime(message.split(" | ")[1], "%b %d %H:%M:%S")
             logname = message.split(" | ")[2]
             if start <= user_time <= end:
-                final_timestamp_messageslog_line.append(
-                    str(message.split(" | ")[0]) + " <-- " + style.GREEN + str(logname) + style.RESET + " --> " + str(message.split(" | ")[1]))
-            else:
-                pass
+                final_timestamp_messageslog_line.append(str(message.split(" | ")[0]) + " <-- " + style.GREEN + str(logname) + style.RESET + " --> " + str(message.split(" | ")[1]) + style.YELLOW + " (System Timezone)\n" + style.RESET)
         # newnslog check
         newnslog_line = newnsloglog.strip().split('\n')
         for newnslog in newnslog_line:
-            start = datetime.strptime(newnslog.split(
-                " | ")[0].strip(), "%b %d %H:%M:%S")
-            end = datetime.strptime(newnslog.split(
-                " | ")[1].strip(), "%b %d %H:%M:%S")
+            start = datetime.strptime(newnslog.split(" | ")[0].strip(), "%b %d %H:%M:%S")
+            end = datetime.strptime(newnslog.split(" | ")[1].strip(), "%b %d %H:%M:%S")
             logname = newnslog.split(" | ")[2]
             if start <= user_time <= end:
-                final_timestamp_newnslog_line.append(
-                    str(newnslog.split(" | ")[0]) + " <-- " + style.GREEN + str(logname) + style.RESET + " --> " + str(newnslog.split(" | ")[1]))
-            else:
-                pass
+                final_timestamp_newnslog_line.append(str(newnslog.split(" | ")[0]) + " <-- " + style.GREEN + str(logname) + style.RESET + " --> " + str(newnslog.split(" | ")[1]) + style.YELLOW + " (GMT Timezone)\n" + style.RESET)
+        # newnslog check in local timezone
+        for newnslog_local in newnslog_output:
+            print(newnslog_local)
+            start = datetime.strptime(newnslog_local.split(" | ")[3].strip(), "%b %d %H:%M:%S")
+            end = datetime.strptime(newnslog_local.split(" | ")[4].strip(), "%b %d %H:%M:%S")
+            logname = newnslog_local.split(" | ")[2]
+            if start <= user_time <= end:
+                final_timestamp_newnslog_local_line.append(str(newnslog_local.split(" | ")[3]) + " <-- " + style.GREEN + str(logname) + style.RESET + " --> " + str(newnslog_local.split(" | ")[4]) + style.YELLOW + " (System Timezone)\n" + style.RESET)
     except ValueError as e:
         print(style.RED + "Date time format error occured" + style.RESET)
-        payload = {"version": version, "user": username, "action": "show -pt --> " + os.getcwd() + " --> " + str(
-            int(time.time())), "runtime": 0, "result": "Invalid", "format": "string", "sr": os.getcwd().split("/")[3]}
-        resp = request.urlopen(request.Request(
-            url, data=parse.urlencode(payload).encode()))
+        payload = {"version": version, "user": username, "action": "show -pt --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Invalid", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
         raise
     except NameError as e:
         print(style.RED + "Date time format error occured" + style.RESET)
-        payload = {"version": version, "user": username, "action": "show -pt --> " + os.getcwd() + " --> " + str(
-            int(time.time())), "runtime": 0, "result": "Invalid", "format": "string", "sr": os.getcwd().split("/")[3]}
-        resp = request.urlopen(request.Request(
-            url, data=parse.urlencode(payload).encode()))
+        payload = {"version": version, "user": username, "action": "show -pt --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Invalid", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
         raise
     finally:
-        payload = {"version": version, "user": username, "action": "show -pt --> " + os.getcwd() + " --> " + str(
-            int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-        resp = request.urlopen(request.Request(
-            url, data=parse.urlencode(payload).encode()))
-        print(style.YELLOW +
-              '{:-^87}'.format('NetScaler Problem Timestamp and Files') + "\n" + style.RESET)
+        payload = {"version": version, "user": username, "action": "show -pt --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+        print(style.YELLOW + '{:-^87}'.format('NetScaler Problem Timestamp and Files') + "\n" + style.RESET)
         if len(final_timestamp_nslog) >= 1:
             print(''.join(str(x) for x in final_timestamp_nslog))
         else:
@@ -373,75 +331,59 @@ elif args.pt:
         if len(final_timestamp_newnslog_line) >= 1:
             print(''.join(str(x) for x in final_timestamp_newnslog_line))
         else:
-            print(style.RED + "Unable to find timestamp in any of newnslog" + style.RESET)
+            print(style.RED + "Unable to find timestamp in any of newnslog (GMT Timezone)" + style.RESET)
+        if len(final_timestamp_newnslog_local_line) >= 1:
+            print(''.join(str(x) for x in final_timestamp_newnslog_local_line))
+            quit()
+        else:
+            print(style.RED + "Unable to find timestamp in any of newnslog (System Timezone)" + style.RESET)
+            quit()
 elif args.n:
     try:
         logger.info(os.getcwd() + " - show -n")
         # Prining Network related information on ADC
-        print(style.YELLOW +
-              '{:-^87}'.format('NetScaler Network Information') + style.RESET+"\n")
-        adcnetinfo = sp.run(
-            "awk '/exec: show ns ip$/{flag=1;next}/Done/{flag=0}flag' shell/showcmds.txt", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        adcroute = sp.run(
-            "awk '/exec: show route$/{flag=1;next}/Done/{flag=0}flag' shell/showcmds.txt", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        adcarp = sp.run(
-            "awk '/exec: show arp$/{flag=1;next}/Done/{flag=0}flag' shell/showcmds.txt", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        print(style.YELLOW + '{:-^87}'.format('NetScaler Network Information') + style.RESET+"\n")
+        adcnetinfo = sp.run("awk '/exec: show ns ip$/{flag=1;next}/Done/{flag=0}flag' shell/showcmds.txt", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        adcroute = sp.run("awk '/exec: show route$/{flag=1;next}/Done/{flag=0}flag' shell/showcmds.txt", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        adcarp = sp.run("awk '/exec: show arp$/{flag=1;next}/Done/{flag=0}flag' shell/showcmds.txt", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
     finally:
         if adcnetinfo.returncode == 0:
-            print(style.YELLOW +
-                  '{:-^87}\n'.format('Network Interface') + style.RESET + adcnetinfo.stdout)
+            print(style.YELLOW + '{:-^87}\n'.format('Network Interface') + style.RESET + adcnetinfo.stdout)
         else:
-            print(
-                style.RED + '{:-^87}\n'.format('Unable to read Network Interface') + style.RESET)
+            print(style.RED + '{:-^87}\n'.format('Unable to read Network Interface') + style.RESET)
         if adcroute.returncode == 0:
-            print(style.YELLOW +
-                  '{:-^87}\n'.format('v4 Routes') + style.RESET + adcroute.stdout)
+            print(style.YELLOW + '{:-^87}\n'.format('v4 Routes') + style.RESET + adcroute.stdout)
         else:
-            print(
-                style.RED + '{:-^87}\n'.format('Unable to read v4 Routes') + style.RESET)
+            print(style.RED + '{:-^87}\n'.format('Unable to read v4 Routes') + style.RESET)
         if adcarp.returncode == 0:
-            print(style.YELLOW +
-                  '{:-^87}\n'.format('ARP Table') + style.RESET + adcarp.stdout)
+            print(style.YELLOW + '{:-^87}\n'.format('ARP Table') + style.RESET + adcarp.stdout)
         else:
-            print(
-                style.RED + '{:-^87}\n'.format('Unable to read ARP Table') + style.RESET)
-        payload = {"version": version, "user": username, "action": "show -n --> " + os.getcwd() + " --> " + str(
-            int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-        resp = request.urlopen(request.Request(
-            url, data=parse.urlencode(payload).encode()))
+            print(style.RED + '{:-^87}\n'.format('Unable to read ARP Table') + style.RESET)
+        payload = {"version": version, "user": username, "action": "show -n --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
         quit()
 elif args.p:
     try:
         logger.info(os.getcwd() + " - show -p")
-        vcpu = sp.run("awk '/System Detected/{print $(NF-1), $NF;exit}' var/nslog/dmesg.boot",
-                      shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        nsppenum = sp.run("awk '/NSPPE/{print}' shell/nsp.out | wc -l | sed \"s/^[ \t]*//\"",
-                          shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        nsppepid = sp.run("awk '/NSPPE/{print}' shell/nsp.out | sed \"s/^[ \t]*//\"",
-                          shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        core = sp.run("awk '/NSPPE-/&&!/bound|log/{printf \"[%s-%s/%s --> %s --> %s]\\n\",  $6, $7, $8, $NF, $5}' shell/ls_lRtrp_var.out | sed \"s/^[ \t]*//\"",
-                      shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        processcore = sp.run(
-            "awk '/bgpd-[0-9]|httpd-[0-9]|iked-[0-9]|imi-[0-9]|imish-[0-9]|iprep-[0-9]|iprep_tool-[0-9]|isisd-[0-9]|metricscollector-[0-9]|nsaaad-[0-9]|nscopo-[0-9]|nskrb_debug-[0-9]|nsm-[0-9]|ospf6d-[0-9]|ospfd-[0-9]|ripd-[0-9]|ripngd-[0-9]|snmpd-[0-9]|nsaggregatord-[0-9]|nscfsyncd-[0-9]|nscollect-[0-9]|nsconfigd-[0-9]|nsconmsg-[0-9]|nslped-[0-9]|nsnetsvc-[0-9]|nsnewstat-[0-9]|nssetup-[0-9]|nstraceaggregator-[0-9]|syshealthd-[0-9]|pitboss-[0-9]|sshd-[0-9]/&&/-rw-------/{printf \"[%s-%s/%s --> %s --> %s]\\n\",  $6, $7, $8, $NF, $5}' shell/ls_lRtrp.out | sed \"s/^[ \t]*//\"", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        vcpu = sp.run("awk '/System Detected/{print $(NF-1), $NF;exit}' var/nslog/dmesg.boot", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        nsppenum = sp.run("awk '/NSPPE/{print}' shell/nsp.out | wc -l | sed \"s/^[ \t]*//\"", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        nsppepid = sp.run("awk '/NSPPE/{print}' shell/nsp.out | sed \"s/^[ \t]*//\"", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        core = sp.run("awk '/NSPPE-/&&!/bound|log/{printf \"[%s-%s/%s --> %s --> %s]\\n\",  $6, $7, $8, $NF, $5}' shell/ls_lRtrp_var.out | sed \"s/^[ \t]*//\"", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        processcore = sp.run("awk '/bgpd-[0-9]|httpd-[0-9]|iked-[0-9]|imi-[0-9]|imish-[0-9]|iprep-[0-9]|iprep_tool-[0-9]|isisd-[0-9]|metricscollector-[0-9]|nsaaad-[0-9]|nscopo-[0-9]|nskrb_debug-[0-9]|nsm-[0-9]|ospf6d-[0-9]|ospfd-[0-9]|ripd-[0-9]|ripngd-[0-9]|snmpd-[0-9]|nsaggregatord-[0-9]|nscfsyncd-[0-9]|nscollect-[0-9]|nsconfigd-[0-9]|nsconmsg-[0-9]|nslped-[0-9]|nsnetsvc-[0-9]|nsnewstat-[0-9]|nssetup-[0-9]|nstraceaggregator-[0-9]|syshealthd-[0-9]|pitboss-[0-9]|sshd-[0-9]/&&/-rw-------/{printf \"[%s-%s/%s --> %s --> %s]\\n\",  $6, $7, $8, $NF, $5}' shell/ls_lRtrp.out | sed \"s/^[ \t]*//\"", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
     finally:
         print(style.YELLOW + '{:-^87}'.format('NetScaler Process Information'))
         print(style.RESET)
         print("Number of vCPU: " + vcpu.stdout.strip())
-        print("NSPPE Count: " + nsppenum.stdout + "\n" + style.GREEN +
-              "Current Running NSPPE:\n" + style.RESET + nsppepid.stdout)
+        print("NSPPE Count: " + nsppenum.stdout + "\n" + style.GREEN + "Current Running NSPPE:\n" + style.RESET + nsppepid.stdout)
         if len(core.stdout) > 10:
-            print(style.LIGHTRED + "Core files: " +
-                  "\n" + style.RESET + core.stdout.strip())
+            print(style.LIGHTRED + "Core files: " + "\n" + style.RESET + core.stdout.strip())
             print("")
         if len(processcore.stdout) > 10:
-            print(style.LIGHTRED + "Process Core files: " +
-                  "\n" + style.RESET + processcore.stdout.strip())
+            print(style.LIGHTRED + "Process Core files: " + "\n" + style.RESET + processcore.stdout.strip())
             print("")
         print("")
-    payload = {"version": version, "user": username, "action": "show -p --> " + os.getcwd() + " --> " + str(
-        int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-    resp = request.urlopen(request.Request(
-        url, data=parse.urlencode(payload).encode()))
+    payload = {"version": version, "user": username, "action": "show -p --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+    resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
 elif args.c:
     try:
         newnslog_counter = ''
@@ -451,219 +393,160 @@ elif args.c:
                     if str(args.c) in i:
                         newnslog_counter += i
         else:
-            newnslog_counter = os.popen(
-                "nsconmsg -K var/nslog/newnslog -d current | awk '!/reltime|Index/{print $6}' | sort | uniq -c | egrep '([a-z].*[_]).*' | grep -i "+args.c+" | column").read().strip()
+            newnslog_counter = os.popen("nsconmsg -K var/nslog/newnslog -d current | awk '!/reltime|Index/{print $6}' | sort | uniq -c | egrep '([a-z].*[_]).*' | grep -i "+args.c+" | column").read().strip()
     finally:
         print(style.YELLOW + '{:-^87}'.format('Usable newnslog counters'))
         print(style.RESET)
         if len(newnslog_counter) > 10:
             print(newnslog_counter)
-            payload = {"version": version, "user": username, "action": "show -c --> " + os.getcwd() + " --> " + str(
-                int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+            payload = {"version": version, "user": username, "action": "show -c --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
         else:
-            print(style.RED + "Unable to find any counter name with the keyword " +
-                  args.c + style.RESET)
-            payload = {"version": version, "user": username, "action": "show -c --> " + os.getcwd() + " --> " + str(
-                int(time.time())), "runtime": 0, "result": "Failed", "format": "string", "sr": os.getcwd().split("/")[3]}
-        resp = request.urlopen(request.Request(
-            url, data=parse.urlencode(payload).encode()))
+            print(style.RED + "Unable to find any counter name with the keyword " + args.c + style.RESET)
+            payload = {"version": version, "user": username, "action": "show -c --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Failed", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
         quit()
 
 elif args.E:
     try:
         print(style.YELLOW +
               '{:-^87}'.format('Errors and Matched KB Articles') + style.RESET+"\n")
-        print(os.popen(
-            "for i in $(ls -lah var/log/ | awk '/ns.lo*/{print $NF}'); do awk 'BEGIN{c=0}/\"ERROR: Operation not permitted - no FIPS card present in the system\"/{c++}END {if(c > 0){printf \"%s\\t%s\\t%s\\t%s\\n\", ARGV[1], c, \"ERROR: Operation not permitted - no FIPS card present in the system\", \"https://support.citrix.com/article/CTX330685\"}}' var/log/$i; done").read().strip())
+        print(os.popen("for i in $(ls -lah var/log/ | awk '/ns.lo*/{print $NF}'); do awk 'BEGIN{c=0}/\"ERROR: Operation not permitted - no FIPS card present in the system\"/{c++}END {if(c > 0){printf \"%s\\t%s\\t%s\\t%s\\n\", ARGV[1], c, \"ERROR: Operation not permitted - no FIPS card present in the system\", \"https://support.citrix.com/article/CTX330685\"}}' var/log/$i; done").read().strip())
         print("\n")
     finally:
-        payload = {"version": version, "user": username, "action": "show -E --> " + os.getcwd() + " --> " + str(
-            int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-        resp = request.urlopen(request.Request(
-            url, data=parse.urlencode(payload).encode()))
+        payload = {"version": version, "user": username, "action": "show -E --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
         quit()
 elif args.fw:
     try:
         logger.info(os.getcwd() + " - show -fu")
-        adcfirmwareRTM = sp.run(
-            "curl -s 'https://www.citrix.com/downloads/citrix-adc/' | egrep -C2 \"<a href=\\\"\/downloads\/citrix-adc.*\" | awk '/citrix-adc|\/p/{print}' | paste - - | sed -E 's/<\/.|<a href=|\\\"|NEW/ /g' | awk -F'>' '{printf \"%s|%s\\n\", $3, $2}' | awk '{$1=$1};1' | sed -E 's-\| \|- \|-g' | column -t -s'|' | sort -k4n -k2M -k3n", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip().replace('\n\n', '\n')
-        admadcfirmwareRTM = sp.run(
-            "curl -s 'https://www.citrix.com/downloads/citrix-application-management/' | egrep -C2 \"<a href=\\\"\/downloads\/citrix-application-management.*\" | awk '/citrix-application-management|\/p/{print}' | paste - - | sed -E 's/<\/.|<a href=|\\\"|NEW/ /g' | awk -F'>' '{printf \"%s|%s\\n\", $3, $2}' | awk '{$1=$1};1' | sed -E 's-\| \|- \|-g' | column -t -s'|' | sort -k4n -k2M -k3n", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip().replace('\n\n', '\n')
+        adcfirmwareRTM = sp.run("curl -s 'https://www.citrix.com/downloads/citrix-adc/' | egrep -C2 \"<a href=\\\"\/downloads\/citrix-adc.*\" | awk '/citrix-adc|\/p/{print}' | paste - - | sed -E 's/<\/.|<a href=|\\\"|NEW/ /g' | awk -F'>' '{printf \"%s|%s\\n\", $3, $2}' | awk '{$1=$1};1' | sed -E 's-\| \|- \|-g' | column -t -s'|' | sort -k4n -k2M -k3n", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip().replace('\n\n', '\n')
+        admadcfirmwareRTM = sp.run("curl -s 'https://www.citrix.com/downloads/citrix-application-management/' | egrep -C2 \"<a href=\\\"\/downloads\/citrix-application-management.*\" | awk '/citrix-application-management|\/p/{print}' | paste - - | sed -E 's/<\/.|<a href=|\\\"|NEW/ /g' | awk -F'>' '{printf \"%s|%s\\n\", $3, $2}' | awk '{$1=$1};1' | sed -E 's-\| \|- \|-g' | column -t -s'|' | sort -k4n -k2M -k3n", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip().replace('\n\n', '\n')
     finally:
         # NetScaler Release
-        print(style.YELLOW +
-              '{:-^87}'.format('NetScaler Released RTM Code Version and Date') + style.RESET+"\n")
-        print(style.YELLOW +
-              '{:-^87}'.format('NetScaler Release Feature Phase Code Details') + style.RESET+"\n")
+        print(style.YELLOW + '{:-^87}'.format('NetScaler Released RTM Code Version and Date') + style.RESET+"\n")
+        print(style.YELLOW + '{:-^87}'.format('NetScaler Release Feature Phase Code Details') + style.RESET+"\n")
         for adcrelease in adcfirmwareRTM.splitlines():
             if "ADC Release" in adcrelease and "Feature Phase" in adcrelease:
                 print(style.LIGHTGREEN + adcrelease + style.RESET)
         print("\n")
-        print(style.YELLOW +
-              '{:-^87}'.format('NetScaler Release Maintenance Phase Code Details') + style.RESET+"\n")
+        print(style.YELLOW +'{:-^87}'.format('NetScaler Release Maintenance Phase Code Details') + style.RESET+"\n")
         for adcrelease in adcfirmwareRTM.splitlines():
             if "ADC Release" in adcrelease and "Maintenance Phase" in adcrelease:
                 print(style.LIGHTRED + adcrelease + style.RESET)
         print("\n")
         # ADM Release
-        print(style.YELLOW +
-              '{:-^87}'.format('ADM Released RTM Code Version and Date') + style.RESET+"\n")
-        print(style.YELLOW +
-              '{:-^87}'.format('ADM Release Feature Phase Code Details') + style.RESET+"\n")
+        print(style.YELLOW + '{:-^87}'.format('ADM Released RTM Code Version and Date') + style.RESET+"\n")
+        print(style.YELLOW + '{:-^87}'.format('ADM Release Feature Phase Code Details') + style.RESET+"\n")
         for admrelease in admadcfirmwareRTM.splitlines():
             if "ADM Release" in admrelease and "Feature Phase" in admrelease:
                 print(style.LIGHTGREEN + admrelease + style.RESET)
         print("\n")
-        print(style.YELLOW +
-              '{:-^87}'.format('ADM Release Maintenance Phase Code Details') + style.RESET+"\n")
+        print(style.YELLOW + '{:-^87}'.format('ADM Release Maintenance Phase Code Details') + style.RESET+"\n")
         for admrelease in admadcfirmwareRTM.splitlines():
             if "ADM Release" in admrelease and "Maintenance Phase" in admrelease:
                 print(style.LIGHTRED + admrelease + style.RESET)
         print("\n")
         # SDX Release
-        print(style.YELLOW +
-              '{:-^87}'.format('SDX Released RTM Code Version and Date') + style.RESET+"\n")
-        print(style.YELLOW +
-              '{:-^87}'.format('SDX Bundle Feature Phase Code Details') + style.RESET+"\n")
+        print(style.YELLOW + '{:-^87}'.format('SDX Released RTM Code Version and Date') + style.RESET+"\n")
+        print(style.YELLOW + '{:-^87}'.format('SDX Bundle Feature Phase Code Details') + style.RESET+"\n")
         for sdxrelease in adcfirmwareRTM.splitlines():
             if "SDX Bundle" in sdxrelease and "Feature Phase" in sdxrelease:
                 print(style.LIGHTGREEN + sdxrelease + style.RESET)
         print("\n")
-        print(style.YELLOW +
-              '{:-^87}'.format('SDX Bundle Maintenance Phase Code Details') + style.RESET+"\n")
+        print(style.YELLOW + '{:-^87}'.format('SDX Bundle Maintenance Phase Code Details') + style.RESET+"\n")
         for sdxrelease in adcfirmwareRTM.splitlines():
             if "SDX Bundle" in sdxrelease and "Maintenance Phase" in sdxrelease:
                 print(style.LIGHTRED + sdxrelease + style.RESET)
-        payload = {"version": version, "user": username, "action": "show -fw --> " + os.getcwd() + " --> " + str(
-            int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-        resp = request.urlopen(request.Request(
-            url, data=parse.urlencode(payload).encode()))
+        payload = {"version": version, "user": username, "action": "show -fw --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
 elif args.gz:
     try:
         logger.info(os.getcwd() + " - show -gz")
         # Fix permission
-        sp.run("fixperms ./",
-               shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        sp.run("fixperms ./", shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
         # Unzip all gz files under ./var/log
-        gunzipresult = sp.run("gunzip -v var/log/*.gz",
-                              shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        gunzipresult = sp.run("gunzip -v var/log/*.gz", shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
         # Unzip all gz files under ./var/nslog
-        gunzipnewnsresult = sp.run(
-            "for i in var/nslog/new*.tar.gz; do tar -xvf \"$i\" -C var/nslog/; done", shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        gunzipnewnsresult = sp.run("for i in var/nslog/new*.tar.gz; do tar -xvf \"$i\" -C var/nslog/; done", shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
     finally:
         if gunzipresult.returncode == 0:
-            sp.run("fixperms ./",
-                   shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
-            print(style.YELLOW +
-                  '{:-^87}\n'.format('Gunzip all .gz files under /var/log') + style.RESET)
+            sp.run("fixperms ./", shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
+            print(style.YELLOW + '{:-^87}\n'.format('Gunzip all .gz files under /var/log') + style.RESET)
             print(style.YELLOW + str(gunzipresult.stderr.decode('utf-8')) + style.RESET)
             print(style.GREEN + "Extracted all files in var/log!!!" + style.RESET)
         else:
             print(style.RED + "Nothing to do here in var/log/" + style.RESET)
         if gunzipnewnsresult.returncode == 0:
-            sp.run("fixperms ./",
-                   shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
-            print(style.YELLOW +
-                  '{:-^87}\n'.format('Gunzip all .gz files under /var/nslog') + style.RESET)
-            print(style.YELLOW +
-                  str(gunzipnewnsresult.stderr.decode('utf-8')) + style.RESET)
+            sp.run("fixperms ./", shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
+            print(style.YELLOW + '{:-^87}\n'.format('Gunzip all .gz files under /var/nslog') + style.RESET)
+            print(style.YELLOW + str(gunzipnewnsresult.stderr.decode('utf-8')) + style.RESET)
             print(style.GREEN + "Extracted all files var/nslog!!!" + style.RESET)
         else:
             print(style.RED + "Nothing to do here in var/nslog/" + style.RESET)
-        payload = {"version": version, "user": username, "action": "show -gz --> " + os.getcwd() + " --> " + str(
-            int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-        resp = request.urlopen(request.Request(
-            url, data=parse.urlencode(payload).encode()))
+        payload = {"version": version, "user": username, "action": "show -gz --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
         quit()
 elif args.im:
     try:
         logger.info(os.getcwd() + " - show -im")
         try:
-            nslog = sp.run(
-                "awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/ns.lo* | grep -v gz | grep -v tar); do awk 'NR == 2 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+            nslog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/ns.lo* | grep -v gz | grep -v tar); do awk 'NR == 2 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         finally:
             if nslog.returncode == 0:
-                print(style.YELLOW +
-                      '{:-^87}\n'.format('NetScaler ns.log timestamp IndexMessages') + style.RESET + nslog.stdout)
+                print(style.YELLOW + '{:-^87}\n'.format('NetScaler ns.log timestamp IndexMessages') + style.RESET + nslog.stdout)
             else:
-                print(
-                    style.RED + '{:-^87}\n'.format('Unable to read ns.log') + style.RESET)
+                print(style.RED + '{:-^87}\n'.format('Unable to read ns.log') + style.RESET)
     finally:
-        payload = {"version": version, "user": username, "action": "show -im --> " + os.getcwd() + " --> " + str(
-            int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-        resp = request.urlopen(request.Request(
-            url, data=parse.urlencode(payload).encode()))
+        payload = {"version": version, "user": username, "action": "show -im --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
         quit()
 elif args.imall:
     if os.path.isfile("conFetch/show_output/show_imall.txt"):
         with open("conFetch/show_output/show_imall.txt", "r") as show_ha:
             print(show_ha.read())
-        payload = {"version": version, "user": username, "action": "show -imall pre-data --> " + os.getcwd() + " --> " + str(int(time.time())),
-                   "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-        resp = request.urlopen(request.Request(
-            url, data=parse.urlencode(payload).encode()))
+        payload = {"version": version, "user": username, "action": "show -imall pre-data --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
         quit()
     else:
         try:
             logger.info(os.getcwd() + " - show -imall")
             # Printing Index messages for ns.log, auth.log, bash.log, nitro.log, notice.log, nsvpn.log, sh.log
             try:
-                nslog = sp.run(
-                    "awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/ns.lo* | grep -v gz | grep -v tar); do awk 'NR == 2 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                authlog = sp.run(
-                    "awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/auth.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                bashlog = sp.run(
-                    "awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/bash.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                nitrolog = sp.run(
-                    "awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/nitro.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                noticelog = sp.run(
-                    "awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/notice.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                nsvpnlog = sp.run(
-                    "awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/nsvpn.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                shlog = sp.run(
-                    "awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/sh.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                newnslog = sp.run(
-                    "awk 'BEGIN{printf \"%s\\t\\t | %s\\t\\t    | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\\n' var/nslog/newnslo* | grep -v gz | grep -v tar); do nsconmsg -K $i -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=\"\"; printf \"%s\\t|\", $0}END{printf \"\\n\"}'; echo $i; done | sed 'N;s/\\n/ /' | awk '{$1=$1=\"\"}1' | sed 's/^ //' | sed -r '/^\\s*$/d' | awk '{printf  \"%s %s %02s %s %s %s %s %s %02s %s %s %s %s\\n\", $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                nslog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/ns.lo* | grep -v gz | grep -v tar); do awk 'NR == 2 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                authlog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/auth.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                bashlog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/bash.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                nitrolog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/nitro.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                noticelog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/notice.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                nsvpnlog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/nsvpn.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                shlog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/sh.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                newnslog = sp.run("awk 'BEGIN{printf \"%s\\t\\t | %s\\t\\t    | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\\n' var/nslog/newnslo* | grep -v gz | grep -v tar); do nsconmsg -K $i -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=\"\"; printf \"%s\\t|\", $0}END{printf \"\\n\"}'; echo $i; done | sed 'N;s/\\n/ /' | awk '{$1=$1=\"\"}1' | sed 's/^ //' | sed -r '/^\\s*$/d' | awk '{printf  \"%s %s %02s %s %s %s %s %s %02s %s %s %s %s\\n\", $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
             finally:
                 if nslog.returncode == 0:
-                    print(style.YELLOW +
-                          '{:-^87}\n'.format('NetScaler ns.log timestamp IndexMessages') + style.RESET + nslog.stdout)
+                    print(style.YELLOW + '{:-^87}\n'.format('NetScaler ns.log timestamp IndexMessages') + style.RESET + nslog.stdout)
                 else:
-                    print(
-                        style.RED + '{:-^87}\n'.format('Unable to read ns.log') + style.RESET)
+                    print(style.RED + '{:-^87}\n'.format('Unable to read ns.log') + style.RESET)
                 if authlog.returncode == 0:
-                    print(style.YELLOW +
-                          '{:-^87}\n'.format('NetScaler auth.log timestamp IndexMessages') + style.RESET + authlog.stdout)
+                    print(style.YELLOW + '{:-^87}\n'.format('NetScaler auth.log timestamp IndexMessages') + style.RESET + authlog.stdout)
                 else:
-                    print(
-                        style.RED + '{:-^87}\n'.format('Unable to read auth.log') + style.RESET)
+                    print(style.RED + '{:-^87}\n'.format('Unable to read auth.log') + style.RESET)
                 if bashlog.returncode == 0:
-                    print(style.YELLOW +
-                          '{:-^87}\n'.format('NetScaler bash.log timestamp IndexMessages') + style.RESET + bashlog.stdout)
+                    print(style.YELLOW + '{:-^87}\n'.format('NetScaler bash.log timestamp IndexMessages') + style.RESET + bashlog.stdout)
                 else:
-                    print(
-                        style.RED + '{:-^87}\n'.format('Unable to read bash.log') + style.RESET)
+                    print(style.RED + '{:-^87}\n'.format('Unable to read bash.log') + style.RESET)
                 if nitrolog.returncode == 0:
-                    print(style.YELLOW +
-                          '{:-^87}\n'.format('NetScaler nitro.log timestamp IndexMessages') + style.RESET + nitrolog.stdout)
+                    print(style.YELLOW + '{:-^87}\n'.format('NetScaler nitro.log timestamp IndexMessages') + style.RESET + nitrolog.stdout)
                 else:
-                    print(
-                        style.RED + '{:-^87}\n'.format('Unable to read nitro.log') + style.RESET)
+                    print(style.RED + '{:-^87}\n'.format('Unable to read nitro.log') + style.RESET)
                 if noticelog.returncode == 0:
-                    print(style.YELLOW +
-                          '{:-^87}\n'.format('NetScaler notice.log timestamp IndexMessages') + style.RESET + noticelog.stdout)
+                    print(style.YELLOW + '{:-^87}\n'.format('NetScaler notice.log timestamp IndexMessages') + style.RESET + noticelog.stdout)
                 else:
-                    print(
-                        style.RED + '{:-^87}\n'.format('Unable to read notice.log') + style.RESET)
+                    print(style.RED + '{:-^87}\n'.format('Unable to read notice.log') + style.RESET)
                 if nsvpnlog.returncode == 0:
-                    print(style.YELLOW +
-                          '{:-^87}\n'.format('NetScaler nsvpn.log timestamp IndexMessages') + style.RESET + nsvpnlog.stdout)
+                    print(style.YELLOW + '{:-^87}\n'.format('NetScaler nsvpn.log timestamp IndexMessages') + style.RESET + nsvpnlog.stdout)
                 else:
-                    print(
-                        style.RED + '{:-^87}\n'.format('Unable to read nsvpn.log') + style.RESET)
+                    print(style.RED + '{:-^87}\n'.format('Unable to read nsvpn.log') + style.RESET)
                 if shlog.returncode == 0:
-                    print(style.YELLOW +
-                          '{:-^87}\n'.format('NetScaler sh.log timestamp IndexMessages') + style.RESET + shlog.stdout)
+                    print(style.YELLOW + '{:-^87}\n'.format('NetScaler sh.log timestamp IndexMessages') + style.RESET + shlog.stdout)
                 else:
                     print(style.RED + '{:-^87}\n'.format('Unable to read sh.log') + style.RESET)
                 if newnslog.returncode == 0:
@@ -675,8 +558,8 @@ elif args.imall:
             resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
             quit()
 
-if args.N:
-    box_time = int(sp.run("awk '/local/&&/GMT/{print $3 - substr($6,12); exit}' var/log/ns.lo*", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
+elif args.N:
+    box_time = str(sp.run("awk '/local/&&/GMT/{print $3 - substr($6,12); exit}' var/log/ns.lo* | awk '{if ($0 !~ \"-\") print \"+\"$0; else print $0}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
     try:
         newnslog = sp.run("""for i in $(ls -lah var/nslog/ | awk '!/tar|gz/&&/newnslog./{print "var/nslog/" $NF}END{print "var/nslog/newnslog"}'); do nsconmsg -K $i -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=""; printf "%s\\t|", $0}END{printf "\\n"}'; echo $i; done | sed 'N;s/\\n/ /' | awk '{$1=$1=""}1' | sed 's/^ //' | sed -r '/^\\s*$/d' | awk '{printf "%s %s %02s %s %s %s %s %s %02s %s %s %s %s\\n", $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13}'""", shell=True, text=True, capture_output=True,).stdout.strip()
         input_format = "%a %b %d %H:%M:%S %Y"
@@ -693,11 +576,10 @@ if args.N:
                 raw_start_time = columns[0]
                 raw_end_time = columns[1]
                 newnslog_name = columns[2]
-                updated_start = start_timestamp + timedelta(hours=box_time)
-                updated_end = end_timestamp + timedelta(hours=box_time)
+                updated_start = start_timestamp + timedelta(hours=int(box_time))
+                updated_end = end_timestamp + timedelta(hours=int(box_time))
                 updated_start_str = updated_start.strftime(output_format)
                 updated_end_str = updated_end.strftime(output_format)
-                #updated_columns = [f"{raw_start_time:<23}", f"{raw_end_time:<23}", f"{updated_start_str:<23}", f"{updated_end_str:<23}", newnslog_name, ]
                 updated_columns = [style.GREEN + raw_start_time + style.RESET, style.CYAN + raw_end_time +style.RESET, style.GREEN + updated_start_str + style.RESET, style.CYAN + updated_end_str + style.RESET , newnslog_name]
                 updated_line = ' | '.join(updated_columns)
                 final_output.append(updated_line)
@@ -726,110 +608,78 @@ elif args.error:
     try:
         logger.info(os.getcwd() + " - show -error")
         # Highlight all the ERROR|err|down|disconnect|fail containing lines in input file.
-        print(sp.run("if test -f var/log/" + args.error +
-              "; then awk '/ERROR|err|Err|down|disconnect|fail/{print \"\033[1;31m\"$0\"\033[0m\";next}{print $0}' var/log/" + args.error + "; else echo \"File not found\"; fi", shell=True).stdout)
+        print(sp.run("if test -f var/log/" + args.error + "; then awk '/ERROR|err|Err|down|disconnect|fail/{print \"\033[1;31m\"$0\"\033[0m\";next}{print $0}' var/log/" + args.error + "; else echo \"File not found\"; fi", shell=True).stdout)
     finally:
-        payload = {"version": version, "user": username, "action": "show -error --> " + args.error + " --> " + os.getcwd() + " --> " + str(
-            int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-        resp = request.urlopen(request.Request(
-            url, data=parse.urlencode(payload).encode()))
+        payload = {"version": version, "user": username, "action": "show -error --> " + args.error + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
         quit()
 elif args.show:
     try:
         logger.info(os.getcwd() + " - show -show - " + args.show)
         # Prining show command output from file shell/showcmds.txt | Try without show
-        showout = os.popen("sed -nr \"/^exec: show " + args.show +
-                           "/,/Done/p\" shell/showcmds.txt").read().strip()
+        showout = os.popen("sed -nr \"/^exec: show " + args.show + "/,/Done/p\" shell/showcmds.txt").read().strip()
         if len(showout) < 1:
-            print(
-                style.RED + "Incorrect show command. Please use the below available match...\n" + style.RESET)
-            showsuggest = os.popen("cat shell/showcmds.txt | grep exec | grep -i " + "\"" +
-                                   args.show + "\"" + " | awk '{$1=$2=\"\"}1' | cut -c3-").read().strip()
+            print(style.RED + "Incorrect show command. Please use the below available match...\n" + style.RESET)
+            showsuggest = os.popen("cat shell/showcmds.txt | grep exec | grep -i " + "\"" + args.show + "\"" + " | awk '{$1=$2=\"\"}1' | cut -c3-").read().strip()
             if len(showsuggest) < 1:
                 print(style.RED + "No matching show command found." + style.RESET)
-                payload = {"version": version, "user": username, "action": "show -show " + args.show + " --> " + os.getcwd() + " --> " + str(
-                    int(time.time())), "runtime": 0, "result": "Failed", "format": "string", "sr": os.getcwd().split("/")[3]}
-                resp = request.urlopen(request.Request(
-                    url, data=parse.urlencode(payload).encode()))
+                payload = {"version": version, "user": username, "action": "show -show " + args.show + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Failed", "format": "string", "sr": os.getcwd().split("/")[3]}
+                resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
             else:
-                print(style.CYAN + os.popen("cat shell/showcmds.txt | grep exec | grep -i " + "\"" +
-                                            args.show + "\"" + " | awk '{$1=$2=\"\"}1' | cut -c3-").read().strip() + style.RESET)
-                payload = {"version": version, "user": username, "action": "show -show " + args.show + " --> " + os.getcwd() + " --> " + str(
-                    int(time.time())), "runtime": 0, "result": "Partial", "format": "string", "sr": os.getcwd().split("/")[3]}
-                resp = request.urlopen(request.Request(
-                    url, data=parse.urlencode(payload).encode()))
+                print(style.CYAN + os.popen("cat shell/showcmds.txt | grep exec | grep -i " + "\"" + args.show + "\"" + " | awk '{$1=$2=\"\"}1' | cut -c3-").read().strip() + style.RESET)
+                payload = {"version": version, "user": username, "action": "show -show " + args.show + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Partial", "format": "string", "sr": os.getcwd().split("/")[3]}
+                resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
         else:
-            print(style.YELLOW +
-                  '{:-^87}'.format('Showcmd '+args.show+' Output') + "\n" + style.RESET)
+            print(style.YELLOW + '{:-^87}'.format('Showcmd '+args.show+' Output') + "\n" + style.RESET)
             print(showout)
-            payload = {"version": version, "user": username, "action": "show -show " + args.show + " --> " + os.getcwd() + " --> " + str(
-                int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-            resp = request.urlopen(request.Request(
-                url, data=parse.urlencode(payload).encode()))
+            payload = {"version": version, "user": username, "action": "show -show " + args.show + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+            resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
     finally:
         quit()
 elif args.stat:
     try:
         logger.info(os.getcwd() + " - show -stat - " + args.stat)
         # Prining stat command output from file shell/statcmds.txt | Try without stat
-        statout = os.popen("sed -nr \"/^exec: stat " + args.stat +
-                           "/,/Done/p\" shell/statcmds.txt").read().strip()
+        statout = os.popen("sed -nr \"/^exec: stat " + args.stat + "/,/Done/p\" shell/statcmds.txt").read().strip()
         if len(statout) < 1:
-            print(
-                style.RED + "Incorrect stat command. Please use the below available match...\n" + style.RESET)
-            statsuggest = os.popen("cat shell/statcmds.txt | grep exec | grep -i " + "\"" +
-                                   args.stat + "\"" + " | awk '{$1=$2=\"\"}1' | cut -c3-").read().strip()
+            print(style.RED + "Incorrect stat command. Please use the below available match...\n" + style.RESET)
+            statsuggest = os.popen("cat shell/statcmds.txt | grep exec | grep -i " + "\"" + args.stat + "\"" + " | awk '{$1=$2=\"\"}1' | cut -c3-").read().strip()
             if len(statsuggest) < 1:
                 print(style.RED + "No matching stat command found." + style.RESET)
-                payload = {"version": version, "user": username, "action": "show -stat " + args.stat + " --> " + os.getcwd() + " --> " + str(
-                    int(time.time())), "runtime": 0, "result": "Failed", "format": "string", "sr": os.getcwd().split("/")[3]}
-                resp = request.urlopen(request.Request(
-                    url, data=parse.urlencode(payload).encode()))
+                payload = {"version": version, "user": username, "action": "show -stat " + args.stat + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Failed", "format": "string", "sr": os.getcwd().split("/")[3]}
+                resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
             else:
-                print(style.CYAN + os.popen("cat shell/statcmds.txt | grep exec | grep -i " + "\"" +
-                                            args.stat + "\"" + " | awk '{$1=$2=\"\"}1' | cut -c3-").read().strip() + style.RESET)
-                payload = {"version": version, "user": username, "action": "show -stat " + args.stat + " --> " + os.getcwd() + " --> " + str(
-                    int(time.time())), "runtime": 0, "result": "Partial", "format": "string", "sr": os.getcwd().split("/")[3]}
-                resp = request.urlopen(request.Request(
-                    url, data=parse.urlencode(payload).encode()))
+                print(style.CYAN + os.popen("cat shell/statcmds.txt | grep exec | grep -i " + "\"" + args.stat + "\"" + " | awk '{$1=$2=\"\"}1' | cut -c3-").read().strip() + style.RESET)
+                payload = {"version": version, "user": username, "action": "show -stat " + args.stat + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Partial", "format": "string", "sr": os.getcwd().split("/")[3]}
+                resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
         else:
-            print(style.YELLOW +
-                  '{:-^87}'.format('Statcmd '+args.stat+' Output') + "\n" + style.RESET)
+            print(style.YELLOW + '{:-^87}'.format('Statcmd '+args.stat+' Output') + "\n" + style.RESET)
             print(statout)
-            payload = {"version": version, "user": username, "action": "show -stat " + args.stat + " --> " + os.getcwd() + " --> " + str(
-                int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-            resp = request.urlopen(request.Request(
-                url, data=parse.urlencode(payload).encode()))
+            payload = {"version": version, "user": username, "action": "show -stat " + args.stat + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+            resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
     finally:
         quit()
 elif args.vip:
     try:
         logger.info(os.getcwd() + " - show -vip")
         # Prining formatted VIP output from file shell/ns_running_config.conf.txt
-        lbvipout = os.popen(
-            "awk '/^add lb/&&/vserver/{printf \"\033[0;92m%s\033[00m | %s | %s | %s | %s |\\n\", $2, $4, $5, $7, $6}' shell/ns_running_config.conf  | column -t -s'|'").read().strip()
-        csvipout = os.popen(
-            "awk '/^add cs/&&/vserver/{printf \"\033[0;96m%s\033[00m | %s | %s | %s | %s |\\n\", $2, $4, $7, $11, $8}' shell/ns_running_config.conf  | column -t -s'|'").read().strip()
-        authvipout = os.popen(
-            "awk '/^add authentication/&&/vserver/{printf \"\033[0;95m%s\033[00m | %s | %s | %s\\n\", $2, $4, $5, $6}' shell/ns_running_config.conf  | column -t -s'|'").read().strip()
-        vpnvipout = os.popen(
-            "awk '/^add vpn/&&/vserver/{printf \"\033[0;94m%s\033[00m | %s | %s | %s\\n\", $2, $4, $5, $6}' shell/ns_running_config.conf  | column -t -s'|'").read().strip()
+        lbvipout = os.popen("awk '/^add lb/&&/vserver/{printf \"\033[0;92m%s\033[00m | %s | %s | %s | %s |\\n\", $2, $4, $5, $7, $6}' shell/ns_running_config.conf  | column -t -s'|'").read().strip()
+        csvipout = os.popen("awk '/^add cs/&&/vserver/{printf \"\033[0;96m%s\033[00m | %s | %s | %s | %s |\\n\", $2, $4, $7, $11, $8}' shell/ns_running_config.conf  | column -t -s'|'").read().strip()
+        authvipout = os.popen("awk '/^add authentication/&&/vserver/{printf \"\033[0;95m%s\033[00m | %s | %s | %s\\n\", $2, $4, $5, $6}' shell/ns_running_config.conf  | column -t -s'|'").read().strip()
+        vpnvipout = os.popen("awk '/^add vpn/&&/vserver/{printf \"\033[0;94m%s\033[00m | %s | %s | %s\\n\", $2, $4, $5, $6}' shell/ns_running_config.conf  | column -t -s'|'").read().strip()
     finally:
         if len(lbvipout) > 2:
-            print(style.YELLOW +
-                  '{:-^87}'.format('Load Balancing VIP Basic Info'))
+            print(style.YELLOW + '{:-^87}'.format('Load Balancing VIP Basic Info'))
             print(lbvipout + "\n")
         else:
             pass
         if len(csvipout) > 2:
-            print(style.YELLOW +
-                  '{:-^87}'.format('Content Switching VIP Basic Info'))
+            print(style.YELLOW + '{:-^87}'.format('Content Switching VIP Basic Info'))
             print(csvipout + "\n")
         else:
             pass
         if len(authvipout) > 2:
-            print(style.YELLOW +
-                  '{:-^87}'.format('Authentication VIP Basic Info'))
+            print(style.YELLOW + '{:-^87}'.format('Authentication VIP Basic Info'))
             print(authvipout + "\n")
         else:
             pass
@@ -838,41 +688,32 @@ elif args.vip:
             print(vpnvipout + "\n")
         else:
             pass
-        payload = {"version": version, "user": username, "action": "show -vip --> " + os.getcwd() + " --> " + str(int(time.time())),
-                   "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-        resp = request.urlopen(request.Request(
-            url, data=parse.urlencode(payload).encode()))
+        payload = {"version": version, "user": username, "action": "show -vip --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
         quit()
 elif args.v:
     try:
         # ns.conf name list and last saved timestamp
-        nsconf_Version = sp.run(
-            "for i in $(ls -lah nsconfig | awk '/ns.con/{print \"nsconfig/\"$NF}'); do printf \"$i*\" ; awk '/#NS/||/# Last modified by/{printf}END{print \"\"}' $i | sed -e 's/#//g; s/Last modified by `save config`,/*/g'; done | column -t -s \"*\"", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        nsconf_Version = sp.run("for i in $(ls -lah nsconfig | awk '/ns.con/{print \"nsconfig/\"$NF}'); do printf \"$i*\" ; awk '/#NS/||/# Last modified by/{printf}END{print \"\"}' $i | sed -e 's/#//g; s/Last modified by `save config`,/*/g'; done | column -t -s \"*\"", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         if nsconf_Version.returncode == 0:
-            print(style.YELLOW +
-                  '{:-^87}'.format('ns.conf name and Last Saved Timestamp') + style.RESET)
+            print(style.YELLOW + '{:-^87}'.format('ns.conf name and Last Saved Timestamp') + style.RESET)
             print(nsconf_Version.stdout)
         else:
-            print(style.RED +
-                  '{:-^87}'.format('No ns.conf files found under nsconfig/') + style.RESET)
+            print(style.RED + '{:-^87}'.format('No ns.conf files found under nsconfig/') + style.RESET)
     finally:
-        payload = {"version": version, "user": username, "action": "show -v --> " + os.getcwd() + " --> " + str(int(time.time())),
-                   "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-        resp = request.urlopen(request.Request(
-            url, data=parse.urlencode(payload).encode()))
+        payload = {"version": version, "user": username, "action": "show -v --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
 elif args.case:
     # Get SFDC API Keys
     try:
         sfdcurl = "https://ftltoolswebapi.deva.citrite.net/sfaas/api/salesforce"
-        tokenpayload = {"feature": "login", "parameters": [{"name": "tokenuri", "value": "https://login.salesforce.com/services/oauth2/token", "isbase64": "false"}]
-                        }
+        tokenpayload = {"feature": "login", "parameters": [{"name": "tokenuri", "value": "https://login.salesforce.com/services/oauth2/token", "isbase64": "false"}] }
         sfdcreq = request.Request(sfdcurl)
         sfdcreq.add_header('Content-Type', 'application/json; charset=utf-8')
         jsondata = json.dumps(tokenpayload)
         jsondataasbytes = jsondata.encode('utf-8')
         sfdcreq.add_header('Content-Length', len(jsondataasbytes))
-        sfdctoken = json.loads(request.urlopen(sfdcreq, jsondataasbytes).read().decode(
-            "utf-8", "ignore"))['options'][0]['values'][0]
+        sfdctoken = json.loads(request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore"))['options'][0]['values'][0]
     except:
         print(style.RED + "Unable to get SFDC Token" + style.RESET)
 
@@ -885,84 +726,56 @@ elif args.case:
     # Get CaseAge and Entitlement Details
     try:
         headers = {'Content-Type': 'application/json'}
-        data = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "EntitlementId,Age__c", "isbase64": "false"}, {
-            "name": "tablename", "value": "Case", "isbase64": "false"}, {"name": "selectcondition", "value": "CaseNumber = '"+casenum+"'", "isbase64": "false"}]}
+        data = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "EntitlementId,Age__c", "isbase64": "false"}, {"name": "tablename", "value": "Case", "isbase64": "false"}, {"name": "selectcondition", "value": "CaseNumber = '"+casenum+"'", "isbase64": "false"}]}
         jsondata = json.dumps(data)
         jsondataasbytes = jsondata.encode('utf-8')
-        finaldata = json.loads(request.urlopen(sfdcreq, jsondataasbytes).read().decode(
-            "utf-8", "ignore"))['options'][0]['values'][0]
+        finaldata = json.loads(request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore"))['options'][0]['values'][0]
         EntitlementId = ast.literal_eval(finaldata)["EntitlementId"]
         CaseAge = str(ast.literal_eval(finaldata)["Age__c"])
-        data = ({"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "EndDate", "isbase64": "false"}, {
-                "name": "tablename", "value": "Entitlement", "isbase64": "false"}, {"name": "selectcondition", "value": "Id = '"+EntitlementId+"'", "isbase64": "false"}]})
+        data = ({"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "EndDate", "isbase64": "false"}, {"name": "tablename", "value": "Entitlement", "isbase64": "false"}, {"name": "selectcondition", "value": "Id = '"+EntitlementId+"'", "isbase64": "false"}]})
         jsondata = json.dumps(data)
         jsondataasbytes = jsondata.encode('utf-8')
-        Entitlement_EndDate = ast.literal_eval(json.loads(request.urlopen(
-            sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore"))['options'][0]['values'][0])["EndDate"]
+        Entitlement_EndDate = ast.literal_eval(json.loads(request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore"))['options'][0]['values'][0])["EndDate"]
     finally:
         print(Entitlement_EndDate + CaseAge)
 elif args.bt:
     try:
-        print(style.YELLOW +
-              '{:-^87}'.format('NetScaler Core Auto Backtrace') + style.RESET)
-        nsppecrashfile = sp.run(
-            "find \"$PWD\" $(pwd | cut -d'/' -f2,3,4 | sed 's/^/\//') | awk '/NSPPE-[0-9][0-9]-/&&!/gz|tar|zip|collector|0000|bigfoot|part/{print }'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.splitlines()
-        collectornsppecrashfile = sp.run(
-            "awk '/NSPPE-[0-9][0-9]-/&&/-rw------/{print $NF}' shell/ls_lRtrp.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.split()
-        codebuild = sp.run("awk '/#NS/{print}' shell/ns_running_config.conf | cut -c 4- | sed s/\" Build \"/-/g | sed 's/$/_nc.tgz/' | tr -d '\n'",
-                           shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
-        processlist = ["bgpd", "httpd", "iked", "imi", "imish", "iprep", "iprep_tool", "isisd", "metricscollector", "nsaaad", "nscopo", "nskrb_debug", "nsm", "ospf6d", "ospfd", "ripd",
-                       "ripngd", "snmpd", "nsaggregatord", "nscfsyncd", "nscollect", "nsconfigd", "nsconmsg", "nslped", "nsnetsvc", "nsnewstat", "nssetup", "nstraceaggregator", "syshealthd", "pitboss", "sshd"]
-        processcrashfile = sp.run(
-            "find \"$PWD\" $(pwd | cut -d'/' -f2,3,4 | sed 's/^/\//')| awk '/bgpd-[0-9][0-9]|httpd-[0-9][0-9]|iked-[0-9][0-9]|imi-[0-9][0-9]|imish-[0-9][0-9]|iprep-[0-9][0-9]|iprep_tool-[0-9][0-9]|isisd-[0-9][0-9]|metricscollector-[0-9][0-9]|nsaaad-[0-9][0-9]|nscopo-[0-9][0-9]|nskrb_debug-[0-9][0-9]|nsm-[0-9][0-9]|ospf6d-[0-9][0-9]|ospfd-[0-9][0-9]|ripd-[0-9][0-9]|ripngd-[0-9][0-9]|snmpd-[0-9][0-9]|nsaggregatord-[0-9][0-9]|nscfsyncd-[0-9][0-9]|nscollect-[0-9][0-9]|nsconfigd-[0-9][0-9]|nsconmsg-[0-9][0-9]|nslped-[0-9][0-9]|nsnetsvc-[0-9][0-9]|nsnewstat-[0-9][0-9]|nssetup-[0-9][0-9]|nstraceaggregator-[0-9][0-9]|syshealthd-[0-9][0-9]|pitboss-[0-9][0-9]/&&!/gz|tar/&&!/bigfoot/{print | \"sort -r| uniq\"}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.split()
-        count_collectorprocesscrashfile = sp.run(
-            "awk '/bgpd-[0-9]|httpd-[0-9]|iked-[0-9]|imi-[0-9]|imish-[0-9]|iprep-[0-9]|iprep_tool-[0-9]|isisd-[0-9]|metricscollector-[0-9]|nsaaad-[0-9]|nscopo-[0-9]|nskrb_debug-[0-9]|nsm-[0-9]|ospf6d-[0-9]|ospfd-[0-9]|ripd-[0-9]|ripngd-[0-9]|snmpd-[0-9]|nsaggregatord-[0-9]|nscfsyncd-[0-9]|nscollect-[0-9]|nsconfigd-[0-9]|nsconmsg-[0-9]|nslped-[0-9]|nsnetsvc-[0-9]|nsnewstat-[0-9]|nssetup-[0-9]|nstraceaggregator-[0-9]|syshealthd-[0-9]|pitboss-[0-9]|sshd-[0-9]/&&/-rw------/{print $NF | \"sort -r| uniq -c\"}' shell/ls_lRtrp.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
-        collectorprocesscrashfile = sp.run(
-            "awk '/bgpd-[0-9]|httpd-[0-9]|iked-[0-9]|imi-[0-9]|imish-[0-9]|iprep-[0-9]|iprep_tool-[0-9]|isisd-[0-9]|metricscollector-[0-9]|nsaaad-[0-9]|nscopo-[0-9]|nskrb_debug-[0-9]|nsm-[0-9]|ospf6d-[0-9]|ospfd-[0-9]|ripd-[0-9]|ripngd-[0-9]|snmpd-[0-9]|nsaggregatord-[0-9]|nscfsyncd-[0-9]|nscollect-[0-9]|nsconfigd-[0-9]|nsconmsg-[0-9]|nslped-[0-9]|nsnetsvc-[0-9]|nsnewstat-[0-9]|nssetup-[0-9]|nstraceaggregator-[0-9]|syshealthd-[0-9]|pitboss-[0-9]|sshd-[0-9]/&&/-rw------/{print $NF}' shell/ls_lRtrp.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.split()
+        print(style.YELLOW + '{:-^87}'.format('NetScaler Core Auto Backtrace') + style.RESET)
+        nsppecrashfile = sp.run("find \"$PWD\" $(pwd | cut -d'/' -f2,3,4 | sed 's/^/\//') | awk '/NSPPE-[0-9][0-9]-/&&!/gz|tar|zip|collector|0000|bigfoot|part/{print }'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.splitlines()
+        collectornsppecrashfile = sp.run("awk '/NSPPE-[0-9][0-9]-/&&/-rw------/{print $NF}' shell/ls_lRtrp.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.split()
+        codebuild = sp.run("awk '/#NS/{print}' shell/ns_running_config.conf | cut -c 4- | sed s/\" Build \"/-/g | sed 's/$/_nc.tgz/' | tr -d '\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        processlist = ["bgpd", "httpd", "iked", "imi", "imish", "iprep", "iprep_tool", "isisd", "metricscollector", "nsaaad", "nscopo", "nskrb_debug", "nsm", "ospf6d", "ospfd", "ripd", "ripngd", "snmpd", "nsaggregatord", "nscfsyncd", "nscollect", "nsconfigd", "nsconmsg", "nslped", "nsnetsvc", "nsnewstat", "nssetup", "nstraceaggregator", "syshealthd", "pitboss", "sshd"]
+        processcrashfile = sp.run("find \"$PWD\" $(pwd | cut -d'/' -f2,3,4 | sed 's/^/\//')| awk '/bgpd-[0-9][0-9]|httpd-[0-9][0-9]|iked-[0-9][0-9]|imi-[0-9][0-9]|imish-[0-9][0-9]|iprep-[0-9][0-9]|iprep_tool-[0-9][0-9]|isisd-[0-9][0-9]|metricscollector-[0-9][0-9]|nsaaad-[0-9][0-9]|nscopo-[0-9][0-9]|nskrb_debug-[0-9][0-9]|nsm-[0-9][0-9]|ospf6d-[0-9][0-9]|ospfd-[0-9][0-9]|ripd-[0-9][0-9]|ripngd-[0-9][0-9]|snmpd-[0-9][0-9]|nsaggregatord-[0-9][0-9]|nscfsyncd-[0-9][0-9]|nscollect-[0-9][0-9]|nsconfigd-[0-9][0-9]|nsconmsg-[0-9][0-9]|nslped-[0-9][0-9]|nsnetsvc-[0-9][0-9]|nsnewstat-[0-9][0-9]|nssetup-[0-9][0-9]|nstraceaggregator-[0-9][0-9]|syshealthd-[0-9][0-9]|pitboss-[0-9][0-9]/&&!/gz|tar/&&!/bigfoot/{print | \"sort -r| uniq\"}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.split()
+        count_collectorprocesscrashfile = sp.run("awk '/bgpd-[0-9]|httpd-[0-9]|iked-[0-9]|imi-[0-9]|imish-[0-9]|iprep-[0-9]|iprep_tool-[0-9]|isisd-[0-9]|metricscollector-[0-9]|nsaaad-[0-9]|nscopo-[0-9]|nskrb_debug-[0-9]|nsm-[0-9]|ospf6d-[0-9]|ospfd-[0-9]|ripd-[0-9]|ripngd-[0-9]|snmpd-[0-9]|nsaggregatord-[0-9]|nscfsyncd-[0-9]|nscollect-[0-9]|nsconfigd-[0-9]|nsconmsg-[0-9]|nslped-[0-9]|nsnetsvc-[0-9]|nsnewstat-[0-9]|nssetup-[0-9]|nstraceaggregator-[0-9]|syshealthd-[0-9]|pitboss-[0-9]|sshd-[0-9]/&&/-rw------/{print $NF | \"sort -r| uniq -c\"}' shell/ls_lRtrp.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        collectorprocesscrashfile = sp.run("awk '/bgpd-[0-9]|httpd-[0-9]|iked-[0-9]|imi-[0-9]|imish-[0-9]|iprep-[0-9]|iprep_tool-[0-9]|isisd-[0-9]|metricscollector-[0-9]|nsaaad-[0-9]|nscopo-[0-9]|nskrb_debug-[0-9]|nsm-[0-9]|ospf6d-[0-9]|ospfd-[0-9]|ripd-[0-9]|ripngd-[0-9]|snmpd-[0-9]|nsaggregatord-[0-9]|nscfsyncd-[0-9]|nscollect-[0-9]|nsconfigd-[0-9]|nsconmsg-[0-9]|nslped-[0-9]|nsnetsvc-[0-9]|nsnewstat-[0-9]|nssetup-[0-9]|nstraceaggregator-[0-9]|syshealthd-[0-9]|pitboss-[0-9]|sshd-[0-9]/&&/-rw------/{print $NF}' shell/ls_lRtrp.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.split()
         if len(nsppecrashfile) != 0:
-            payload = {"version": version, "user": username, "action": "show -bt --> NSPPE crash" + os.getcwd() + " --> " + str(
-                int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-            resp = request.urlopen(request.Request(
-                url, data=parse.urlencode(payload).encode()))
-            print(style.YELLOW +
-                  '{:-^87}'.format('Its a NSPPE Crash'))
-            print(
-                style.YELLOW + "\nAvailable NSPPE Core files in Case directory " + style.RESET)
+            payload = {"version": version, "user": username, "action": "show -bt --> NSPPE crash" + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+            resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+            print(style.YELLOW + '{:-^87}'.format('Its a NSPPE Crash'))
+            print(style.YELLOW + "\nAvailable NSPPE Core files in Case directory " + style.RESET)
             print(style.CYAN + '\n'.join(nsppecrashfile) + style.RESET)
             if collectornsppecrashfile:
-                print(
-                    style.YELLOW + "\nAvailable NSPPE Core files in this collector bundle: " + style.RESET)
+                print(style.YELLOW + "\nAvailable NSPPE Core files in this collector bundle: " + style.RESET)
                 print(style.CYAN + '\n'.join(collectornsppecrashfile) + style.RESET)
             else:
-                print(
-                    style.RED + "\nUnable to find crash / core file in this collector bundle." + style.RESET)
-                manual_core = input(
-                    style.YELLOW + "\nPlease specify the core file full path for manual analysis: " + style.RESET)
+                print(style.RED + "\nUnable to find crash / core file in this collector bundle." + style.RESET)
+                manual_core = input(style.YELLOW + "\nPlease specify the core file full path for manual analysis: " + style.RESET)
                 if len(manual_core) > 5:
-                    print(style.GREEN+"\nGenerating BackTrace for: " +
-                          manual_core + " --> " + sp.run("what " + manual_core + "| awk '/NetScaler/{print substr($2,3) substr($4,1,length($4)-4)}' | sed 's/:/_/g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout + style.RESET)
-                    nsppefw = "nsppe64-"+sp.run(
-                        "what " + manual_core + " | awk '/Build/{print $2, $4}' | cut -c 3- | sed s/\": \"/-/g | sed s/.nc/_nc/g | rev | cut -c 2- | rev | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
-                    nsppebtout = (sp.run("gdb /home/django/nsppe_symbols/"+nsppefw + " " + manual_core +
-                                         " -ex 'bt full' -ex quit | awk '/0x[0-9a-z]|symbols from|generated by|terminated with|handler called/{print}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout)
+                    print(style.GREEN+"\nGenerating BackTrace for: " + manual_core + " --> " + sp.run("what " + manual_core + "| awk '/NetScaler/{print substr($2,3) substr($4,1,length($4)-4)}' | sed 's/:/_/g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout + style.RESET)
+                    nsppefw = "nsppe64-"+sp.run("what " + manual_core + " | awk '/Build/{print $2, $4}' | cut -c 3- | sed s/\": \"/-/g | sed s/.nc/_nc/g | rev | cut -c 2- | rev | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                    nsppebtout = (sp.run("gdb /home/django/nsppe_symbols/"+nsppefw + " " + manual_core + " -ex 'bt full' -ex quit | awk '/0x[0-9a-z]|symbols from|generated by|terminated with|handler called/{print}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout)
                     print(nsppebtout)
-                    rawjira = [e[3:] for e in re.findall(
-                        "in\s[a-z_0-9]{3,}", nsppebtout)]
+                    rawjira = [e[3:] for e in re.findall( "in\s[a-z_0-9]{3,}", nsppebtout)]
                     JiraFun = (' '.join(rawjira))
-                    print(style.UNDERLINE + style.GREEN + "Crashing functions:" +
-                          "\n" + style.RESET)
+                    print(style.UNDERLINE + style.GREEN + "Crashing functions:" + "\n" + style.RESET)
                     print(JiraFun + "\n")
-                    initialJira = sp.run(
-                        "curl -s -H 'Content-type: application/json' -d '{\"feature\":\"search\", \"parameters\": [{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\"},{\"name\":\"searchstring\",\"value\":\""+JiraFun+"\"}]}' -X POST http://10.14.18.46/SFaaS/api/jira | perl -wnE'say /\"NSHELP-[0-9]{3,9}/g' | sed 's/\"/ /g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                    initialJira = sp.run("curl -s -H 'Content-type: application/json' -d '{\"feature\":\"search\", \"parameters\": [{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\"},{\"name\":\"searchstring\",\"value\":\""+JiraFun+"\"}]}' -X POST http://10.14.18.46/SFaaS/api/jira | perl -wnE'say /\"NSHELP-[0-9]{3,9}/g' | sed 's/\"/ /g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                     if len(initialJira) > 5:
-                        print(style.GREEN + "Matching Jira -->" +
-                              style.RESET + initialJira)
+                        print(style.GREEN + "Matching Jira -->" + style.RESET + initialJira)
                     else:
-                        print(style.RED + "Unable to match any Jira with the above crashing funcation !!!" +
-                              style.RESET + initialJira)
+                        print(style.RED + "Unable to match any Jira with the above crashing funcation !!!" + style.RESET + initialJira)
                     for i in initialJira.split():
-                        detailedJira = sp.run(
-                            "curl -s -H 'Content-type: application/json' -d '{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\",\"feature\":\"fetchfields\",\"parameters\":[{\"name\":\"id\",\"value\":\""+i+"\",\"isbase64\":false},{\"name\":\"fields\",\"value\":\"summary,versions,status,resolution,fixVersions,created\",\"isbase64\":false}]}' -X POST http://10.14.18.46/SFaaS/api/jira | jq '.options | .[] | .values | .[]' | sed 's/\\\\//g' | awk '{print substr($0, 2, length($0) - 2)}' | jq -r  '\"\\(.key) \\(\"-->\") \\(.fields.summary) \\(\"-->\") \\(.fields.resolution.name) \\(\"-->\") \\(.fields.created[0:10]) \\(\"\\nFound In:\") \\([.fields.versions[].name]) \\(\"--> Fixed In:\") \\([.fields.fixVersions[].name]) \\(\"\\n\")\"'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                        detailedJira = sp.run("curl -s -H 'Content-type: application/json' -d '{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\",\"feature\":\"fetchfields\",\"parameters\":[{\"name\":\"id\",\"value\":\""+i+"\",\"isbase64\":false},{\"name\":\"fields\",\"value\":\"summary,versions,status,resolution,fixVersions,created\",\"isbase64\":false}]}' -X POST http://10.14.18.46/SFaaS/api/jira | jq '.options | .[] | .values | .[]' | sed 's/\\\\//g' | awk '{print substr($0, 2, length($0) - 2)}' | jq -r  '\"\\(.key) \\(\"-->\") \\(.fields.summary) \\(\"-->\") \\(.fields.resolution.name) \\(\"-->\") \\(.fields.created[0:10]) \\(\"\\nFound In:\") \\([.fields.versions[].name]) \\(\"--> Fixed In:\") \\([.fields.fixVersions[].name]) \\(\"\\n\")\"'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                         print(detailedJira)
             for nsppecrash in nsppecrashfile:
                 nsppecrash = re.sub("\(", "\(", nsppecrash)
@@ -974,218 +787,151 @@ elif args.bt:
                     collectornscrash = re.sub(" ", "\ ", collectornscrash)
                     collectornscrash = re.sub(".gz", "", collectornscrash)
                     if collectornscrash in nsppecrash:
-                        print(style.GREEN+"\nGenerating BackTrace for: " +
-                              nsppecrash + " --> " + sp.run("what " + nsppecrash + "| awk '/NetScaler/{print substr($2,3) substr($4,1,length($4)-4)}' | sed 's/:/_/g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout + style.RESET)
-                        nsppefw = "nsppe64-"+sp.run(
-                            "what " + nsppecrash + " | awk '/Build/{print $2, $4}' | cut -c 3- | sed s/\": \"/-/g | sed s/.nc/_nc/g | rev | cut -c 2- | rev | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
-                        nsppebtout = (sp.run("gdb /home/django/nsppe_symbols/"+nsppefw + " " + nsppecrash +
-                                             " -ex 'bt full' -ex quit | awk '/0x[0-9a-z]|symbols from|generated by|terminated with|handler called/{print}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout)
+                        print(style.GREEN+"\nGenerating BackTrace for: " + nsppecrash + " --> " + sp.run("what " + nsppecrash + "| awk '/NetScaler/{print substr($2,3) substr($4,1,length($4)-4)}' | sed 's/:/_/g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout + style.RESET)
+                        nsppefw = "nsppe64-"+sp.run("what " + nsppecrash + " | awk '/Build/{print $2, $4}' | cut -c 3- | sed s/\": \"/-/g | sed s/.nc/_nc/g | rev | cut -c 2- | rev | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                        nsppebtout = (sp.run("gdb /home/django/nsppe_symbols/"+nsppefw + " " + nsppecrash + " -ex 'bt full' -ex quit | awk '/0x[0-9a-z]|symbols from|generated by|terminated with|handler called/{print}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout)
                         print(nsppebtout)
-                        rawjira = [e[3:] for e in re.findall(
-                            "in\s[a-z_0-9]{3,}", nsppebtout)]
+                        rawjira = [e[3:] for e in re.findall("in\s[a-z_0-9]{3,}", nsppebtout)]
                         JiraFun = (' '.join(rawjira))
-                        print(style.GREEN + "Crashing functions:" +
-                              "\n" + style.RESET)
+                        print(style.GREEN + "Crashing functions:" + "\n" + style.RESET)
                         print(JiraFun + "\n")
-                        initialJira = sp.run(
-                            "curl -s -H 'Content-type: application/json' -d '{\"feature\":\"search\", \"parameters\": [{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\"},{\"name\":\"searchstring\",\"value\":\""+JiraFun+"\"}]}' -X POST http://10.14.18.46/SFaaS/api/jira | perl -wnE'say /\"NSHELP-[0-9]{3,9}/g' | sed 's/\"/ /g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                        initialJira = sp.run("curl -s -H 'Content-type: application/json' -d '{\"feature\":\"search\", \"parameters\": [{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\"},{\"name\":\"searchstring\",\"value\":\""+JiraFun+"\"}]}' -X POST http://10.14.18.46/SFaaS/api/jira | perl -wnE'say /\"NSHELP-[0-9]{3,9}/g' | sed 's/\"/ /g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                         if len(initialJira) > 5:
-                            print(style.GREEN + "Matching Jira -->" +
-                                  style.RESET + initialJira)
+                            print(style.GREEN + "Matching Jira -->" + style.RESET + initialJira)
                         else:
-                            print(style.RED + "Unable to match any Jira with the above crashing funcation !!!" +
-                                  style.RESET + initialJira)
+                            print(style.RED + "Unable to match any Jira with the above crashing function !!!" + style.RESET + initialJira)
                         for i in initialJira.split():
-                            detailedJira = sp.run(
-                                "curl -s -H 'Content-type: application/json' -d '{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\",\"feature\":\"fetchfields\",\"parameters\":[{\"name\":\"id\",\"value\":\""+i+"\",\"isbase64\":false},{\"name\":\"fields\",\"value\":\"summary,versions,status,resolution,fixVersions,created\",\"isbase64\":false}]}' -X POST http://10.14.18.46/SFaaS/api/jira | jq '.options | .[] | .values | .[]' | sed 's/\\\\//g' | awk '{print substr($0, 2, length($0) - 2)}' | jq -r  '\"\\(.key) \\(\"-->\") \\(.fields.summary) \\(\"-->\") \\(.fields.resolution.name) \\(\"-->\") \\(.fields.created[0:10]) \\(\"\\nFound In:\") \\([.fields.versions[].name]) \\(\"--> Fixed In:\") \\([.fields.fixVersions[].name]) \\(\"\\n\")\"'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                            detailedJira = sp.run("curl -s -H 'Content-type: application/json' -d '{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\",\"feature\":\"fetchfields\",\"parameters\":[{\"name\":\"id\",\"value\":\""+i+"\",\"isbase64\":false},{\"name\":\"fields\",\"value\":\"summary,versions,status,resolution,fixVersions,created\",\"isbase64\":false}]}' -X POST http://10.14.18.46/SFaaS/api/jira | jq '.options | .[] | .values | .[]' | sed 's/\\\\//g' | awk '{print substr($0, 2, length($0) - 2)}' | jq -r  '\"\\(.key) \\(\"-->\") \\(.fields.summary) \\(\"-->\") \\(.fields.resolution.name) \\(\"-->\") \\(.fields.created[0:10]) \\(\"\\nFound In:\") \\([.fields.versions[].name]) \\(\"--> Fixed In:\") \\([.fields.fixVersions[].name]) \\(\"\\n\")\"'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                             print(detailedJira)
 
         elif len(processcrashfile) != 0:
-            print(style.YELLOW +
-                  '{:-^87}'.format('Its a Process Crash') + style.RESET)
-            print(
-                style.YELLOW + "\nAvailable Process Core files in Case directory " + style.RESET)
+            print(style.YELLOW + '{:-^87}'.format('Its a Process Crash') + style.RESET)
+            print(style.YELLOW + "\nAvailable Process Core files in Case directory " + style.RESET)
             print(style.CYAN + '\n'.join(processcrashfile) + style.RESET)
-            print(
-                style.YELLOW + "\nAvailable Process Core files in this collector bundle: " + style.RESET)
+            print(style.YELLOW + "\nAvailable Process Core files in this collector bundle: " + style.RESET)
             print(style.CYAN + count_collectorprocesscrashfile + style.RESET)
             print("Downloading and Using Debug files " + codebuild)
-            manaq = ("curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_mana/build_mana_" +
-                     codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild + " | awk '/HTTP/{print $2}'")
-            artesaq = ("curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_artesa/build_artesa_" +
-                       codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild + " | awk '/HTTP/{print $2}'")
-            mana = ("curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_mana/build_mana_" +
-                    codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild)
-            artesa = ("curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_artesa/build_artesa_" +
-                      codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild)
+            manaq = ("curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_mana/build_mana_" + codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild + " | awk '/HTTP/{print $2}'")
+            artesaq = ("curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_artesa/build_artesa_" + codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild + " | awk '/HTTP/{print $2}'")
+            mana = ("curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_mana/build_mana_" + codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild)
+            artesa = ("curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_artesa/build_artesa_" + codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild)
             if "200" in sp.run(manaq, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout:
-                payload = {"version": version, "user": username, "action": "show -bt --> mana process crash" + os.getcwd() + " --> " + str(
-                    int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                resp = request.urlopen(request.Request(
-                    url, data=parse.urlencode(payload).encode()))
-                sp.run(mana, shell=True, text=True,
-                       stdout=sp.PIPE, stderr=sp.PIPE)
+                payload = {"version": version, "user": username, "action": "show -bt --> mana process crash" + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+                resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                sp.run(mana, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                 print("Extracting " + codebuild)
-                sp.run("tar -xf dbgbins*", shell=True,
-                       text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                sp.run("rm -rf dbgbins*.tgz", shell=True,
-                       text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                sp.run("fixperms ./", shell=True, text=True,
-                       stdout=sp.PIPE, stderr=sp.PIPE)
+                sp.run("tar -xf dbgbins*", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                sp.run("rm -rf dbgbins*.tgz", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                sp.run("fixperms ./", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                 collectorprocesscrashfile = set(collectorprocesscrashfile)
                 for processcrash in processcrashfile:
                     processcrash = re.sub("\(", "\(", processcrash)
                     processcrash = re.sub("\)", "\)", processcrash)
                     for collectorprocesscrash in collectorprocesscrashfile:
-                        collectorprocesscrash = re.sub(
-                            "\(", "\(", collectorprocesscrash)
-                        collectorprocesscrash = re.sub(
-                            "\)", "\)", collectorprocesscrash)
-                        collectorprocesscrash = re.sub(
-                            ".gz", "", collectorprocesscrash)
+                        collectorprocesscrash = re.sub("\(", "\(", collectorprocesscrash)
+                        collectorprocesscrash = re.sub("\)", "\)", collectorprocesscrash)
+                        collectorprocesscrash = re.sub(".gz", "", collectorprocesscrash)
                         if collectorprocesscrash in processcrash:
-                            print(style.GREEN+"\nGenerating BackTrace for: " +
-                                  processcrash + style.RESET)
+                            print(style.GREEN+"\nGenerating BackTrace for: " + processcrash + style.RESET)
                             if os.path.isfile("dbgbins-" + codebuild[:-4] + "/" + processcrash.split("-")[0].split("/")[-1]):
                                 os.chdir("dbgbins-" + codebuild[:-4])
-                                btout = sp.run("gdb i386/" + processcrash.split("-")[0].split(
-                                    "/")[-1] + " " + processcrash + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                                btout = sp.run("gdb i386/" + processcrash.split("-")[0].split("/")[-1] + " " + processcrash + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                                 print(btout.stdout)
                                 os.chdir("..")
                             elif os.path.isfile("dbgbins-" + codebuild[:-4] + "/" + "i386/"+processcrash.split("-")[0].split("/")[-1]):
                                 os.chdir("dbgbins-" + codebuild[:-4])
-                                btout = sp.run("gdb i386/" + processcrash.split("-")[0].split(
-                                    "/")[-1] + " " + processcrash + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                                btout = sp.run("gdb i386/" + processcrash.split("-")[0].split("/")[-1] + " " + processcrash + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                                 print(btout.stdout)
                                 os.chdir("..")
                             elif os.path.isfile("dbgbins-" + codebuild[:-4] + "/" + "amd64/" + processcrash.split("-")[0].split("/")[-1]):
                                 os.chdir("dbgbins-" + codebuild[:-4])
-                                btout = sp.run("gdb amd64/" + processcrash.split("-")[0].split(
-                                    "/")[-1] + " " + processcrash + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                                btout = sp.run("gdb amd64/" + processcrash.split("-")[0].split("/")[-1] + " " + processcrash + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                                 print(btout.stdout)
-                                sp.run("rm -rf dbgbins*", shell=True,
-                                       text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                                sp.run("rm -rf dbgbins*", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                                 os.chdir("..")
                             else:
-                                print(style.RED + "Unable to find this process: " + processcrash.split(
-                                    "-")[0].split("/")[-1] + " in debug binaries" + style.RESET)
-                                sp.run("rm -rf dbgbins*", shell=True,
-                                       text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                                print(style.RED + "Unable to find this process: " + processcrash.split("-")[0].split("/")[-1] + " in debug binaries" + style.RESET)
+                                sp.run("rm -rf dbgbins*", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                                 quit()
             elif "200" in sp.run(artesaq, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout:
-                payload = {"version": version, "user": username, "action": "show -bt --> artesa process crash" + os.getcwd() + " --> " + str(
-                    int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                resp = request.urlopen(request.Request(
-                    url, data=parse.urlencode(payload).encode()))
-                sp.run(artesa, shell=True, text=True,
-                       stdout=sp.PIPE, stderr=sp.PIPE)
+                payload = {"version": version, "user": username, "action": "show -bt --> artesa process crash" + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+                resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                sp.run(artesa, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                 print("Extracting " + codebuild)
-                sp.run("tar -xf dbgbins*", shell=True,
-                       text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                sp.run("rm -rf dbgbins*.tgz", shell=True,
-                       text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                sp.run("fixperms ./", shell=True, text=True,
-                       stdout=sp.PIPE, stderr=sp.PIPE)
+                sp.run("tar -xf dbgbins*", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                sp.run("rm -rf dbgbins*.tgz", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                sp.run("fixperms ./", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                 collectorprocesscrashfile = set(collectorprocesscrashfile)
                 for processcrash in processcrashfile:
                     processcrash = re.sub("\(", "\(", processcrash)
                     processcrash = re.sub("\)", "\)", processcrash)
                     for collectorprocesscrash in collectorprocesscrashfile:
-                        collectorprocesscrash = re.sub(
-                            "\(", "\(", collectorprocesscrash)
-                        collectorprocesscrash = re.sub(
-                            "\)", "\)", collectorprocesscrash)
-                        collectorprocesscrash = re.sub(
-                            ".gz", "", collectorprocesscrash)
+                        collectorprocesscrash = re.sub("\(", "\(", collectorprocesscrash)
+                        collectorprocesscrash = re.sub("\)", "\)", collectorprocesscrash)
+                        collectorprocesscrash = re.sub(".gz", "", collectorprocesscrash)
                         if collectorprocesscrash in processcrash:
-                            print(style.GREEN+"\nGenerating BackTrace for: " +
-                                  processcrash + style.RESET)
+                            print(style.GREEN+"\nGenerating BackTrace for: " + processcrash + style.RESET)
                             if os.path.isfile("dbgbins-" + codebuild[:-4] + "/" + processcrash.split("-")[0].split("/")[-1]):
                                 os.chdir("dbgbins-" + codebuild[:-4])
-                                btout = sp.run("gdb i386/" + processcrash.split("-")[0].split(
-                                    "/")[-1] + " " + processcrash + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                                btout = sp.run("gdb i386/" + processcrash.split("-")[0].split("/")[-1] + " " + processcrash + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                                 print(btout.stdout)
                                 os.chdir("..")
                             elif os.path.isfile("dbgbins-" + codebuild[:-4] + "/" + "i386/"+processcrash.split("-")[0].split("/")[-1]):
                                 os.chdir("dbgbins-" + codebuild[:-4])
-                                btout = sp.run("gdb i386/" + processcrash.split("-")[0].split(
-                                    "/")[-1] + " " + processcrash + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                                btout = sp.run("gdb i386/" + processcrash.split("-")[0].split("/")[-1] + " " + processcrash + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                                 print(btout.stdout)
                                 os.chdir("..")
                             elif os.path.isfile("dbgbins-" + codebuild[:-4] + "/" + "amd64/" + processcrash.split("-")[0].split("/")[-1]):
                                 os.chdir("dbgbins-" + codebuild[:-4])
-                                btout = sp.run("gdb amd64/" + processcrash.split("-")[0].split(
-                                    "/")[-1] + " " + processcrash + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                                btout = sp.run("gdb amd64/" + processcrash.split("-")[0].split("/")[-1] + " " + processcrash + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                                 print(btout.stdout)
                                 sp.run("rm -rf dbgbins*", shell=True,
                                        text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                                 os.chdir("..")
                             else:
-                                print(style.RED + "Unable to find this process: " + processcrash.split(
-                                    "-")[0].split("/")[-1] + " in debug binaries" + style.RESET)
-                                sp.run("rm -rf dbgbins*", shell=True,
-                                       text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                                print(style.RED + "Unable to find this process: " + processcrash.split("-")[0].split("/")[-1] + " in debug binaries" + style.RESET)
+                                sp.run("rm -rf dbgbins*", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                                 quit()
         else:
             print(style.RED + "Unable to find Process / NSPPE Crash in Either Collector Bundle or No Core File in Case Directory !!!" + style.RESET)
-            payload = {"version": version, "user": username, "action": "show -bt --> " + os.getcwd() + " --> " + str(
-                int(time.time())), "runtime": 0, "result": "Failed", "format": "string", "sr": os.getcwd().split("/")[3]}
-            resp = request.urlopen(request.Request(
-                url, data=parse.urlencode(payload).encode()))
+            payload = {"version": version, "user": username, "action": "show -bt --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Failed", "format": "string", "sr": os.getcwd().split("/")[3]}
+            resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
     finally:
         quit()
 elif args.bt1:
     try:
-        payload = {"version": version, "user": username, "action": "show -bt1 --> NSPPE crash" + os.getcwd() + " --> " + str(
-            int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-        resp = request.urlopen(request.Request(
-            url, data=parse.urlencode(payload).encode()))
-        manual_core = input(
-            style.YELLOW + "\nPlease specify the core file full path for manual analysis: " + style.RESET)
+        payload = {"version": version, "user": username, "action": "show -bt1 --> NSPPE crash" + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+        manual_core = input(style.YELLOW + "\nPlease specify the core file full path for manual analysis: " + style.RESET)
         if len(manual_core) > 5:
-            print(style.GREEN+"\nGenerating BackTrace for: " +
-                  manual_core + " --> " + sp.run("what " + manual_core + "| awk '/NetScaler/{print substr($2,3) substr($4,1,length($4)-4)}' | sed 's/:/_/g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout + style.RESET)
-            nsppefw = "nsppe64-"+sp.run(
-                "what " + manual_core + " | awk '/Build/{print $2, $4}' | cut -c 3- | sed s/\": \"/-/g | sed s/.nc/_nc/g | rev | cut -c 2- | rev | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
-            nsppebtout = (sp.run("gdb /home/django/nsppe_symbols/"+nsppefw + " " + manual_core +
-                                 " -ex 'bt full' -ex quit | awk '/0x[0-9a-z]|symbols from|generated by|terminated with|handler called/{print}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout)
+            print(style.GREEN+"\nGenerating BackTrace for: " + manual_core + " --> " + sp.run("what " + manual_core + "| awk '/NetScaler/{print substr($2,3) substr($4,1,length($4)-4)}' | sed 's/:/_/g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout + style.RESET)
+            nsppefw = "nsppe64-"+sp.run("what " + manual_core + " | awk '/Build/{print $2, $4}' | cut -c 3- | sed s/\": \"/-/g | sed s/.nc/_nc/g | rev | cut -c 2- | rev | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+            nsppebtout = (sp.run("gdb /home/django/nsppe_symbols/"+nsppefw + " " + manual_core + " -ex 'bt full' -ex quit | awk '/0x[0-9a-z]|symbols from|generated by|terminated with|handler called/{print}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout)
             print(nsppebtout)
-            rawjira = [e[3:] for e in re.findall(
-                "in\s[a-z_0-9]{3,}", nsppebtout)]
+            rawjira = [e[3:] for e in re.findall("in\s[a-z_0-9]{3,}", nsppebtout)]
             JiraFun = (' '.join(rawjira))
-            print(style.UNDERLINE + style.GREEN + "Crashing functions:" +
-                  "\n" + style.RESET)
+            print(style.UNDERLINE + style.GREEN + "Crashing functions:" + "\n" + style.RESET)
             print(JiraFun + "\n")
-            initialJira = sp.run(
-                "curl -s -H 'Content-type: application/json' -d '{\"feature\":\"search\", \"parameters\": [{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\"},{\"name\":\"searchstring\",\"value\":\""+JiraFun+"\"}]}' -X POST http://10.14.18.46/SFaaS/api/jira | perl -wnE'say /\"NSHELP-[0-9]{3,9}/g' | sed 's/\"/ /g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+            initialJira = sp.run("curl -s -H 'Content-type: application/json' -d '{\"feature\":\"search\", \"parameters\": [{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\"},{\"name\":\"searchstring\",\"value\":\""+JiraFun+"\"}]}' -X POST http://10.14.18.46/SFaaS/api/jira | perl -wnE'say /\"NSHELP-[0-9]{3,9}/g' | sed 's/\"/ /g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
             if len(initialJira) > 5:
-                print(style.GREEN + "Matching Jira -->" +
-                      style.RESET + initialJira)
+                print(style.GREEN + "Matching Jira -->" + style.RESET + initialJira)
             else:
-                print(style.RED + "Unable to match any Jira with the above crashing funcation !!!" +
-                      style.RESET + initialJira)
+                print(style.RED + "Unable to match any Jira with the above crashing funcation !!!" + style.RESET + initialJira)
             for i in initialJira.split():
-                detailedJira = sp.run(
-                    "curl -s -H 'Content-type: application/json' -d '{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\",\"feature\":\"fetchfields\",\"parameters\":[{\"name\":\"id\",\"value\":\""+i+"\",\"isbase64\":false},{\"name\":\"fields\",\"value\":\"summary,versions,status,resolution,fixVersions,created\",\"isbase64\":false}]}' -X POST http://10.14.18.46/SFaaS/api/jira | jq '.options | .[] | .values | .[]' | sed 's/\\\\//g' | awk '{print substr($0, 2, length($0) - 2)}' | jq -r  '\"\\(.key) \\(\"-->\") \\(.fields.summary) \\(\"-->\") \\(.fields.resolution.name) \\(\"-->\") \\(.fields.created[0:10]) \\(\"\\nFound In:\") \\([.fields.versions[].name]) \\(\"--> Fixed In:\") \\([.fields.fixVersions[].name]) \\(\"\\n\")\"'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                detailedJira = sp.run("curl -s -H 'Content-type: application/json' -d '{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\",\"feature\":\"fetchfields\",\"parameters\":[{\"name\":\"id\",\"value\":\""+i+"\",\"isbase64\":false},{\"name\":\"fields\",\"value\":\"summary,versions,status,resolution,fixVersions,created\",\"isbase64\":false}]}' -X POST http://10.14.18.46/SFaaS/api/jira | jq '.options | .[] | .values | .[]' | sed 's/\\\\//g' | awk '{print substr($0, 2, length($0) - 2)}' | jq -r  '\"\\(.key) \\(\"-->\") \\(.fields.summary) \\(\"-->\") \\(.fields.resolution.name) \\(\"-->\") \\(.fields.created[0:10]) \\(\"\\nFound In:\") \\([.fields.versions[].name]) \\(\"--> Fixed In:\") \\([.fields.fixVersions[].name]) \\(\"\\n\")\"'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                 print(detailedJira)
     finally:
         pass
 elif args.author:
     logger.info(os.getcwd() + " - author")
-    print(sp.run(["lolcat"], input=showscriptauthor,
-          capture_output=True, text=True).stdout)
-    payload = {"version": version, "user": username, "action": "show --author --> " + os.getcwd() + " --> " + str(
-        int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-    resp = request.urlopen(request.Request(
-        url, data=parse.urlencode(payload).encode()))
+    print(sp.run(["lolcat"], input=showscriptauthor, capture_output=True, text=True).stdout)
+    payload = {"version": version, "user": username, "action": "show --author --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+    resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
 elif args.about:
     logger.info(os.getcwd() + " - about")
-    print(sp.run(["lolcat"], input=showscriptabout,
-          capture_output=True, text=True).stdout)
-    payload = {"version": version, "user": username, "action": "show --about --> " + os.getcwd() + " --> " + str(
-        int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-    resp = request.urlopen(request.Request(
-        url, data=parse.urlencode(payload).encode()))
+    print(sp.run(["lolcat"], input=showscriptabout, capture_output=True, text=True).stdout)
+    payload = {"version": version, "user": username, "action": "show --about --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+    resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
 elif args.G:
     try:
         adchostname = sp.run("awk '{printf $2}' shell/uname-a.out",
@@ -1609,10 +1355,8 @@ elif args.g:
                 print("Processed "+newnslogFile)
             finally:
                 os.popen("fixperms ./conFetch").read()
-                payload = {"version": version, "user": username, "action": "show -g " + ''.join(args.g + " -- ".split() + args.K) + " --> " + os.getcwd() + " --> " + str(
-                    int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                resp = request.urlopen(request.Request(
-                    url, data=parse.urlencode(payload).encode()))
+                payload = {"version": version, "user": username, "action": "show -g " + ''.join(args.g + " -- ".split() + args.K) + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+                resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
     finally:
         pass
 
@@ -1620,7 +1364,5 @@ elif args.g:
 else:
     print("Please use -h for help")
     logger.error(os.getcwd() + " - No switch")
-    payload = {"version": version, "user": username, "action": "No Switch Used " + os.getcwd() + " --> " + str(
-        int(time.time())), "runtime": 0, "result": "Error", "format": "string", "sr": os.getcwd().split("/")[3]}
-    resp = request.urlopen(request.Request(
-        url, data=parse.urlencode(payload).encode()))
+    payload = {"version": version, "user": username, "action": "No Switch Used " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Error", "format": "string", "sr": os.getcwd().split("/")[3]}
+    resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
