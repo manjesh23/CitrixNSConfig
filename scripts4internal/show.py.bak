@@ -86,54 +86,33 @@ showscriptabout = '''
 # Parser args
 parser = argparse.ArgumentParser(
     description="NetScaler Support Bundle Show Script", formatter_class=argparse.RawTextHelpFormatter)
-parser.add_argument('--author', action="store_true",
-                    help=argparse.SUPPRESS)
-parser.add_argument('-i', action="store_true",
-                    help="NetScaler Basic Information")
-parser.add_argument('-n', action="store_true",
-                    help="NetScaler Networking Information")
-parser.add_argument('-p', action="store_true",
-                    help="NetScaler Process Related Information")
-parser.add_argument(
-    '-c', metavar="", help="Display all possible counter names wihtin newnslog")
-parser.add_argument('-E', action="store_true",
-                    help="Match well known error with KB articles")
-parser.add_argument('-fw', action="store_true",
-                    help="Display Latest RTM Firmware Code")
-parser.add_argument('-gz', action="store_true",
-                    help="Unzip *.gz files under /var/log and var/nslog")
-parser.add_argument('-im', action="store_true",
-                    help="Indexing timestamp of ns.log")
-parser.add_argument('-imall', action="store_true",
-                    help="Indexing timestamp of logs including ns, auth, bash, nitro, notice, nsvpn, sh, newnslogs")
+parser.add_argument('--author', action="store_true", help=argparse.SUPPRESS)
+parser.add_argument('-i', action="store_true", help="NetScaler Basic Information")
+parser.add_argument('-n', action="store_true", help="NetScaler Networking Information")
+parser.add_argument('-p', action="store_true", help="NetScaler Process Related Information")
+parser.add_argument('-c', metavar="", help="Display all possible counter names wihtin newnslog")
+parser.add_argument('-E', action="store_true", help="Match well known error with KB articles")
+parser.add_argument('-fw', action="store_true", help="Display Latest RTM Firmware Code")
+parser.add_argument('-gz', action="store_true", help="Unzip *.gz files under /var/log and var/nslog")
+parser.add_argument('-im', action="store_true",help="Indexing timestamp of ns.log")
+parser.add_argument('-imall', action="store_true", help="Indexing timestamp of logs including ns, auth, bash, nitro, notice, nsvpn, sh, newnslogs")
+parser.add_argument('-N', action="store_true", help="Display newnslog Start and End Time in both GMT and Local Timezone")
 parser.add_argument('-error', metavar="", help="Highlights known errors")
 parser.add_argument('-show', metavar="", help="Selected Show Commands")
 parser.add_argument('-stat', metavar="", help="Selected Stat Commands")
 parser.add_argument('-vip', action="store_true", help="Get VIP Basic Details")
-parser.add_argument('-v', action="store_true",
-                    help="ns.conf Version and Last Saved")
-parser.add_argument('-case', action="store_true",
-                    help=argparse.SUPPRESS)
-parser.add_argument('-bt', action="store_true",
-                    help="Auto bt for both NSPPE and Process core files")
-parser.add_argument('-bt1', action="store_true",
-                    help="Specify NSPPE Core file absolute path to run a bt")
-parser.add_argument('-G', action="append",
-                    choices={"cpu", "mem", "ha", "nic"}, help="Generate HTML Graph for all newnslog(s)")
-parser.add_argument('-g', action="append",
-                    choices={"cpu", "mem", "ha", "nic"}, help="Generate HTML Graph for specific newnslog\n-K <newnslog> --> newnslog Filename\n-s <HH:MM> --> Graph Start Time\n-e <HH:MM> --> Graph End Time")
-parser.add_argument('-K', action="append",
-                    metavar="newnslog filename", help=argparse.SUPPRESS)
-parser.add_argument('-s', action="append",
-                    metavar="newnslog starttime", help=argparse.SUPPRESS)
-parser.add_argument('-e', action="append",
-                    metavar="newnslog endtime", help=argparse.SUPPRESS)
-parser.add_argument('-ha', action="store_true",
-                    help="HA Analysis (Potential RCA)")
-parser.add_argument('-pt', metavar="", action="append",
-                    help="Check if the given problem time present in the bundle (Aug 02 13:40:00)")
-parser.add_argument('--about', action="store_true",
-                    help="About Show Script")
+parser.add_argument('-v', action="store_true", help="ns.conf Version and Last Saved")
+parser.add_argument('-case', action="store_true", help=argparse.SUPPRESS)
+parser.add_argument('-bt', action="store_true", help="Auto bt for both NSPPE and Process core files")
+parser.add_argument('-bt1', action="store_true", help="Specify NSPPE Core file absolute path to run a bt")
+parser.add_argument('-G', action="append", choices={"cpu", "mem", "ha", "nic"}, help="Generate HTML Graph for all newnslog(s)")
+parser.add_argument('-g', action="append", choices={"cpu", "mem", "ha", "nic"}, help="Generate HTML Graph for specific newnslog\n-K <newnslog> --> newnslog Filename\n-s <HH:MM> --> Graph Start Time\n-e <HH:MM> --> Graph End Time")
+parser.add_argument('-K', action="append", metavar="newnslog filename", help=argparse.SUPPRESS)
+parser.add_argument('-s', action="append", metavar="newnslog starttime", help=argparse.SUPPRESS)
+parser.add_argument('-e', action="append", metavar="newnslog endtime", help=argparse.SUPPRESS)
+parser.add_argument('-ha', action="store_true", help="HA Analysis (Potential RCA)")
+parser.add_argument('-pt', metavar="", action="append", help="Check if the given problem time present in the bundle (\"Aug 02 13:40:00\")")
+parser.add_argument('--about', action="store_true", help="About Show Script")
 args = parser.parse_args()
 
 # Logme the user
@@ -234,7 +213,7 @@ if args.i:
         deviceuptime = sp.run("sed 's/^.*up //' shell/uptime.out | sed 's/,...user.*//'",
                               shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         systemtimezone = sp.run(
-            "awk '{printf \"[%s]: \", $5}' shell/date.out; awk '/local/&&/GMT/{print \"GMT \" $3 - substr($6,12); exit}' var/log/ns.log | awk '{if ($NF !~ \"-\") print $1 \" +\" $2; else print $1 \" \"  $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+            "awk '{printf \"[%s]: \", $5}' shell/date.out; awk '/local/&&/GMT/{print \"GMT \" $3 - substr($6,12); exit}' var/log/ns.lo* | awk '{if ($NF !~ \"-\") print $1 \" +\" $2; else print $1 \" \"  $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         cpuinfo = sp.run("awk '/hw.model/{$1=\"\"; print}' shell/sysctl-a.out",
                          shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         loadaverage = sp.run("awk '/load average/{printf \"%s %s %s\", \"1 min: \"$6, \"5 min: \"$7, \"15 min: \"$8}' shell/top-b.out",
@@ -686,20 +665,57 @@ elif args.imall:
                     print(style.YELLOW +
                           '{:-^87}\n'.format('NetScaler sh.log timestamp IndexMessages') + style.RESET + shlog.stdout)
                 else:
-                    print(
-                        style.RED + '{:-^87}\n'.format('Unable to read sh.log') + style.RESET)
+                    print(style.RED + '{:-^87}\n'.format('Unable to read sh.log') + style.RESET)
                 if newnslog.returncode == 0:
-                    print(style.YELLOW +
-                          '{:-^87}\n'.format('NetScaler newnslog timestamp IndexMessages') + style.RESET + newnslog.stdout)
+                    print(style.YELLOW + '{:-^87}\n'.format('NetScaler newnslog timestamp IndexMessages') + style.RESET + newnslog.stdout)
                 else:
-                    print(
-                        style.RED + '{:-^87}\n'.format('Unable to read newnslog') + style.RESET)
+                    print(style.RED + '{:-^87}\n'.format('Unable to read newnslog') + style.RESET)
         finally:
-            payload = {"version": version, "user": username, "action": "show -imall --> " + os.getcwd() + " --> " + str(
-                int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-            resp = request.urlopen(request.Request(
-                url, data=parse.urlencode(payload).encode()))
+            payload = {"version": version, "user": username, "action": "show -imall --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+            resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
             quit()
+
+if args.N:
+    box_time = int(sp.run("awk '/local/&&/GMT/{print $3 - substr($6,12); exit}' var/log/ns.lo*", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
+    try:
+        newnslog = sp.run("""for i in $(ls -lah var/nslog/ | awk '!/tar|gz/&&/newnslog./{print "var/nslog/" $NF}END{print "var/nslog/newnslog"}'); do nsconmsg -K $i -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=""; printf "%s\\t|", $0}END{printf "\\n"}'; echo $i; done | sed 'N;s/\\n/ /' | awk '{$1=$1=""}1' | sed 's/^ //' | sed -r '/^\\s*$/d' | awk '{printf "%s %s %02s %s %s %s %s %s %02s %s %s %s %s\\n", $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13}'""", shell=True, text=True, capture_output=True,).stdout.strip()
+        input_format = "%a %b %d %H:%M:%S %Y"
+        output_format = "%a %b %d %H:%M:%S %Y"
+        lines = newnslog.strip().split('\n')
+        final_output = []
+        header = "     GMT Start_Time      |       GMT End_Time       |     GMT " + str(box_time)+ " Start_Time    |     GMT " + str(box_time)+ " End_Time      |     Filename"
+        gmtheader = "     GMT Start_Time      |       GMT End_Time       |     Filename"
+        for line in lines:
+            columns = line.split(' | ')
+            try:
+                start_timestamp = datetime.strptime(columns[0], input_format)
+                end_timestamp = datetime.strptime(columns[1], input_format)
+                raw_start_time = columns[0]
+                raw_end_time = columns[1]
+                newnslog_name = columns[2]
+                updated_start = start_timestamp + timedelta(hours=box_time)
+                updated_end = end_timestamp + timedelta(hours=box_time)
+                updated_start_str = updated_start.strftime(output_format)
+                updated_end_str = updated_end.strftime(output_format)
+                #updated_columns = [f"{raw_start_time:<23}", f"{raw_end_time:<23}", f"{updated_start_str:<23}", f"{updated_end_str:<23}", newnslog_name, ]
+                updated_columns = [style.GREEN + raw_start_time + style.RESET, style.CYAN + raw_end_time +style.RESET, style.GREEN + updated_start_str + style.RESET, style.CYAN + updated_end_str + style.RESET , newnslog_name]
+                updated_line = ' | '.join(updated_columns)
+                final_output.append(updated_line)
+            except ValueError:
+                print("Invalid date format in line:", line)
+    except sp.CalledProcessError as e:
+        print("Error:", e.stderr)
+    finally:
+        if int(box_time) == 0:
+            print(style.YELLOW + '{:-^87}'.format('NetScaler newnslog in GMT Only') + "\n" + style.RESET)
+            print(gmtheader)
+            print(newnslog)
+        else:
+            print(style.YELLOW + '{:-^128}'.format('NetScaler newnslog in GMT and Local Timezone') + "\n" + style.RESET)
+            print(header)
+            for line in final_output:
+                print(line)
+
 elif args.error:
     try:
         logger.info(os.getcwd() + " - show -error")
@@ -1322,7 +1338,7 @@ elif args.ha:
                     url, data=parse.urlencode(payload).encode()))
                 quit()
             else:
-                box_time = int(sp.run("awk '/local/&&/GMT/{print $3 - substr($6,12); exit}' var/log/ns.log",
+                box_time = int(sp.run("awk '/local/&&/GMT/{print $3 - substr($6,12); exit}' var/log/ns.lo*",
                                       shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
                 box_timezone = sp.run("awk '{printf \"[%s]\", $5}' shell/date.out",
                                       shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
