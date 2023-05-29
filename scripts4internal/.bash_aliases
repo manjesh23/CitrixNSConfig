@@ -6,6 +6,7 @@ alias datadd="source /home/CITRITE/manjeshn/manscript/datadd.sh"
 alias show="python /home/CITRITE/manjeshn/manscript/show.py"
 alias showd="python /home/CITRITE/manjeshn/manscript/showd.py"
 alias confetch="python /home/CITRITE/manjeshn/manscript/conFetch_Wrapper.py"
+alias nks="python /home/CITRITE/manjeshn/manscript/newnslog_ks.py"
 
 # bigCap alias
 alias bigcap="python /home/CITRITE/manjeshn/manscript/bigcap.py"

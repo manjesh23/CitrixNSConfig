@@ -126,6 +126,12 @@ logger.setLevel(logging.DEBUG)
 try:
     if (os.popen("pwd").read().index("collector") >= 0):
         os.chdir(re.search('.*\/collecto.*_[0-9]{2}', os.popen("pwd").read()).group(0))
+except AttributeError as e:
+    print(style.RED + "Collector Bundle not in Correct Naming Convention" + style.RESET)
+    os.chdir(re.search('.*\/collecto.*_[0-9|_|\-|a-zA-Z|\.]{1,30}', os.popen("pwd").read()).group(0))
+except FileNotFoundError as e:
+    print(style.RED + "Collector Bundle not in Correct Naming Convention" + style.RESET)
+    os.chdir(re.search('.*\/collecto.*_[0-9|_|\-|a-z|\.]{2,30}', os.popen("pwd").read()).group(0))
 except ValueError:
     print("\nPlease navigate to correct support bundle path")
     print("Available directories with support bundle names: \n\n" + style.CYAN + "\n".join(re.findall("collect.*", "\n".join(next(os.walk('.'))[1]))) + style.RESET)
@@ -248,15 +254,26 @@ if args.i:
         resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
         quit()
 elif args.pt:
+    box_time = str(sp.run("awk '/local/&&/GMT/{print $3 - substr($6,12); exit}' var/log/ns.lo* | awk '{if ($0 !~ \"-\") print \"+\"$0; else print $0}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
     try:
         user_time = datetime.strptime(args.pt[0], "%b %d %H:%M:%S")
         final_timestamp_nslog = []
         final_timestamp_messageslog_line = []
         final_timestamp_newnslog_line = []
+        final_timestamp_newnslog_local_line = []
         nslog = sp.run("for i in $(printf '%s\n' var/log/ns.lo* | grep -v gz | grep -v tar); do awk 'NR == 2 {printf \"%s %02d %s | \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
         messageslog = sp.run("for i in $(printf '%s\n' var/log/message* | grep -v gz | grep -v tar); do awk 'NR == 2 {printf \"%s %02d %s | \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
         newnsloglog = sp.run("for i in $(printf '%s\n' var/nslog/newnslo* | grep -v gz | grep -v tar); do nsconmsg -K $i -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=\"\"; printf \"%s\\t|\", $0}END{printf \"\\n\"}'; echo $i; done | sed 'N;s/\\n/ /' | awk '{$1=$1=\"\"}1' | sed 's/^ //' | sed -r '/^\\s*$/d' | awk '{printf  \"%s %02s %s %s %s %02s %s %s %s\\n\", $2,$3,$4,$6,$8,$9,$10,$12,$13}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
-        print(newnsloglog)
+        newnslog_output = []
+        time_format = "%b %d %H:%M:%S"
+        for line in newnsloglog.splitlines():
+            parts = line.split(" | ")
+            start_time = datetime.strptime(parts[0], time_format)
+            end_time = datetime.strptime(parts[1], time_format)
+            start_time += timedelta(hours=int(box_time))
+            end_time += timedelta(hours=int(box_time))
+            updated_line = f"{parts[0]} | {parts[1]} | {parts[2]} | {start_time.strftime(time_format)} | {end_time.strftime(time_format)}"
+            newnslog_output.append(updated_line)
         # ns.log checks
         nslog_line = nslog.strip().split('\n')
         for nslog in nslog_line:
@@ -264,7 +281,7 @@ elif args.pt:
             end = datetime.strptime(nslog.split(" | ")[1], "%b %d %H:%M:%S")
             logname = nslog.split(" | ")[2]
             if start <= user_time <= end:
-                final_timestamp_nslog.append(str(nslog.split(" | ")[0]) + " <-- " + style.GREEN + str(logname) + style.RESET + " --> " + str(nslog.split(" | ")[1]))
+                final_timestamp_nslog.append(str(nslog.split(" | ")[0]) + " <-- " + style.GREEN + str(logname) + style.RESET + " --> " + str(nslog.split(" | ")[1]) + style.YELLOW + " (System Timezone)\n" + style.RESET)
         # messages check
         messageslog_line = messageslog.strip().split('\n')
         for message in messageslog_line:
@@ -272,7 +289,7 @@ elif args.pt:
             end = datetime.strptime(message.split(" | ")[1], "%b %d %H:%M:%S")
             logname = message.split(" | ")[2]
             if start <= user_time <= end:
-                final_timestamp_messageslog_line.append(str(message.split(" | ")[0]) + " <-- " + style.GREEN + str(logname) + style.RESET + " --> " + str(message.split(" | ")[1]))
+                final_timestamp_messageslog_line.append(str(message.split(" | ")[0]) + " <-- " + style.GREEN + str(logname) + style.RESET + " --> " + str(message.split(" | ")[1]) + style.YELLOW + " (System Timezone)\n" + style.RESET)
         # newnslog check
         newnslog_line = newnsloglog.strip().split('\n')
         for newnslog in newnslog_line:
@@ -280,7 +297,15 @@ elif args.pt:
             end = datetime.strptime(newnslog.split(" | ")[1].strip(), "%b %d %H:%M:%S")
             logname = newnslog.split(" | ")[2]
             if start <= user_time <= end:
-                final_timestamp_newnslog_line.append(str(newnslog.split(" | ")[0]) + " <-- " + style.GREEN + str(logname) + style.RESET + " --> " + str(newnslog.split(" | ")[1]))
+                final_timestamp_newnslog_line.append(str(newnslog.split(" | ")[0]) + " <-- " + style.GREEN + str(logname) + style.RESET + " --> " + str(newnslog.split(" | ")[1]) + style.YELLOW + " (GMT Timezone)\n" + style.RESET)
+        # newnslog check in local timezone
+        for newnslog_local in newnslog_output:
+            print(newnslog_local)
+            start = datetime.strptime(newnslog_local.split(" | ")[3].strip(), "%b %d %H:%M:%S")
+            end = datetime.strptime(newnslog_local.split(" | ")[4].strip(), "%b %d %H:%M:%S")
+            logname = newnslog_local.split(" | ")[2]
+            if start <= user_time <= end:
+                final_timestamp_newnslog_local_line.append(str(newnslog_local.split(" | ")[3]) + " <-- " + style.GREEN + str(logname) + style.RESET + " --> " + str(newnslog_local.split(" | ")[4]) + style.YELLOW + " (System Timezone)\n" + style.RESET)
     except ValueError as e:
         print(style.RED + "Date time format error occured" + style.RESET)
         payload = {"version": version, "user": username, "action": "show -pt --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Invalid", "format": "string", "sr": os.getcwd().split("/")[3]}
@@ -305,9 +330,14 @@ elif args.pt:
             print(style.RED + "Unable to find timestamp in any of messages" + style.RESET)
         if len(final_timestamp_newnslog_line) >= 1:
             print(''.join(str(x) for x in final_timestamp_newnslog_line))
+        else:
+            print(style.RED + "Unable to find timestamp in any of newnslog (GMT Timezone)" + style.RESET)
+        if len(final_timestamp_newnslog_local_line) >= 1:
+            print(''.join(str(x) for x in final_timestamp_newnslog_local_line))
             quit()
         else:
-            print(style.RED + "Unable to find timestamp in any of newnslog" + style.RESET)
+            print(style.RED + "Unable to find timestamp in any of newnslog (System Timezone)" + style.RESET)
+            quit()
 elif args.n:
     try:
         logger.info(os.getcwd() + " - show -n")
@@ -528,7 +558,7 @@ elif args.imall:
             resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
             quit()
 
-if args.N:
+elif args.N:
     box_time = str(sp.run("awk '/local/&&/GMT/{print $3 - substr($6,12); exit}' var/log/ns.lo* | awk '{if ($0 !~ \"-\") print \"+\"$0; else print $0}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
     try:
         newnslog = sp.run("""for i in $(ls -lah var/nslog/ | awk '!/tar|gz/&&/newnslog./{print "var/nslog/" $NF}END{print "var/nslog/newnslog"}'); do nsconmsg -K $i -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=""; printf "%s\\t|", $0}END{printf "\\n"}'; echo $i; done | sed 'N;s/\\n/ /' | awk '{$1=$1=""}1' | sed 's/^ //' | sed -r '/^\\s*$/d' | awk '{printf "%s %s %02s %s %s %s %s %s %02s %s %s %s %s\\n", $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13}'""", shell=True, text=True, capture_output=True,).stdout.strip()
@@ -550,7 +580,6 @@ if args.N:
                 updated_end = end_timestamp + timedelta(hours=int(box_time))
                 updated_start_str = updated_start.strftime(output_format)
                 updated_end_str = updated_end.strftime(output_format)
-                #updated_columns = [f"{raw_start_time:<23}", f"{raw_end_time:<23}", f"{updated_start_str:<23}", f"{updated_end_str:<23}", newnslog_name, ]
                 updated_columns = [style.GREEN + raw_start_time + style.RESET, style.CYAN + raw_end_time +style.RESET, style.GREEN + updated_start_str + style.RESET, style.CYAN + updated_end_str + style.RESET , newnslog_name]
                 updated_line = ' | '.join(updated_columns)
                 final_output.append(updated_line)

@@ -52,7 +52,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "4.11"
+version = "4.14"
 
 # About script
 showscriptabout = '''
@@ -187,7 +187,7 @@ if args.i:
         nsboottime = sp.run("egrep \"nsstart\" var/nslog/ns.log | tail -1 | awk '{$1=$NF=$(NF-1)=\"\"; print}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         collectorpacktime = sp.run("cat shell/date.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         deviceuptime = sp.run("sed 's/^.*up //' shell/uptime.out | sed 's/,...user.*//'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        systemtimezone = sp.run("awk '{printf \"[%s]: \", $5}' shell/date.out; awk '/local/&&/GMT/{print \"GMT \" $3 - substr($6,12); exit}' var/log/ns.lo* | awk '{if ($NF !~ \"-\") print $1 \" +\" $2; else print $1 \" \"  $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        systemtimezone = sp.run("""awk '/Timezone:/&&/GMT/{print $2}' shell/showcmds.txt | awk '{print substr($1,1,9)}' | awk -F'GMT' '{printf "GMT " $2" "}'; awk '/Timezone:/&&/GMT/{print $2}' shell/showcmds.txt | awk '{print substr($1,11)}' | awk -F- '{print "["$1"]" " - "$2}' | awk 'BEGIN { found = 0 } { output = $0; found = 1 } END { if (found) print output; else print "GMT 00:00 [UTC] - Coordinated Universal Time" }'""", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         cpuinfo = sp.run("awk '/hw.model/{$1=\"\"; print}' shell/sysctl-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         loadaverage = sp.run("awk '/load average/{printf \"%s %s %s\", \"1 min: \"$6, \"5 min: \"$7, \"15 min: \"$8}' shell/top-b.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         mgmtcpu = sp.run("awk '!/100% idle/{printf \"%s User: %s | Nice: %s | System: %s | Interrupt: %s | Idle: %s\", $1, $2, $4, $6, $8, $(NF-1)}' shell/mgmtcpupercent.txt | awk '{if($NF>75) print $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, \"\033[32m\"$15\"\033[0m\"; else print $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, \"\033[31m\"$15\"\033[0m\"}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
@@ -254,7 +254,8 @@ if args.i:
         resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
         quit()
 elif args.pt:
-    box_time = str(sp.run("awk '/local/&&/GMT/{print $3 - substr($6,12); exit}' var/log/ns.lo* | awk '{if ($0 !~ \"-\") print \"+\"$0; else print $0}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
+    box_time = str(sp.run("awk -F'GMT' '/Timezone:/&&/GMT/{print substr($2,1,6)}' shell/showcmds.txt | awk 'BEGIN { found = 0 } { output = $0; found = 1 } END { if (found) print output; else print \"00:00\" }'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
+    box_time_mins = (int(re.match(r"([-+]?)(\d+):(\d+)", box_time).group(2)) * 60) + int(re.match(r"([-+]?)(\d+):(\d+)", box_time).group(3)); box_time_mins *= -1 if re.match(r"([-+]?)(\d+):(\d+)", box_time).group(1) == "-" else 1
     try:
         user_time = datetime.strptime(args.pt[0], "%b %d %H:%M:%S")
         final_timestamp_nslog = []
@@ -270,8 +271,8 @@ elif args.pt:
             parts = line.split(" | ")
             start_time = datetime.strptime(parts[0], time_format)
             end_time = datetime.strptime(parts[1], time_format)
-            start_time += timedelta(hours=int(box_time))
-            end_time += timedelta(hours=int(box_time))
+            start_time += timedelta(minutes=int(box_time_mins))
+            end_time += timedelta(minutes=int(box_time_mins))
             updated_line = f"{parts[0]} | {parts[1]} | {parts[2]} | {start_time.strftime(time_format)} | {end_time.strftime(time_format)}"
             newnslog_output.append(updated_line)
         # ns.log checks
@@ -300,7 +301,6 @@ elif args.pt:
                 final_timestamp_newnslog_line.append(str(newnslog.split(" | ")[0]) + " <-- " + style.GREEN + str(logname) + style.RESET + " --> " + str(newnslog.split(" | ")[1]) + style.YELLOW + " (GMT Timezone)\n" + style.RESET)
         # newnslog check in local timezone
         for newnslog_local in newnslog_output:
-            print(newnslog_local)
             start = datetime.strptime(newnslog_local.split(" | ")[3].strip(), "%b %d %H:%M:%S")
             end = datetime.strptime(newnslog_local.split(" | ")[4].strip(), "%b %d %H:%M:%S")
             logname = newnslog_local.split(" | ")[2]
@@ -559,14 +559,15 @@ elif args.imall:
             quit()
 
 elif args.N:
-    box_time = str(sp.run("awk '/local/&&/GMT/{print $3 - substr($6,12); exit}' var/log/ns.lo* | awk '{if ($0 !~ \"-\") print \"+\"$0; else print $0}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
+    box_time = str(sp.run("awk -F'GMT' '/Timezone:/&&/GMT/{print substr($2,1,6)}' shell/showcmds.txt | awk 'BEGIN { found = 0 } { output = $0; found = 1 } END { if (found) print output; else print \"00:00\" }'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
+    box_time_mins = (int(re.match(r"([-+]?)(\d+):(\d+)", box_time).group(2)) * 60) + int(re.match(r"([-+]?)(\d+):(\d+)", box_time).group(3)); box_time_mins *= -1 if re.match(r"([-+]?)(\d+):(\d+)", box_time).group(1) == "-" else 1
     try:
         newnslog = sp.run("""for i in $(ls -lah var/nslog/ | awk '!/tar|gz/&&/newnslog./{print "var/nslog/" $NF}END{print "var/nslog/newnslog"}'); do nsconmsg -K $i -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=""; printf "%s\\t|", $0}END{printf "\\n"}'; echo $i; done | sed 'N;s/\\n/ /' | awk '{$1=$1=""}1' | sed 's/^ //' | sed -r '/^\\s*$/d' | awk '{printf "%s %s %02s %s %s %s %s %s %02s %s %s %s %s\\n", $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13}'""", shell=True, text=True, capture_output=True,).stdout.strip()
         input_format = "%a %b %d %H:%M:%S %Y"
         output_format = "%a %b %d %H:%M:%S %Y"
         lines = newnslog.strip().split('\n')
         final_output = []
-        header = "     GMT Start_Time      |       GMT End_Time       |     GMT " + str(box_time)+ " Start_Time    |     GMT " + str(box_time)+ " End_Time      |     Filename"
+        header = "     GMT Start_Time      |       GMT End_Time       |   GMT " + str(box_time)+ " Start_Time  |   GMT " + str(box_time)+ " End_Time    |     Filename"
         gmtheader = "     GMT Start_Time      |       GMT End_Time       |     Filename"
         for line in lines:
             columns = line.split(' | ')
@@ -576,8 +577,8 @@ elif args.N:
                 raw_start_time = columns[0]
                 raw_end_time = columns[1]
                 newnslog_name = columns[2]
-                updated_start = start_timestamp + timedelta(hours=int(box_time))
-                updated_end = end_timestamp + timedelta(hours=int(box_time))
+                updated_start = start_timestamp + timedelta(minutes=int(box_time_mins))
+                updated_end = end_timestamp + timedelta(minutes=int(box_time_mins))
                 updated_start_str = updated_start.strftime(output_format)
                 updated_end_str = updated_end.strftime(output_format)
                 updated_columns = [style.GREEN + raw_start_time + style.RESET, style.CYAN + raw_end_time +style.RESET, style.GREEN + updated_start_str + style.RESET, style.CYAN + updated_end_str + style.RESET , newnslog_name]
@@ -588,7 +589,7 @@ elif args.N:
     except sp.CalledProcessError as e:
         print("Error:", e.stderr)
     finally:
-        if int(box_time) == 0:
+        if int(box_time_mins) == 0:
             print(style.YELLOW + '{:-^87}'.format('NetScaler newnslog in GMT Only') + "\n" + style.RESET)
             print(gmtheader)
             print(newnslog)
@@ -1064,10 +1065,8 @@ elif args.ha:
     if os.path.isfile("conFetch/show_output/show_ha.txt"):
         with open("conFetch/show_output/show_ha.txt", "r") as show_ha:
             print(show_ha.read())
-            payload = {"version": version, "user": username, "action": "show -ha pre-data --> " + os.getcwd() + " --> " + str(int(time.time())),
-                       "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-            resp = request.urlopen(request.Request(
-                url, data=parse.urlencode(payload).encode()))
+            payload = {"version": version, "user": username, "action": "show -ha pre-data --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+            resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
             quit()
     else:
         try:
@@ -1075,82 +1074,54 @@ elif args.ha:
             rca_msg_printed = False
             ha_transition_timestamp = []
             timestamp_pattern = r'\b([A-Za-z]{3} \d{1,2} \d{2}:\d{2}:\d{2})\b'
-            print(style.YELLOW +
-                  '{:-^87}'.format('NetScaler HA Analysis') + "\n" + style.RESET)
-            ha_state = sp.run(
-                "sed -n -e \"/show ns version/I,/Done/p\" shell/showcmds.txt | grep Node | awk '{print $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
-            print("Currently this Node is: " +
-                  style.GREEN + ha_state + style.RESET + "\n")
+            print(style.YELLOW + '{:-^87}'.format('NetScaler HA Analysis') + "\n" + style.RESET)
+            ha_state = sp.run("sed -n -e \"/show ns version/I,/Done/p\" shell/showcmds.txt | grep Node | awk '{print $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+            print("Currently this Node is: " + style.GREEN + ha_state + style.RESET + "\n")
             if "Standalone" in ha_state:
-                print(
-                    style.RED + "Since this is a Standalone node, unable to proceed further !!!" + style.RESET + "\n")
-                payload = {"version": version, "user": username, "action": "show -ha Standalone --> " + os.getcwd() + " --> " + str(int(time.time())),
-                           "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                resp = request.urlopen(request.Request(
-                    url, data=parse.urlencode(payload).encode()))
+                print(style.RED + "Since this is a Standalone node, unable to proceed further !!!" + style.RESET + "\n")
+                payload = {"version": version, "user": username, "action": "show -ha Standalone --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+                resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
                 quit()
             else:
-                box_time = int(sp.run("awk '/local/&&/GMT/{print $3 - substr($6,12); exit}' var/log/ns.lo*",
-                                      shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
-                box_timezone = sp.run("awk '{printf \"[%s]\", $5}' shell/date.out",
-                                      shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
-                ha_initial_state = sp.run(
-                    "i=$(ls -alh var/nslog/ | awk '/newnslog./{print \"var/nslog/\"$NF}' | sort | head -1); nsconmsg -d stats -g ha_cur_master_state -K $i |  awk -v i=\"$i\" '/ha_cur_master_state/{if ($3 == 0) print i \" --> Initial State --> \\033[;32mSecondary\\033[0m\"; else if ($3 == 1) print i \" --> Initial State  --> \\033[;32mClaiming To Primary\\033[0m\"; else if ($3 == 2) print i \" --> Initial State  --> \\033[;32mPrimary\\033[0m\"; else if ($3 == 3) print i \" --> Initial State  --> \\033[;32mStay Secondary\\033[0m\"; else if ($3 == 4) print i \" --> Initial State  --> \\033[;32mForce Change to Primary\\033[0m\"; else print i \" --> Initial State  --> \\033[;32mInvalid\\033[0m\"}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
-                ha_transition = sp.run(
-                    " for i in $(printf \"%s\\n\" \"var/nslog/newnslog.*\" | grep -v gz | grep -v tar && printf \"var/nslog/newnslog\\n\"); do nsconmsg -d current -s disptime=1 -g ha_cur_master_state -K $i | awk -v i=\"$i\" '/ha_cur_master_state/{if ($3 == 0) print i \" --> Secondary --> \\033[;31mFailed Over Time\\033[0m --> \", $7, $8, $9, $10, $11; else if ($3 == 1) print i \" --> Claiming To Primary --> \\033[;31mFailed Over Time\\033[0m --> \", $7, $8, $9, $10, $11; else if ($3 == 2) print i \" --> Primary --> \\033[;31mFailed Over Time\\033[0m --> \", $7, $8, $9, $10, $11; else if ($3 == 3) print i \" --> Stay Secondary --> \\033[;31mFailed Over Time\\033[0m --> \", $7, $8, $9, $10, $11; else if ($3 == 4) print i \" --> Force Change to Primary --> \\033[;31mFailed Over Time\\033[0m --> \", $7, $8, $9, $10, $11; else print i \" --> Invalid --> \\033[;31mFailed Over Time\\033[0m --> \", $7, $8, $9, $10, $11}'; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                box_time = int(sp.run("awk '/local/&&/GMT/{print $3 - substr($6,12); exit}' var/log/ns.lo*", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
+                box_timezone = sp.run("awk '{printf \"[%s]\", $5}' shell/date.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                ha_initial_state = sp.run("i=$(ls -alh var/nslog/ | awk '/newnslog./{print \"var/nslog/\"$NF}' | sort | head -1); nsconmsg -d stats -g ha_cur_master_state -K $i |  awk -v i=\"$i\" '/ha_cur_master_state/{if ($3 == 0) print i \" --> Initial State --> \\033[;32mSecondary\\033[0m\"; else if ($3 == 1) print i \" --> Initial State  --> \\033[;32mClaiming To Primary\\033[0m\"; else if ($3 == 2) print i \" --> Initial State  --> \\033[;32mPrimary\\033[0m\"; else if ($3 == 3) print i \" --> Initial State  --> \\033[;32mStay Secondary\\033[0m\"; else if ($3 == 4) print i \" --> Initial State  --> \\033[;32mForce Change to Primary\\033[0m\"; else print i \" --> Initial State  --> \\033[;32mInvalid\\033[0m\"}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                ha_transition = sp.run(" for i in $(printf \"%s\\n\" \"var/nslog/newnslog.*\" | grep -v gz | grep -v tar && printf \"var/nslog/newnslog\\n\"); do nsconmsg -d current -s disptime=1 -g ha_cur_master_state -K $i | awk -v i=\"$i\" '/ha_cur_master_state/{if ($3 == 0) print i \" --> Secondary --> \\033[;31mFailed Over Time\\033[0m --> \", $7, $8, $9, $10, $11; else if ($3 == 1) print i \" --> Claiming To Primary --> \\033[;31mFailed Over Time\\033[0m --> \", $7, $8, $9, $10, $11; else if ($3 == 2) print i \" --> Primary --> \\033[;31mFailed Over Time\\033[0m --> \", $7, $8, $9, $10, $11; else if ($3 == 3) print i \" --> Stay Secondary --> \\033[;31mFailed Over Time\\033[0m --> \", $7, $8, $9, $10, $11; else if ($3 == 4) print i \" --> Force Change to Primary --> \\033[;31mFailed Over Time\\033[0m --> \", $7, $8, $9, $10, $11; else print i \" --> Invalid --> \\033[;31mFailed Over Time\\033[0m --> \", $7, $8, $9, $10, $11}'; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 if box_time == 0:
                     print(ha_initial_state + "\n")
                     if len(ha_transition) < 23:
-                        print(style.GREEN + "NetScaler did not failover" +
-                              style.RESET + "\n")
+                        print(style.GREEN + "NetScaler did not failover" + style.RESET + "\n")
                     else:
-                        print(
-                            style.YELLOW + "NetScaler Time is already in GMT Time" + style.RESET + "\n")
+                        print(style.YELLOW + "NetScaler Time is already in GMT Time" + style.RESET + "\n")
                         print(ha_transition + "\n")
-                        ha_transition_timestamp = re.findall(
-                            timestamp_pattern, ha_transition)
-                        payload = {"version": version, "user": username, "action": "show -ha Analysis --> " + os.getcwd() + " --> " + str(int(time.time())),
-                                   "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                        resp = request.urlopen(request.Request(
-                            url, data=parse.urlencode(payload).encode()))
+                        ha_transition_timestamp = re.findall(timestamp_pattern, ha_transition)
+                        payload = {"version": version, "user": username, "action": "show -ha Analysis --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+                        resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
                 else:
                     ha_transition_string = "'''"+ha_transition+"'''"
-                    ha_transition_timeconvert = ha_transition_string.split(
-                        '\n')
+                    ha_transition_timeconvert = ha_transition_string.split('\n')
                     print(ha_initial_state + "\n")
                     for line in ha_transition_timeconvert:
-                        match = re.search(
-                            r'(\w{3} \w{3} \d{1,2} \d{2}:\d{2}:\d{2} \d{4})', line)
+                        match = re.search(r'(\w{3} \w{3} \d{1,2} \d{2}:\d{2}:\d{2} \d{4})', line)
                         if match:
-                            timestamp = datetime.strptime(
-                                match.group(), '%a %b %d %H:%M:%S %Y')
-                            new_timestamp = timestamp + \
-                                timedelta(hours=box_time)
-                            line = line + " [GMT] --> " + \
-                                new_timestamp.strftime(
-                                    "%a %b %d %H:%M:%S %Y") + " " + box_timezone
+                            timestamp = datetime.strptime(match.group(), '%a %b %d %H:%M:%S %Y')
+                            new_timestamp = timestamp + timedelta(hours=box_time)
+                            line = line + " [GMT] --> " + new_timestamp.strftime("%a %b %d %H:%M:%S %Y") + " " + box_timezone
                         if len(line) < 23:
-                            print(style.GREEN + "NetScaler did not failover" +
-                                  style.RESET + "\n")
+                            print(style.GREEN + "NetScaler did not failover" + style.RESET + "\n")
                         else:
                             if not tz_convert_msg_printed:
-                                print(style.GREEN + "Converted from GMT time to NetScaler Time " +
-                                      box_timezone + " Offset: " + str(box_time) + style.RESET + "\n")
+                                print(style.GREEN + "Converted from GMT time to NetScaler Time " + box_timezone + " Offset: " + str(box_time) + style.RESET + "\n")
                                 tz_convert_msg_printed = True
                             else:
                                 print(line.replace("'''", ""))
-                                ha_transition_timestamp = re.findall(
-                                    timestamp_pattern, line)
-                    payload = {"version": version, "user": username, "action": "show -ha Analysis --> " + os.getcwd() + " --> " + str(int(time.time())),
-                               "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                    resp = request.urlopen(request.Request(
-                        url, data=parse.urlencode(payload).encode()))
+                                ha_transition_timestamp = re.findall(timestamp_pattern, line)
+                    payload = {"version": version, "user": username, "action": "show -ha Analysis --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+                    resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
         finally:
             try:
-                print(style.YELLOW +
-                      '{:-^87}'.format('NetScaler HA Root Cause') + "\n" + style.RESET)
-                manual_failover = sp.run(
-                    "for file in var/log/*; do awk '/HA/&&/CMD_EXECUTED/&&/failover/{print}' \"$file\"; done | sort | uniq", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                print(style.YELLOW +'{:-^87}'.format('NetScaler HA Root Cause') + "\n" + style.RESET)
+                manual_failover = sp.run("for file in var/log/*; do awk '/CMD_EXECUTED/&&/force HA failover -force/{print}' \"$file\"; done | sort | uniq", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                 for line in manual_failover.split('\n'):
                     if not line.strip():
                         continue
@@ -1158,20 +1129,16 @@ elif args.ha:
                     timestamp_str = ' '.join(timestamp)
                     for ts in ha_transition_timestamp:
                         ts_dt = datetime.strptime(ts, '%b %d %H:%M:%S')
-                        line_ts_dt = datetime.strptime(
-                            timestamp_str, '%b %d %H:%M:%S')
+                        line_ts_dt = datetime.strptime(timestamp_str, '%b %d %H:%M:%S')
                         diff = line_ts_dt - ts_dt
                         if abs(diff.total_seconds()) < 300:
                             if not rca_msg_printed:
-                                print(
-                                    style.YELLOW + "Possible Manual Failover at the time of " + ts + style.RESET)
+                                print(style.YELLOW + "\nPossible Manual Failover at the time of " + ts + style.RESET)
                                 rca_msg_printed = True
                             print(line)
                             break
-                forced = sp.run(
-                    "for file in var/log/*; do awk '/STATECHANGE/&&/forcibly becoming Primary/||/State Primary/{print}' \"$file\"; done | sort | uniq", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                forced = sp.run("for file in var/log/*; do awk '/STATECHANGE/&&/forcibly becoming Primary/||/State Primary/{print}' \"$file\"; done | sort | uniq", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                 rca_msg_printed = False
-                print("\n")
                 for line in forced.split('\n'):
                     if not line.strip():
                         continue
@@ -1184,8 +1151,43 @@ elif args.ha:
                         diff = line_ts_dt - ts_dt
                         if abs(diff.total_seconds()) < 300:
                             if not rca_msg_printed:
-                                print(
-                                    style.YELLOW + "Possible Force Failover at the time of " + ts + style.RESET)
+                                print(style.YELLOW + "\nPossible Force Failover at the time of " + ts + style.RESET)
+                                rca_msg_printed = True
+                            print(line)
+                            break
+                nsppe_crash = sp.run("for file in var/log/*; do awk '(/got signal/&&/nsppe/)||(/NSPPE-/&&/died due to/)||(/NSPPE-/&&/core dumped/){print}' \"$file\"; done | sort | uniq", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                rca_msg_printed = False
+                for line in nsppe_crash.split('\n'):
+                    if not line.strip():
+                        continue
+                    timestamp = line.split()[0:3]
+                    timestamp_str = ' '.join(timestamp)
+                    for ts in ha_transition_timestamp:
+                        ts_dt = datetime.strptime(ts, '%b %d %H:%M:%S')
+                        line_ts_dt = datetime.strptime(
+                            timestamp_str, '%b %d %H:%M:%S')
+                        diff = line_ts_dt - ts_dt
+                        if abs(diff.total_seconds()) < 300:
+                            if not rca_msg_printed:
+                                print(style.YELLOW + "Possible Force Failover at the time of " + ts + style.RESET)
+                                rca_msg_printed = True
+                            print(line)
+                            break
+                ha_heartbeat = sp.run("for file in var/log/*; do awk '/haNoHeartbeats|HA Version Mismatch|haVersionMismatch|InitDueToRequestFrom HA peer node|haNicsMonitorFailed|haBadSecState/{print}' \"$file\"; done | sort | uniq", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                rca_msg_printed = False
+                for line in ha_heartbeat.split('\n'):
+                    if not line.strip():
+                        continue
+                    timestamp = line.split()[0:3]
+                    timestamp_str = ' '.join(timestamp)
+                    for ts in ha_transition_timestamp:
+                        ts_dt = datetime.strptime(ts, '%b %d %H:%M:%S')
+                        line_ts_dt = datetime.strptime(
+                            timestamp_str, '%b %d %H:%M:%S')
+                        diff = line_ts_dt - ts_dt
+                        if abs(diff.total_seconds()) < 300:
+                            if not rca_msg_printed:
+                                print(style.YELLOW + "\nPossible Force Failover at the time of " + ts + style.RESET)
                                 rca_msg_printed = True
                             print(line)
                             break
