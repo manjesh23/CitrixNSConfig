@@ -4,8 +4,8 @@ import gzip
 from concurrent.futures import ThreadPoolExecutor
 import re
 import time
-from datetime import datetime, timedelta
 from urllib import request, parse
+from datetime import datetime, timedelta
 
 # Hard coded components
 version = "0.1 Alpha"
@@ -25,6 +25,8 @@ except FileNotFoundError as e:
 except ValueError:
     print("\nPlease navigate to correct support bundle path")
     print("Available directories with support bundle names: \n\n".join(re.findall("collect.*", "\n".join(next(os.walk('.'))[1]))))
+    payload = {"version": version, "user": username, "action": "newnslog_wrapper --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Partial", "format": "string", "sr": os.getcwd().split("/")[3]}
+    resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
     quit()
 
 # Retrieve all_newnslog
@@ -40,25 +42,14 @@ box_time_mins = (int(re.match(r"([-+]?)(\d+):(\d+)", box_time).group(2)) * 60) +
 def gmt_to_boxtime(input_string):
     pattern = r'(\w{3} \w{3} \d{2} \d{2}:\d{2}:\d{2} \d{4})'
     matches = re.findall(pattern, input_string)
+
     for match in matches:
         timestamp = datetime.strptime(match, '%a %b %d %H:%M:%S %Y')
         new_timestamp = timestamp + timedelta(minutes=box_time_mins)
         new_timestamp_str = new_timestamp.strftime('%a %b %d %H:%M:%S %Y')
         input_string = input_string.replace(match, new_timestamp_str)
-    return input_string
 
-# Function to remove 1st and 2nd column
-def remove_columns(input_text):
-    lines = input_text.split('\n')
-    output_lines = []
-    for line in lines:
-        columns = line.split()
-        # Remove the first two columns
-        remaining_columns = columns[2:]
-        output_line = ' '.join(remaining_columns)
-        output_lines.append(output_line)
-    output_text = '\n'.join(output_lines)
-    return output_text
+    return input_string
 
 # Check if the conFetch directory exists
 directory_name = "conFetch/newnslog_raw"
@@ -68,37 +59,53 @@ if not os.path.exists(directory_name):
 else:
     print("conFetch directory exists.")
 
-# Process newnslog and write sorted output to file
+# Process newnslog with d_flag as current and write sorted output to file
 def newnslog_current(newnslog):
-    newnslog_current_cmd = "nsconmsg -K " + newnslog + " -d current -s disptime=1 | awk '/./&&!/Displaying|NetScaler|reltime|Index/ {if (NR!=1) print $0}'"
-    output = sp.run(newnslog_current_cmd, shell=True, capture_output=True, text=True).stdout
-    output = remove_columns(output)
-    output = gmt_to_boxtime(output)
-    # Split lines and sort the output
-    lines = output.split('\n')
-    sorted_lines = sorted(lines)
-    # Join the sorted lines back into a single string
-    sorted_output = '\n'.join(sorted_lines)
+    newnslog_current_cmd = "nsconmsg -K " + newnslog + " -d current -s disptime=1 | awk '/./&&!/Displaying|NetScaler|reltime|Index/{if (NR!=1) print $0}'"
+    current_output = sp.run(newnslog_current_cmd, shell=True, capture_output=True, text=True).stdout
+    current_output_boxtime = gmt_to_boxtime(current_output)
     file_path = os.path.join(directory_name, "d.current_file.txt.gz")
     with gzip.open(file_path, "at") as file:
-        file.write(sorted_output)
+        file.write(current_output_boxtime)
+
+# Process newnslog with d_flag as event and write sorted output to file
+def newnslog_event(newnslog):
+    newnslog_event_cmd = "nsconmsg -K " + newnslog + " -d event -s disptime=1 | awk '/./&&!/Displaying|NetScaler|rtime|Done./{if (NR!=1) print $0}'"
+    event_output = sp.run(newnslog_event_cmd, shell=True, capture_output=True, text=True).stdout
+    event_output_boxtime = gmt_to_boxtime(event_output)
+    file_path = os.path.join(directory_name, "d.event_file.txt.gz")
+    with gzip.open(file_path, "at") as file:
+        file.write(event_output_boxtime)
+
+# Process newnslog with d_flag as setime (overall) and write sorted output to file
+def newnslog_setime():
+    newnslog_setime_cmd = '''echo $(nsconmsg -K $(find ./ -type d -name "newnslog.*" | sort |  sed 's/ .\//\n.\//g' | awk -F/ '{print "var/nslog/"$NF}' | sed -n '1p') -d setime | awk '/start/&&!/Displaying/{$1=$2=""; printf }'; printf " --> "; nsconmsg -K var/nslog/newnslog -d setime | awk '/end/&&!/Displaying/{$1=$2=""; print}')'''
+    print(newnslog_setime_cmd)
+    setime_output = sp.run(newnslog_setime_cmd, shell=True, capture_output=True, text=True).stdout
+    setime_output_boxtime = gmt_to_boxtime(setime_output)
+    print(f"This is setime {setime_output}")
+    print(f"This is setime in localtime {setime_output_boxtime}")
+    file_path = os.path.join(directory_name, "d.setime_file.txt.gz")
+    with gzip.open(file_path, "at") as file:
+        file.write(setime_output_boxtime)
 
 # Process all newnslog files
 def process_all_d_flags():
     with ThreadPoolExecutor() as executor:
         futures = []
         for newnslog in all_newnslog:
-            future = executor.submit(newnslog_current, newnslog)
-            futures.append(future)
-        # Wait for all tasks to complete
+            futures.append(executor.submit(newnslog_current, newnslog))
+            futures.append(executor.submit(newnslog_event, newnslog))
+            futures.append(executor.submit(newnslog_setime, newnslog))
+        
+        # Wait for all futures to complete
         for future in futures:
             future.result()
-        print("newnslog d_flags are processed and output written to d.current_file.txt.gz")
 
 # Execute the main function
 try:
     print("newnslog d_flags are getting processed")
     process_all_d_flags()
+    print("newnslog d_flags are processed and output written under conFetch/newnslog_raw")
 finally:
-    payload = {"version": version, "user": username, "action": "newnslog_wrapper --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Partial", "format": "string", "sr": os.getcwd().split("/")[3]}
-    resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+    pass

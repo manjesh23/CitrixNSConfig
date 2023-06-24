@@ -52,7 +52,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "4.14"
+version = "4.15"
 
 # About script
 showscriptabout = '''
@@ -112,6 +112,7 @@ parser.add_argument('-s', action="append", metavar="newnslog starttime", help=ar
 parser.add_argument('-e', action="append", metavar="newnslog endtime", help=argparse.SUPPRESS)
 parser.add_argument('-ha', action="store_true", help="HA Analysis (Potential RCA)")
 parser.add_argument('-pt', metavar="", action="append", help="Check if the given problem time present in the bundle (\"Aug 02 13:40:00\")")
+parser.add_argument('--case', action="store_true", help="Salesforce Case Details")
 parser.add_argument('--about', action="store_true", help="About Show Script")
 args = parser.parse_args()
 
@@ -131,7 +132,7 @@ except AttributeError as e:
     os.chdir(re.search('.*\/collecto.*_[0-9|_|\-|a-zA-Z|\.]{1,30}', os.popen("pwd").read()).group(0))
 except FileNotFoundError as e:
     print(style.RED + "Collector Bundle not in Correct Naming Convention" + style.RESET)
-    os.chdir(re.search('.*\/collecto.*_[0-9|_|\-|a-z|\.]{2,30}', os.popen("pwd").read()).group(0))
+    os.chdir(re.search('.*\/collecto.*_[0-9|_|\-|a-z|\.]{1,30}', os.popen("pwd").read()).group(0))
 except ValueError:
     print("\nPlease navigate to correct support bundle path")
     print("Available directories with support bundle names: \n\n" + style.CYAN + "\n".join(re.findall("collect.*", "\n".join(next(os.walk('.'))[1]))) + style.RESET)
@@ -323,20 +324,20 @@ elif args.pt:
         if len(final_timestamp_nslog) >= 1:
             print(''.join(str(x) for x in final_timestamp_nslog))
         else:
-            print(style.RED + "Unable to find timestamp in any of ns.log" + style.RESET)
+            print(style.RED + "Unable to find timestamp in any of ns.log\n" + style.RESET)
         if len(final_timestamp_messageslog_line) >= 1:
             print(''.join(str(x) for x in final_timestamp_messageslog_line))
         else:
-            print(style.RED + "Unable to find timestamp in any of messages" + style.RESET)
+            print(style.RED + "Unable to find timestamp in any of messages\n" + style.RESET)
         if len(final_timestamp_newnslog_line) >= 1:
             print(''.join(str(x) for x in final_timestamp_newnslog_line))
         else:
-            print(style.RED + "Unable to find timestamp in any of newnslog (GMT Timezone)" + style.RESET)
+            print(style.RED + "Unable to find timestamp in any of newnslog (GMT Timezone)\n" + style.RESET)
         if len(final_timestamp_newnslog_local_line) >= 1:
             print(''.join(str(x) for x in final_timestamp_newnslog_local_line))
             quit()
         else:
-            print(style.RED + "Unable to find timestamp in any of newnslog (System Timezone)" + style.RESET)
+            print(style.RED + "Unable to find timestamp in any of newnslog (System Timezone)\n" + style.RESET)
             quit()
 elif args.n:
     try:
@@ -387,8 +388,8 @@ elif args.p:
 elif args.c:
     try:
         newnslog_counter = ''
-        if os.path.isfile("conFetch/nsconmsg/newnslog_counters.txt"):
-            with open("conFetch/nsconmsg/newnslog_counters.txt", "r") as nsconmsg_counter:
+        if os.path.isfile("conFetch/nsconmsg/nsconmsg_counters.txt"):
+            with open("conFetch/nsconmsg/nsconmsg_counters.txt", "r") as nsconmsg_counter:
                 for i in nsconmsg_counter.readlines():
                     if str(args.c) in i:
                         newnslog_counter += i
@@ -515,6 +516,7 @@ elif args.imall:
                 nslog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/ns.lo* | grep -v gz | grep -v tar); do awk 'NR == 2 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                 authlog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/auth.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                 bashlog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/bash.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                messages = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/message* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                 nitrolog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/nitro.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                 noticelog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/notice.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                 nsvpnlog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/nsvpn.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
@@ -533,6 +535,10 @@ elif args.imall:
                     print(style.YELLOW + '{:-^87}\n'.format('NetScaler bash.log timestamp IndexMessages') + style.RESET + bashlog.stdout)
                 else:
                     print(style.RED + '{:-^87}\n'.format('Unable to read bash.log') + style.RESET)
+                if messages.returncode == 0:
+                    print(style.YELLOW + '{:-^87}\n'.format('NetScaler messages timestamp IndexMessages') + style.RESET + messages.stdout)
+                else:
+                    print(style.RED + '{:-^87}\n'.format('Unable to read messages') + style.RESET)
                 if nitrolog.returncode == 0:
                     print(style.YELLOW + '{:-^87}\n'.format('NetScaler nitro.log timestamp IndexMessages') + style.RESET + nitrolog.stdout)
                 else:
@@ -692,6 +698,7 @@ elif args.vip:
         payload = {"version": version, "user": username, "action": "show -vip --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
         resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
         quit()
+
 elif args.v:
     try:
         # ns.conf name list and last saved timestamp
@@ -704,6 +711,7 @@ elif args.v:
     finally:
         payload = {"version": version, "user": username, "action": "show -v --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
         resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+
 elif args.case:
     # Get SFDC API Keys
     try:
@@ -723,22 +731,117 @@ elif args.case:
         casenum = os.popen("pwd").read().split("/")[3]
     except IndexError:
         print(style.RED + "Unable to get case number from your current working directory" + style.RESET)
-
     # Get CaseAge and Entitlement Details
     try:
         headers = {'Content-Type': 'application/json'}
-        data = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "EntitlementId,Age__c", "isbase64": "false"}, {"name": "tablename", "value": "Case", "isbase64": "false"}, {"name": "selectcondition", "value": "CaseNumber = '"+casenum+"'", "isbase64": "false"}]}
+        data = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "EntitlementId,Age__c,Account_Name__c,Account_Org_ID__c,Case_Created_Date_Qual__c,Case_Owner__c,Case_Review_Flag__c,Case_Status__c,Case_Team__c,CaseReopened__c,Contact_Email__c,ContactCountry__c,ContactMobile,ContactPhone,Dev_Engineer__c,End_of_Support__c,Eng_Status__c,EngCase_SubmittedDate__c,Escalated_By__c,EscalatedDate__c,First_Response_Severity__c,First_Response_Time_Taken__c,Fixed_Known_Issue_ID__c,Frontline_to_Escalation_Severity__c,Frontline_to_Escalation_Violated__c,Highest_Severity__c,Initial_Severity__c,IsEscalated,IsEscalatedtoEng__c,IsPartner__c,KT_Applied__c,Last_Customer_Contact_Timestamp__c,Manager_Name__c,Number_of_Audits__c,Offering_Level__c,Product_Line_Name__c,Record_GEO__c,ServiceProduct_Name__c,Target_GEO__c", "isbase64": "false"}, {"name": "tablename", "value": "Case", "isbase64": "false"}, {"name": "selectcondition", "value": "CaseNumber = '"+casenum+"'", "isbase64": "false"}]}
         jsondata = json.dumps(data)
         jsondataasbytes = jsondata.encode('utf-8')
         finaldata = json.loads(request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore"))['options'][0]['values'][0]
-        EntitlementId = ast.literal_eval(finaldata)["EntitlementId"]
-        CaseAge = str(ast.literal_eval(finaldata)["Age__c"])
+        finaldata = json.loads(finaldata)
+        EntitlementId = str(finaldata["EntitlementId"])
+        Age__c = str(finaldata["Age__c"])
+        Account_Name__c = str(finaldata["Account_Name__c"])
+        Account_Org_ID__c = str(finaldata["Account_Org_ID__c"])
+        Case_Created_Date_Qual__c = str(finaldata["Case_Created_Date_Qual__c"])
+        Case_Owner__c = str(finaldata["Case_Owner__c"])
+        Case_Review_Flag__c = str(finaldata["Case_Review_Flag__c"])
+        Case_Status__c = str(finaldata["Case_Status__c"])
+        Case_Team__c = str(finaldata["Case_Team__c"])
+        CaseReopened__c = str(finaldata["CaseReopened__c"])
+        Contact_Email__c = str(finaldata["Contact_Email__c"])
+        ContactCountry__c = str(finaldata["ContactCountry__c"])
+        ContactMobile = str(finaldata["ContactMobile"])
+        ContactPhone = str(finaldata["ContactPhone"])
+        Dev_Engineer__c = str(finaldata["Dev_Engineer__c"])
+        End_of_Support__c = str(finaldata["End_of_Support__c"])
+        Eng_Status__c = str(finaldata["Eng_Status__c"])
+        EngCase_SubmittedDate__c = str(finaldata["EngCase_SubmittedDate__c"])
+        Escalated_By__c = str(finaldata["Escalated_By__c"])
+        EscalatedDate__c = str(finaldata["EscalatedDate__c"])
+        First_Response_Severity__c = str(finaldata["First_Response_Severity__c"])
+        First_Response_Time_Taken__c = str(finaldata["First_Response_Time_Taken__c"])
+        Fixed_Known_Issue_ID__c = str(finaldata["Fixed_Known_Issue_ID__c"])
+        Frontline_to_Escalation_Severity__c = str(finaldata["Frontline_to_Escalation_Severity__c"])
+        Frontline_to_Escalation_Violated__c = str(finaldata["Frontline_to_Escalation_Violated__c"])
+        Highest_Severity__c = str(finaldata["Highest_Severity__c"])
+        Initial_Severity__c = str(finaldata["Initial_Severity__c"])
+        IsEscalated = str(finaldata["IsEscalated"])
+        IsEscalatedtoEng__c = str(finaldata["IsEscalatedtoEng__c"])
+        IsPartner__c = str(finaldata["IsPartner__c"])
+        # Entitlement Logic
         data = ({"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "EndDate", "isbase64": "false"}, {"name": "tablename", "value": "Entitlement", "isbase64": "false"}, {"name": "selectcondition", "value": "Id = '"+EntitlementId+"'", "isbase64": "false"}]})
         jsondata = json.dumps(data)
         jsondataasbytes = jsondata.encode('utf-8')
         Entitlement_EndDate = ast.literal_eval(json.loads(request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore"))['options'][0]['values'][0])["EndDate"]
+        Entitlement_EndDate = datetime.strptime(Entitlement_EndDate, "%Y-%m-%d").date()
+        current_date = datetime.today()
+        current_date = current_date.strftime("%Y-%m-%d")
+        if Entitlement_EndDate.strftime("%Y-%m-%d") > current_date:
+            Entitlement_EndDate = style.GREEN + str(Entitlement_EndDate) + style.RESET
+        else:
+            Entitlement_EndDate = style.RED + Entitlement_EndDate + style.RESET
+        # Engineering Logic
+        data = ({"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "Name", "isbase64": "false"}, {"name": "tablename", "value": "Contact", "isbase64": "false"}, {"name": "selectcondition", "value": "Id = '"+Dev_Engineer__c+"'", "isbase64": "false"}]})
+        jsondata = json.dumps(data)
+        jsondataasbytes = jsondata.encode('utf-8')
+        Dev_Engineer__c = str(ast.literal_eval(json.loads(request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore"))['options'][0]['values'][0])["Name"])
+        # Survey Response
+        data = ({"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "CSAT_Citrix_Support__c,Survey_Date__c", "isbase64": "false"}, {"name": "tablename", "value": "Survey__c", "isbase64": "false"}, {"name": "selectcondition", "value": "Account_ID__c = '"+Account_Org_ID__c+"'", "isbase64": "false"}]})
+        jsondata = json.dumps(data)
+        jsondataasbytes = jsondata.encode('utf-8')
+        print(jsondataasbytes)
+        dummy = ast.literal_eval(json.loads(request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore")))['options'][0]['values'][0]["CSAT_Citrix_Support__c"]
+        print("====================After=================================================")
+        print(dummy)
     finally:
-        print(Entitlement_EndDate + CaseAge)
+        print(style.YELLOW + '{:-^87}'.format('SalesForce Case details') + style.RESET)
+        print(style.YELLOW + '{:-^87}'.format('Case Related') + style.RESET)
+        print("\nSalesForce Case Number: " + casenum)
+        print("Case Age: " + Age__c + " days old")
+        print("Case created Date: " + Case_Created_Date_Qual__c)
+        print("Current Case Owner: " + Case_Owner__c)
+        print("Case Status: " + Case_Status__c)
+        print("Case Team: " + Case_Team__c)
+        print("Case Re-opened: " + CaseReopened__c)
+        print("First Response Severity: " + First_Response_Severity__c)
+        print("Initial Severity: " + Initial_Severity__c)
+        print("Highest Severity: " + Highest_Severity__c)
+        print("Escalated: " + IsEscalated)
+        print("Engineering Involved: " + IsEscalatedtoEng__c)
+
+        print(style.YELLOW + '{:-^87}'.format('Account Related') + style.RESET)
+        print("Entitlement End Date: "+Entitlement_EndDate)
+        print("End of Support: " + End_of_Support__c)
+        print("Account Name: " + Account_Name__c)
+        print("Org Id: " + Account_Org_ID__c)
+        print("Customer Email: " + Contact_Email__c)
+        print("Customer Mobile: " + ContactMobile)
+        print("Customer Phone: " + ContactPhone)
+        print("Customer Current Clock: " + sp.run("zdump $(awk '/Timezone:/&&/GMT/{print $2}' shell/showcmds.txt | awk -F- '{print substr($1,11), $NF}')", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout)
+        print("Partner Account: " + IsPartner__c)
+
+        print(style.YELLOW + '{:-^87}'.format('FrontLine Related') + style.RESET)
+        print("Escalated by: " + Escalated_By__c)
+        print("Escalated Date: " + EscalatedDate__c)
+        print("First Response Time Taken: " + First_Response_Time_Taken__c)
+        print("FrontLine to Escalation Severity: " + Frontline_to_Escalation_Severity__c)
+        print("Frontline to Escalation Violated: " + Frontline_to_Escalation_Violated__c)
+        print(style.YELLOW + '{:-^87}'.format('Escalation Related') + style.RESET)
+
+        print(style.YELLOW + '{:-^87}'.format('Engineering Related') + style.RESET)
+        print("Jira ID: " + Fixed_Known_Issue_ID__c)
+        print("Jira Created Date: " + EngCase_SubmittedDate__c)
+        print("Engineering Status: " + Eng_Status__c)
+        print("Engineering Owner: " + Dev_Engineer__c)
+
+        print(style.YELLOW + '{:-^87}'.format('Last 12 months Stats') + style.RESET)
+        print("")
+
+        payload = {"version": version, "user": username, "action": "show --case --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+        resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+        quit()
+
 elif args.bt:
     try:
         print(style.YELLOW + '{:-^87}'.format('NetScaler Core Auto Backtrace') + style.RESET)
