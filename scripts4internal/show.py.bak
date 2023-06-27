@@ -389,7 +389,7 @@ elif args.c:
     try:
         newnslog_counter = ''
         if os.path.isfile("conFetch/nsconmsg/nsconmsg_counters.txt"):
-            with open("conFetch/nsconmsg/newnslog_counters.txt", "r") as nsconmsg_counter:
+            with open("conFetch/nsconmsg/nsconmsg_counters.txt", "r") as nsconmsg_counter:
                 for i in nsconmsg_counter.readlines():
                     if str(args.c) in i:
                         newnslog_counter += i
