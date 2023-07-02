@@ -83,6 +83,13 @@ showscriptabout = '''
 ######################################################################################################
 '''
 
+# Logme the user
+username = os.popen("whoami").read().strip()
+userfile = "/home/CITRITE/manjeshn/manscript/showdata/"+username+".log"
+logging.basicConfig(filename=userfile, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
+
 # Parser args
 parser = argparse.ArgumentParser(
     description="NetScaler Support Bundle Show Script", formatter_class=argparse.RawTextHelpFormatter)
@@ -114,14 +121,9 @@ parser.add_argument('-ha', action="store_true", help="HA Analysis (Potential RCA
 parser.add_argument('-pt', metavar="", action="append", help="Check if the given problem time present in the bundle (\"Aug 02 13:40:00\")")
 parser.add_argument('--case', action="store_true", help="Salesforce Case Details")
 parser.add_argument('--about', action="store_true", help="About Show Script")
+payload = {"version": version, "user": username, "action": "show -h --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Partial", "format": "string", "sr": os.getcwd().split("/")[3]}
+resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
 args = parser.parse_args()
-
-# Logme the user
-username = os.popen("whoami").read().strip()
-userfile = "/home/CITRITE/manjeshn/manscript/showdata/"+username+".log"
-logging.basicConfig(filename=userfile, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
 
 # Set correct support bundle path
 try:
