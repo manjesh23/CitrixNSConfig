@@ -121,8 +121,6 @@ parser.add_argument('-ha', action="store_true", help="HA Analysis (Potential RCA
 parser.add_argument('-pt', metavar="", action="append", help="Check if the given problem time present in the bundle (\"Aug 02 13:40:00\")")
 parser.add_argument('--case', action="store_true", help="Salesforce Case Details")
 parser.add_argument('--about', action="store_true", help="About Show Script")
-payload = {"version": version, "user": username, "action": "show -h --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Partial", "format": "string", "sr": os.getcwd().split("/")[3]}
-resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
 args = parser.parse_args()
 
 # Set correct support bundle path
@@ -398,8 +396,7 @@ elif args.c:
         else:
             newnslog_counter = os.popen("nsconmsg -K var/nslog/newnslog -d current | awk '!/reltime|Index/{print $6}' | sort | uniq -c | egrep '([a-z].*[_]).*' | grep -i "+args.c+" | column").read().strip()
     finally:
-        print(style.YELLOW + '{:-^87}'.format('Usable newnslog counters'))
-        print(style.RESET)
+        print(style.YELLOW + '{:-^87}'.format('Usable newnslog counters') + style.RESET)
         if len(newnslog_counter) > 10:
             print(newnslog_counter)
             payload = {"version": version, "user": username, "action": "show -c --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}

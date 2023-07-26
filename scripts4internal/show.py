@@ -1069,10 +1069,8 @@ elif args.G:
                     if len(cc_cpu_use.stdout) < 52:
                         cc_cpu_use.stdout = "data.addColumn('date', 'Manjesh');data.addColumn('Manjesh', 'Manjesh');"
                     else:
-                        cc_cpu_use.stdout = re.sub(
-                            '.*,\s,.*', '', cc_cpu_use.stdout)
-                        cc_cpu_use.stdout = re.sub(
-                            '.*,\s\].*', '', cc_cpu_use.stdout)
+                        cc_cpu_use.stdout = re.sub('.*,\s,.*', '', cc_cpu_use.stdout)
+                        cc_cpu_use.stdout = re.sub('.*,\s\].*', '', cc_cpu_use.stdout)
                         cc_cpu_use.stdout = cc_cpu_use.stdout.replace("\n", "")
                     if True:
                         file = open(path+"/"+newnslog_file.split("/")
@@ -1122,13 +1120,15 @@ elif args.G:
                 for newnslog_file in glob('var/nslog/newnslo*[!z]'):
                     time_range = sp.run(
                         "nsconmsg -K "+newnslog_file+" -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=\"\"; printf \" --%s\", $0}' | sed -r 's/^.{9}//'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
-                    mem_cur_usedsize_freesize_avail = sp.run(
-                        "nsconmsg -K "+newnslog_file+" -d current -s disptime=1 -g mem_tot_avail -g mem_cur_usedsize -g mem_cur_freesize | awk '!/actual/&&/mem_cur/||/tot_available/{print $8\"-\"$9\",\"$11\"-\"$10, $3/1000000, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\\n\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g' | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                    mem_cur_usedsize_freesize_avail = sp.run("nsconmsg -K "+newnslog_file+" -d current -s disptime=1 -g mem_tot_avail -g mem_cur_usedsize -g mem_cur_freesize | awk '!/actual/&&/mem_cur/||/tot_available/{print $8\"-\"$9\",\"$11\"-\"$10, $3/1000000, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\\n\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g' | grep -v PART", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                     if len(mem_cur_usedsize_freesize_avail.stdout) < 52:
                         mem_cur_usedsize_freesize_avail.stdout = "data.addColumn('date', 'Manjesh');data.addColumn('Manjesh', 'Manjesh');"
+                    else:
+                        mem_cur_usedsize_freesize_avail.stdout = re.sub('.*,\s,.*', '', mem_cur_usedsize_freesize_avail.stdout)
+                        mem_cur_usedsize_freesize_avail.stdout = re.sub('.*,\s\].*', '', mem_cur_usedsize_freesize_avail.stdout)
+                        mem_cur_usedsize_freesize_avail.stdout = mem_cur_usedsize_freesize_avail.stdout.replace("\n", "")
                     if True:
-                        file = open(path+"/"+newnslog_file.split("/")
-                                    [2]+"_memory.html", "w")
+                        file = open(path+"/"+newnslog_file.split("/")[2]+"_memory.html", "w")
                         file.write('''<html><head> <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script> <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.js"></script> <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.css"> <script type="text/javascript">google.charts.load('current',{'packages': ['annotationchart']}); google.charts.setOnLoadCallback(mem_free_used_avail); function mem_free_used_avail(){var data=new google.visualization.DataTable();'''+mem_cur_usedsize_freesize_avail.stdout +
                                    ''' var chart=new google.visualization.AnnotationChart(document.getElementById('mem_free_used_avail')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}</script></head><body> <h1 class="txt-primary">Memory Graph</h1> <hr> <p class="txt-title">Collector_Bundle_Name: '''+collector_bundle_name+'''<br>Device_Name: '''+adchostname+'''<br>Log_file: '''+newnslog_file.split("/")[2]+'''<br>Log_Timestamp: '''+time_range+'''</p><hr> <div style="width: 100%"><p class="txt-primary">mem_cur_freesize - mem_cur_usedsize - mem_tot_available</p><div id="mem_free_used_avail" style="height:450px"></div></div><div class="footer">Project conFetch</div></body></html>''')
                         file.close()
@@ -1436,8 +1436,7 @@ elif args.g:
                 os.popen("fixperms ./conFetch").read()
                 payload = {"version": version, "user": username, "action": "show -g " + ''.join(args.g + " -- ".split() + args.K) + " --> " + os.getcwd() + " --> " + str(
                     int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                resp = request.urlopen(request.Request(
-                    url, data=parse.urlencode(payload).encode()))
+                resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
         elif "nic" in args.g:
             try:
                 time_range = sp.run(

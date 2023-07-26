@@ -65,8 +65,8 @@ def newnslog_current(newnslog):
     current_output = sp.run(newnslog_current_cmd, shell=True, capture_output=True, text=True).stdout
     current_output_boxtime = gmt_to_boxtime(current_output)
     file_path = os.path.join(directory_name, "d.current_file.txt.gz")
-    with gzip.open(file_path, "at") as file:
-        file.write(current_output_boxtime)
+    with gzip.open(file_path, "wb") as file:
+        file.write(current_output_boxtime.encode())  # Write binary data
 
 # Process newnslog with d_flag as event and write sorted output to file
 def newnslog_event(newnslog):
@@ -74,20 +74,20 @@ def newnslog_event(newnslog):
     event_output = sp.run(newnslog_event_cmd, shell=True, capture_output=True, text=True).stdout
     event_output_boxtime = gmt_to_boxtime(event_output)
     file_path = os.path.join(directory_name, "d.event_file.txt.gz")
-    with gzip.open(file_path, "at") as file:
-        file.write(event_output_boxtime)
+    with gzip.open(file_path, "wb") as file:
+        file.write(event_output_boxtime.encode())  # Write binary data
 
 # Process newnslog with d_flag as setime (overall) and write sorted output to file
-def newnslog_setime():
-    newnslog_setime_cmd = '''echo $(nsconmsg -K $(find ./ -type d -name "newnslog.*" | sort |  sed 's/ .\//\n.\//g' | awk -F/ '{print "var/nslog/"$NF}' | sed -n '1p') -d setime | awk '/start/&&!/Displaying/{$1=$2=""; printf }'; printf " --> "; nsconmsg -K var/nslog/newnslog -d setime | awk '/end/&&!/Displaying/{$1=$2=""; print}')'''
-    print(newnslog_setime_cmd)
-    setime_output = sp.run(newnslog_setime_cmd, shell=True, capture_output=True, text=True).stdout
-    setime_output_boxtime = gmt_to_boxtime(setime_output)
-    print(f"This is setime {setime_output}")
-    print(f"This is setime in localtime {setime_output_boxtime}")
+def newnslog_setime(all_newnslog):
     file_path = os.path.join(directory_name, "d.setime_file.txt.gz")
-    with gzip.open(file_path, "at") as file:
-        file.write(setime_output_boxtime)
+    with gzip.open(file_path, "wb") as file:
+        for newnslog in all_newnslog:
+            setime_output = sp.run(f"nsconmsg -K {newnslog} -d setime | awk '/start/&&!/Displaying/{{ $1=$2=\"\"; printf }}; /end/&&!/Displaying/{{ $1=$2=\"\"; print }}'", shell=True, capture_output=True, text=True).stdout
+            setime_output_boxtime = gmt_to_boxtime(setime_output)
+            file_name = os.path.basename(newnslog)  # Extracts the filename from the path
+            print(f"Processing file: {file_name}")
+            file.write(f"{file_name} --> {setime_output_boxtime}\n".encode())  # Write binary data
+
 
 # Process all newnslog files
 def process_all_d_flags():
@@ -96,7 +96,7 @@ def process_all_d_flags():
         for newnslog in all_newnslog:
             futures.append(executor.submit(newnslog_current, newnslog))
             futures.append(executor.submit(newnslog_event, newnslog))
-            futures.append(executor.submit(newnslog_setime, newnslog))
+        futures.append(executor.submit(newnslog_setime, all_newnslog))
         
         # Wait for all futures to complete
         for future in futures:
