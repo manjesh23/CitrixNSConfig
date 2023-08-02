@@ -1436,8 +1436,7 @@ elif args.g:
                 os.popen("fixperms ./conFetch").read()
                 payload = {"version": version, "user": username, "action": "show -g " + ''.join(args.g + " -- ".split() + args.K) + " --> " + os.getcwd() + " --> " + str(
                     int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                resp = request.urlopen(request.Request(
-                    url, data=parse.urlencode(payload).encode()))
+                resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
         elif "nic" in args.g:
             try:
                 time_range = sp.run(
