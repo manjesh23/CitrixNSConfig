@@ -91,8 +91,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
 # Parser args
-parser = argparse.ArgumentParser(
-    description="NetScaler Support Bundle Show Script", formatter_class=argparse.RawTextHelpFormatter)
+parser = argparse.ArgumentParser(description="NetScaler Support Bundle Show Script", formatter_class=argparse.RawTextHelpFormatter)
 parser.add_argument('--author', action="store_true", help=argparse.SUPPRESS)
 parser.add_argument('-i', action="store_true", help="NetScaler Basic Information")
 parser.add_argument('-n', action="store_true", help="NetScaler Networking Information")
@@ -119,6 +118,8 @@ parser.add_argument('-s', action="append", metavar="newnslog starttime", help=ar
 parser.add_argument('-e', action="append", metavar="newnslog endtime", help=argparse.SUPPRESS)
 parser.add_argument('-ha', action="store_true", help="HA Analysis (Potential RCA)")
 parser.add_argument('-pt', metavar="", action="append", help="Check if the given problem time present in the bundle (\"Aug 02 13:40:00\")")
+parser.add_argument('-z', action="append", metavar="", help="Generate HTML Graph for all newnslog(s) at once per user-input counter\n--divide <integer> --> value used to divide 'totalcount-val' in nsconmsg output")
+parser.add_argument('--divide', action="append", metavar="divide column 3 by", help=argparse.SUPPRESS)
 parser.add_argument('--case', action="store_true", help="Salesforce Case Details")
 parser.add_argument('--about', action="store_true", help="About Show Script")
 args = parser.parse_args()
@@ -400,10 +401,11 @@ elif args.c:
         if len(newnslog_counter) > 10:
             print(newnslog_counter)
             payload = {"version": version, "user": username, "action": "show -c --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+            resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
         else:
             print(style.RED + "Unable to find any counter name with the keyword " + args.c + style.RESET)
             payload = {"version": version, "user": username, "action": "show -c --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Failed", "format": "string", "sr": os.getcwd().split("/")[3]}
-        resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+            resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
         quit()
 
 elif args.E:
@@ -490,10 +492,13 @@ elif args.im:
     try:
         logger.info(os.getcwd() + " - show -im")
         try:
+            log_turnover = sp.run('''awk '/turned over due to size/{print}' var/log/ns.log''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
             nslog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/ns.lo* | grep -v gz | grep -v tar); do awk 'NR == 2 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         finally:
             if nslog.returncode == 0:
-                print(style.YELLOW + '{:-^87}\n'.format('NetScaler ns.log timestamp IndexMessages') + style.RESET + nslog.stdout)
+                if len(log_turnover) > 23:
+                    print(style.YELLOW + '{:-^87}\n'.format('NetScaler ns.log timestamp IndexMessages') + style.RESET + nslog.stdout)
+                    print(style.YELLOW + f'Warning: Original ns.log is greater than 15MB, please request ns.log seperately..' + style.RESET)
             else:
                 print(style.RED + '{:-^87}\n'.format('Unable to read ns.log') + style.RESET)
     finally:
@@ -1081,10 +1086,8 @@ elif args.G:
                         print("Processed "+newnslog_file)
             finally:
                 os.popen("fixperms ./conFetch").read()
-                payload = {"version": version, "user": username, "action": "show -G " + ''.join(args.G) + " --> " + os.getcwd() + " --> " + str(
-                    int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                resp = request.urlopen(request.Request(
-                    url, data=parse.urlencode(payload).encode()))
+                payload = {"version": version, "user": username, "action": "show -G " + ''.join(args.G) + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+                resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
         elif "ha" in args.G:
             try:
                 for newnslog_file in glob('var/nslog/newnslo*[!z]'):
@@ -1142,10 +1145,8 @@ elif args.G:
         elif "nic" in args.G:
             try:
                 for newnslog_file in glob('var/nslog/newnslo*[!z]'):
-                    time_range = sp.run(
-                        "nsconmsg -K "+newnslog_file+" -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=\"\"; printf \" --%s\", $0}' | sed -r 's/^.{9}//'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
-                    allnic_tot_rx_tx_mbits = sp.run(
-                        "nsconmsg -K "+newnslog_file+" -s disptime=1 -d current -g allnic | awk '/allnic_tot_rx_mbits/||/allnic_tot_tx_mbits/{print $8\"-\"$9\",\"$11\"-\"$10, $5, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\\n\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                    time_range = sp.run("nsconmsg -K "+newnslog_file+" -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=\"\"; printf \" --%s\", $0}' | sed -r 's/^.{9}//'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                    allnic_tot_rx_tx_mbits = sp.run("nsconmsg -K "+newnslog_file+" -s disptime=1 -d current -g allnic | awk '/allnic_tot_rx_mbits/||/allnic_tot_tx_mbits/{print $8\"-\"$9\",\"$11\"-\"$10, $5, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\\n\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                     if len(allnic_tot_rx_tx_mbits.stdout) < 52:
                         allnic_tot_rx_tx_mbits.stdout = "data.addColumn('date', 'Manjesh');data.addColumn('Manjesh', 'Manjesh');"
                     if True:
@@ -1297,10 +1298,8 @@ elif args.ha:
                 pass
 elif args.g:
     try:
-        adchostname = sp.run("awk '{printf $2}' shell/uname-a.out",
-                             shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
-        collector_bundle_name = sp.run(
-            "pwd", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.split("/")[4]
+        adchostname = sp.run("awk '{printf $2}' shell/uname-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        collector_bundle_name = sp.run("pwd", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.split("/")[4]
         if args.s:
             starttime = args.s[0]
         else:
@@ -1348,10 +1347,8 @@ elif args.g:
                 if len(cc_cpu_use.stdout) < 52:
                     cc_cpu_use.stdout = "data.addColumn('date', 'Manjesh');data.addColumn('Manjesh', 'Manjesh');,['', ]"
                 else:
-                    cc_cpu_use.stdout = re.sub(
-                        '.*,\s,.*', '', cc_cpu_use.stdout)
-                    cc_cpu_use.stdout = re.sub(
-                        '.*,\s\].*', '', cc_cpu_use.stdout)
+                    cc_cpu_use.stdout = re.sub('.*,\s,.*', '', cc_cpu_use.stdout)
+                    cc_cpu_use.stdout = re.sub('.*,\s\].*', '', cc_cpu_use.stdout)
                     cc_cpu_use.stdout = cc_cpu_use.stdout.replace("\n", "")
                     cc_cpu_use.stdout = re.findall('data.addColumn.{0,52}\);|data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s' +
                                                    starttime+'..*data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s'+endtime+'..{2,100}\);', cc_cpu_use.stdout)
@@ -1366,41 +1363,31 @@ elif args.g:
                     print("Processed "+newnslogFile)
             finally:
                 os.popen("fixperms ./conFetch").read()
-                payload = {"version": version, "user": username, "action": "show -g " + ''.join(args.K) + " --> " + os.getcwd() + " --> " + str(
-                    int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                resp = request.urlopen(request.Request(
-                    url, data=parse.urlencode(payload).encode()))
+                payload = {"version": version, "user": username, "action": "show -g " + ''.join(args.K) + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+                resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
         elif "ha" in args.g:
             try:
                 time_range = sp.run(
                     "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=\"\"; printf \" --%s\", $0}' | sed -r 's/^.{9}//'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
-                ha_tot_pkt_rx_tx = sp.run(
-                    "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -s disptime=1 -g ha_tot_pkt_rx -g ha_tot_pkt_tx  |awk '/ha_tot/{print $8\"-\"$9\",\"$11\"-\"$10, $4, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\\n\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g' | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                ha_err_heartbeat = sp.run(
-                    "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -s disptime=1 -g ha_err_heartbeat | awk '/ha_err_heartbeat/{print $8\"-\"$9\",\"$11\"-\"$10, $4, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\\n\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g' | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                ha_tot_macresolve_requests = sp.run(
-                    "nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -s disptime=1 -g ha_tot_macresolve_requests | awk '/ha_tot_macresolve_requests/{print $8\"-\"$9\",\"$11\"-\"$10, $4, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\\n\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g' | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                ha_tot_pkt_rx_tx = sp.run("nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -s disptime=1 -g ha_tot_pkt_rx -g ha_tot_pkt_tx  |awk '/ha_tot/{print $8\"-\"$9\",\"$11\"-\"$10, $4, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\\n\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g' | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                ha_err_heartbeat = sp.run("nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -s disptime=1 -g ha_err_heartbeat | awk '/ha_err_heartbeat/{print $8\"-\"$9\",\"$11\"-\"$10, $4, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\\n\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g' | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                ha_tot_macresolve_requests = sp.run("nsconmsg -K "+"var/nslog/"+newnslogFile+" -d current -s disptime=1 -g ha_tot_macresolve_requests | awk '/ha_tot_macresolve_requests/{print $8\"-\"$9\",\"$11\"-\"$10, $4, $6}' | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\\n\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g' | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                 if len(ha_tot_pkt_rx_tx.stdout) < 52:
                     ha_tot_pkt_rx_tx = "data.addColumn('date', 'Manjesh');data.addColumn('Manjesh', 'Manjesh');,['', ]"
                 else:
-                    ha_tot_pkt_rx_tx.stdout = re.findall('data.addColumn.{0,52}\);|data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s' +
-                                                         starttime+'..*data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s'+endtime+'..{2,20}\);', ha_tot_pkt_rx_tx.stdout)
+                    ha_tot_pkt_rx_tx.stdout = re.findall('data.addColumn.{0,52}\);|data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s' + starttime+'..*data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s'+endtime+'..{2,20}\);', ha_tot_pkt_rx_tx.stdout)
                     ha_tot_pkt_rx_tx = ''.join(
                         ha_tot_pkt_rx_tx.stdout)
                 if len(ha_tot_macresolve_requests.stdout) < 52:
                     ha_tot_macresolve_requests = "data.addColumn('date', 'Manjesh');data.addColumn('Manjesh', 'Manjesh');,['', ]"
                 else:
-                    ha_tot_macresolve_requests.stdout = re.findall('data.addColumn.{0,52}\);|data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s' +
-                                                                   starttime+'..*data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s'+endtime+'..{2,20}\);', ha_tot_macresolve_requests.stdout)
-                    ha_tot_macresolve_requests = ''.join(
-                        ha_tot_macresolve_requests.stdout)
+                    ha_tot_macresolve_requests.stdout = re.findall('data.addColumn.{0,52}\);|data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s' + starttime+'..*data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s'+endtime+'..{2,20}\);', ha_tot_macresolve_requests.stdout)
+                    ha_tot_macresolve_requests = ''.join(ha_tot_macresolve_requests.stdout)
                 if len(ha_err_heartbeat.stdout) < 52:
                     ha_err_heartbeat = "data.addColumn('date', 'Manjesh');data.addColumn('Manjesh', 'Manjesh');,['', ]"
                 else:
-                    ha_err_heartbeat.stdout = re.findall('data.addColumn.{0,52}\);|data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s' +
-                                                         starttime+'..*data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s'+endtime+'..{2,20}\);', ha_err_heartbeat.stdout)
-                    ha_err_heartbeat = ''.join(
-                        ha_err_heartbeat.stdout)
+                    ha_err_heartbeat.stdout = re.findall('data.addColumn.{0,52}\);|data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s' + starttime+'..*data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s'+endtime+'..{2,20}\);', ha_err_heartbeat.stdout)
+                    ha_err_heartbeat = ''.join(ha_err_heartbeat.stdout)
                 if True:
                     file = open(path+"/"+newnslogFile+"_HA.html", "w")
                 file.write('''<html><head> <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script> <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.js"></script> <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.css"> <script type="text/javascript">google.charts.load('current',{'packages': ['annotationchart']}); google.charts.setOnLoadCallback(ha_tot_pkt_rx_tx); google.charts.setOnLoadCallback(ha_err_heartbeat); google.charts.setOnLoadCallback(ha_tot_macresolve_requests); function ha_tot_pkt_rx_tx(){var data=new google.visualization.DataTable();'''+ha_tot_pkt_rx_tx + ''' var chart=new google.visualization.AnnotationChart(document.getElementById('ha_tot_pkt_rx_tx')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}function ha_err_heartbeat(){var data=new google.visualization.DataTable();'''+ha_err_heartbeat +
@@ -1422,10 +1409,8 @@ elif args.g:
                 if len(mem_cur_usedsize_freesize_avail.stdout) < 52:
                     mem_cur_usedsize_freesize_avail = "data.addColumn('date', 'Manjesh');data.addColumn('Manjesh', 'Manjesh');,['', ]"
                 else:
-                    mem_cur_usedsize_freesize_avail.stdout = re.findall('data.addColumn.{0,52}\);|data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s' +
-                                                                        starttime+'..*data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s'+endtime+'..{2,60}\);', mem_cur_usedsize_freesize_avail.stdout)
-                    mem_cur_usedsize_freesize_avail = ''.join(
-                        mem_cur_usedsize_freesize_avail.stdout)
+                    mem_cur_usedsize_freesize_avail.stdout = re.findall('data.addColumn.{0,52}\);|data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s' + starttime+'..*data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s'+endtime+'..{2,60}\);', mem_cur_usedsize_freesize_avail.stdout)
+                    mem_cur_usedsize_freesize_avail = ''.join(mem_cur_usedsize_freesize_avail.stdout)
                 if True:
                     file = open(path+"/"+newnslogFile+"_memory.html", "w")
                 file.write('''<html><head> <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script> <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.js"></script> <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.css"> <script type="text/javascript">google.charts.load('current',{'packages': ['annotationchart']}); google.charts.setOnLoadCallback(mem_free_used_avail); function mem_free_used_avail(){var data=new google.visualization.DataTable();'''+mem_cur_usedsize_freesize_avail +
@@ -1434,8 +1419,7 @@ elif args.g:
                 print("Processed "+newnslogFile)
             finally:
                 os.popen("fixperms ./conFetch").read()
-                payload = {"version": version, "user": username, "action": "show -g " + ''.join(args.g + " -- ".split() + args.K) + " --> " + os.getcwd() + " --> " + str(
-                    int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+                payload = {"version": version, "user": username, "action": "show -g " + ''.join(args.g + " -- ".split() + args.K) + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
                 resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
         elif "nic" in args.g:
             try:
@@ -1446,10 +1430,8 @@ elif args.g:
                 if len(allnic_tot_rx_tx_mbits.stdout) < 52:
                     allnic_tot_rx_tx_mbits = "data.addColumn('date', 'Manjesh');data.addColumn('Manjesh', 'Manjesh');,['', ]"
                 else:
-                    allnic_tot_rx_tx_mbits.stdout = re.findall('data.addColumn.{0,52}\);|data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s' +
-                                                               starttime+'..*data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s'+endtime+'..{2,60}\);', allnic_tot_rx_tx_mbits.stdout)
-                    allnic_tot_rx_tx_mbits = ''.join(
-                        allnic_tot_rx_tx_mbits.stdout)
+                    allnic_tot_rx_tx_mbits.stdout = re.findall('data.addColumn.{0,52}\);|data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s' + starttime+'..*data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s'+endtime+'..{2,60}\);', allnic_tot_rx_tx_mbits.stdout)
+                    allnic_tot_rx_tx_mbits = ''.join(allnic_tot_rx_tx_mbits.stdout)
                 if True:
                     file = open(path+"/"+newnslogFile+"_nic.html", "w")
                 file.write('''<html><head> <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script> <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.js"></script> <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.css"> <script type="text/javascript">google.charts.load('current',{'packages': ['annotationchart']}); google.charts.setOnLoadCallback(allnic_tot_rx_tx_mbits); function allnic_tot_rx_tx_mbits(){var data=new google.visualization.DataTable();'''+allnic_tot_rx_tx_mbits +
@@ -1460,6 +1442,95 @@ elif args.g:
                 os.popen("fixperms ./conFetch").read()
                 payload = {"version": version, "user": username, "action": "show -g " + ''.join(args.g + " -- ".split() + args.K) + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
                 resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+    finally:
+        pass
+
+
+elif args.z:
+    try:
+        path = "conFetch"
+        isExist = os.path.exists(path)
+        if not isExist:
+            os.popen("fixperms ../").read()
+            os.makedirs(path)
+        else:
+            pass
+        if args.divide:
+            try:
+                divide = int(''.join(args.divide))
+                divide = str(divide)
+            except ValueError:
+                div_error = ''.join(args.divide)
+                print(style.RED + f'{div_error} is not a integer, please use integer and try again.' + style.RESET)
+                quit()
+        else:
+            divide = str(1)
+        custom_counter = ""
+        raw_output = ""
+        adchostname = sp.run("awk '{printf $2}' shell/uname-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        collector_bundle_name = sp.run("pwd", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.split("/")[4]
+        counter_name = ''.join(args.z)
+        all_newnslog_names = sp.run('''ls -lah var/nslog/ | awk \'/newnslog\./&&!/gz|tar/{print $NF}END{print "newnslog"}\'''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        num_columns = sp.run('''nsconmsg -K var/nslog/newnslog -d current -s disptime=1 -f ''' + counter_name + ''' | awk \'/''' + counter_name + '''/{print NF; exit}\'''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        start_time = sp.run("nsconmsg -K \"var/nslog/$(ls -lah var/nslog/ | awk '/newnslog\./&&!/gz|tar/{print $NF;exit}')\" -d setime | awk '/start time/{print $4, $5, $6, $7}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        end_time = sp.run("nsconmsg -K \"var/nslog/newnslog\" -d setime | awk '/end   time/{print $4, $5, $6, $7}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        start_end = f'{start_time} to {end_time}'
+        raw_file_path = str("conFetch/raw_"+counter_name+".txt")
+        try:
+            if int(num_columns) == 12:
+                for nslog in all_newnslog_names.splitlines():
+                    custom_counter_output = sp.run("nsconmsg -K var/nslog/"+nslog+" -d current -s disptime=1 -f "+counter_name+" | awk '!/partition/&&/"+counter_name+"/{print $9\"-\"$10\",\"$12\"-\"$11, $3/"+divide+", $7}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                    raw_output += custom_counter_output
+                    with open(raw_file_path, "w") as file:
+                        file.write(raw_output)
+                custom_counter = sp.run("cat "+raw_file_path+" | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\\n\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                remove_tmp_file = sp.run("rm -rf "+raw_file_path+"", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                if len(custom_counter) < 52:
+                        custom_counter = "data.addColumn('date', 'Manjesh');data.addColumn('Manjesh', 'Manjesh');,['', ]"
+                else:
+                    pass
+                custom_counter = re.sub('.*,\s\].*', '', custom_counter)
+                if True:
+                    payload = {"version": version, "user": username, "action": "show -z " + ''.join(args.z) + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+                    resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                    file = open(path+"/"+counter_name+"_Graph.html", "w")
+                file.write('''<html><head> <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script> <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.js"></script> <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.css"> <script type="text/javascript">google.charts.load('current',{'packages': ['annotationchart']}); google.charts.setOnLoadCallback(allnic_tot_rx_tx_mbits); function allnic_tot_rx_tx_mbits(){var data=new google.visualization.DataTable(); ''' + custom_counter +
+                            ''' var chart=new google.visualization.AnnotationChart(document.getElementById('allnic_tot_rx_tx_mbits')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}</script></head><body> <h1 class="txt-primary">'''+counter_name+'''</h1> <hr> <p class="txt-title">Collector_Bundle_Name: '''+collector_bundle_name+'''<br>Device_Name: '''+adchostname+'''<br>Log_file: All newnslogs<br>Log_Timestamp: '''+start_end+'''</p><hr> <div style="width: 100%"><p class="txt-primary">'''+ counter_name +''' Graph</p><div id="allnic_tot_rx_tx_mbits" style="height:450px"></div></div><div class="footer">Project conFetch</div></body></html>''')
+                file.close()
+                single_line_out = sp.run("perl -p -e 's/(?<!>)\n//g' conFetch/"+counter_name+"_Graph.html > temp_file.html && mv temp_file.html conFetch/"+counter_name+"_Graph.html", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                os.popen("fixperms ./conFetch/").read()
+                print(style.GREEN + f'Processed {counter_name} Graph for all newnslogs' + style.RESET)
+                payload = {"version": version, "user": username, "action": "show -z " + ''.join(args.z) + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+                resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+            elif int(num_columns) == 11:
+                for nslog in all_newnslog_names.splitlines():
+                    custom_counter_output = sp.run("nsconmsg -K var/nslog/"+nslog+" -d current -s disptime=1 -f "+counter_name+" | awk '!/partition/&&/"+counter_name+"/{print $8\"-\"$9\",\"$11\"-\"$10, $3/"+divide+", $6}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                    raw_output += custom_counter_output
+                    with open(raw_file_path, "w") as file:
+                        file.write(raw_output)
+                custom_counter = sp.run("cat "+raw_file_path+" | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\\n\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}' | sed 's/-/ /g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                remove_tmp_file = sp.run("rm -rf "+raw_file_path+"", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                if len(custom_counter) < 52:
+                        custom_counter = "data.addColumn('date', 'Manjesh');data.addColumn('Manjesh', 'Manjesh');,['', ]"
+                else:
+                    pass
+                custom_counter = re.sub('.*,\s\].*', '', custom_counter)
+                if True:
+                    payload = {"version": version, "user": username, "action": "show -z " + ''.join(args.z) + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+                    resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                    file = open(path+"/"+counter_name+"_Graph.html", "w")
+                file.write('''<html><head> <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script> <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.js"></script> <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.css"> <script type="text/javascript">google.charts.load('current',{'packages': ['annotationchart']}); google.charts.setOnLoadCallback(allnic_tot_rx_tx_mbits); function allnic_tot_rx_tx_mbits(){var data=new google.visualization.DataTable(); ''' + custom_counter +
+                            ''' var chart=new google.visualization.AnnotationChart(document.getElementById('allnic_tot_rx_tx_mbits')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}</script></head><body> <h1 class="txt-primary">'''+counter_name+'''</h1> <hr> <p class="txt-title">Collector_Bundle_Name: '''+collector_bundle_name+'''<br>Device_Name: '''+adchostname+'''<br>Log_file: All newnslogs<br>Log_Timestamp: '''+start_end+'''</p><hr> <div style="width: 100%"><p class="txt-primary">'''+ counter_name +''' Graph</p><div id="allnic_tot_rx_tx_mbits" style="height:450px"></div></div><div class="footer">Project conFetch</div></body></html>''')
+                file.close()
+                single_line_out = sp.run("perl -p -e 's/(?<!>)\n//g' conFetch/"+counter_name+"_Graph.html > temp_file.html && mv temp_file.html conFetch/"+counter_name+"_Graph.html", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                os.popen("fixperms ./conFetch/").read()
+                print(style.GREEN + f'Processed {counter_name} Graph for all newnslogs' + style.RESET)
+                payload = {"version": version, "user": username, "action": "show -z " + ''.join(args.z) + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
+                resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+        except ValueError:
+            print(style.RED + f'Please check the counter name once again !!!' + style.RESET)
+            payload = {"version": version, "user": username, "action": "show -z " + ''.join(args.z) + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Failed", "format": "string", "sr": os.getcwd().split("/")[3]}
+            resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
     finally:
         pass
 
