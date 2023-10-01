@@ -51,7 +51,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "4.15"
+version = "4.17"
 
 # About script
 showscriptabout = '''
@@ -89,13 +89,24 @@ logging.basicConfig(filename=userfile, format='%(asctime)s - %(levelname)s - %(m
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
+# Tooltrack send data function (embeded with fail proof)
+def send_request(version, username, url, fate_message, result):
+    payload = {"version": version, "user": username, "action": f"{fate_message} --> {os.getcwd()} --> {int(time.time())}", "runtime": 0, "result": result, "format": "string", "sr": os.getcwd().split("/")[3]}
+    try:
+        data = json.dumps(payload).encode()
+        req = request.Request(url, data=data, headers=headers)
+        with request.urlopen(req, timeout=3) as response:
+            response_text = response.read().decode()
+    finally:
+        return True
+
 # Parser args
 parser = argparse.ArgumentParser(description="NetScaler Support Bundle Show Script", formatter_class=argparse.RawTextHelpFormatter)
 parser.add_argument('--author', action="store_true", help=argparse.SUPPRESS)
 parser.add_argument('-i', action="store_true", help="NetScaler Basic Information")
 parser.add_argument('-n', action="store_true", help="NetScaler Networking Information")
 parser.add_argument('-p', action="store_true", help="NetScaler Process Related Information")
-parser.add_argument('-c', metavar="", help="Display all possible counter names wihtin newnslog")
+parser.add_argument('-c', metavar="", help="Display all possible counter names within newnslog")
 parser.add_argument('-E', action="store_true", help="Match well known error with KB articles")
 parser.add_argument('-fw', action="store_true", help="Display Latest RTM Firmware Code")
 parser.add_argument('-gz', action="store_true", help="Unzip *.gz files under /var/log and var/nslog")
@@ -137,8 +148,7 @@ except ValueError:
     print("\nPlease navigate to correct support bundle path")
     print("Available directories with support bundle names: \n\n" + style.CYAN + "\n".join(re.findall("collect.*", "\n".join(next(os.walk('.'))[1]))) + style.RESET)
     try:
-        payload = {"version": version, "user": username, "action": "Out of Support Bundle --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Partial", "format": "string", "sr": os.getcwd().split("/")[3]}
-        resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+        fate_message = "Out of Support Bundle"; send_request(version, username, url, fate_message, "Partial")
     finally:
         quit()
 
@@ -166,8 +176,10 @@ if args.i:
         # Printing system essential details
         print(style.YELLOW + '{:-^87}'.format('NetScaler Show Configuration') + "\n" + style.RESET)
         adchostname = sp.run("awk '{print $2}' shell/uname-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        adcpartitionName = sp.run("find shell/partitions/ -maxdepth 1 -mindepth 1 | awk -F'/' '{print $NF}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
         adcha = sp.run( "sed -n -e \"/show ns version/I,/Done/p\" shell/showcmds.txt | grep Node | awk -F':' '{print $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         adcfirmware = sp.run("cat shell/ns_running_config.conf | grep \"#NS\" | cut -c 2-", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        admconnected = sp.run("awk '/add service adm_metric_collector_svc_/{printf \"%s (%s : %s)\", $4, $5, $6}' shell/ns_running_config.conf", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
         firmwarehistory = sp.run("awk -F'NetScaler' 'BEGIN{nores=1;}/upgrade from NetScaler/{if ($0 ~ \"upgrade|build\") history=$2; nores=0} END {if (nores) print \"None found recently\"; else print history}' shell/dmesg-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         nsinstall = sp.run("awk '/VERSION/||/_TIME/{$1=\"\"; printf \"%s -->\", $0}' var/nsinstall/installns_state | sed -E 's/^\s|[0-9]{9,15}.|-->$//g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         platformserial = sp.run("sed -n '/^exec: show ns hardware/,/Done/p' shell/showcmds.txt | awk '/Serial/{print $NF}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
@@ -216,8 +228,10 @@ if args.i:
         print("System TimeZone: " + systemtimezone.stdout.strip())
         print("Newnslog Overall Start_End Time: " + newnslogsetime.stdout.strip())
         print("")
+        print(f"Partition Name: {adcpartitionName if adcpartitionName else 'default'}")
         print("NetScaler Hostname: " + adchostname.stdout.strip())
         print("NetScaler HA State: " + adcha.stdout.strip())
+        print(f"ADM Connected: {admconnected if admconnected else 'No'}")
         print("NetScaler Firmware version: " + adcfirmware.stdout.strip())
         print("Firmware history: " + firmwarehistory.stdout.strip())
         print("Last Upgrade Stats: " + nsinstall.stdout.strip())
@@ -254,8 +268,7 @@ if args.i:
         print("NSPPE Count: " + nsppe.stdout.strip() + "\n")
         # Tooltrack
         try:
-            payload = {"version": version, "user": username, "action": "show -i --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-            resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+            fate_message = "show -i"; send_request(version, username, url, fate_message, "Success")
         finally:
             quit()
 elif args.pt:
@@ -314,23 +327,20 @@ elif args.pt:
     except ValueError as e:
         print(style.RED + "Date time format error occured" + style.RESET)
         try:
-            payload = {"version": version, "user": username, "action": "show -pt --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Invalid", "format": "string", "sr": os.getcwd().split("/")[3]}
-            resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+            fate_message = "show -pt"; send_request(version, username, url, fate_message, "Invalid")
         finally:
             pass
         raise
     except NameError as e:
         print(style.RED + "Date time format error occured" + style.RESET)
         try:
-            payload = {"version": version, "user": username, "action": "show -pt --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Invalid", "format": "string", "sr": os.getcwd().split("/")[3]}
-            resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+            fate_message = "show -pt"; send_request(version, username, url, fate_message, "Invalid")
         finally:
             pass
         raise
     finally:
         try:
-            payload = {"version": version, "user": username, "action": "show -pt --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-            resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+            fate_message = "show -pt"; send_request(version, username, url, fate_message, "Success")
         finally:
             pass
         print(style.YELLOW + '{:-^87}'.format('NetScaler Problem Timestamp and Files') + "\n" + style.RESET)
@@ -374,8 +384,7 @@ elif args.n:
         else:
             print(style.RED + '{:-^87}\n'.format('Unable to read ARP Table') + style.RESET)
         try:
-            payload = {"version": version, "user": username, "action": "show -n --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-            resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+            fate_message = "show -n"; send_request(version, username, url, fate_message, "Success")
         finally:
             quit()
 elif args.p:
@@ -399,8 +408,7 @@ elif args.p:
             print("")
         print("")
     try:
-        payload = {"version": version, "user": username, "action": "show -p --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-        resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+        fate_message = "show -p"; send_request(version, username, url, fate_message, "Success")
     finally:
         quit()
 elif args.c:
@@ -418,15 +426,13 @@ elif args.c:
         if len(newnslog_counter) > 10:
             print(newnslog_counter)
             try:
-                payload = {"version": version, "user": username, "action": "show -c --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                fate_message = "show -c"; send_request(version, username, url, fate_message, "Success")
             finally:
                 pass
         else:
             print(style.RED + "Unable to find any counter name with the keyword " + args.c + style.RESET)
             try:
-                payload = {"version": version, "user": username, "action": "show -c --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Failed", "format": "string", "sr": os.getcwd().split("/")[3]}
-                resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                fate_message = "show -n"; send_request(version, username, url, fate_message, "Failed")
             finally:
                 pass
         quit()
@@ -439,8 +445,7 @@ elif args.E:
         print("\n")
     finally:
         try:
-            payload = {"version": version, "user": username, "action": "show -E --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-            resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+            fate_message = "show -E"; send_request(version, username, url, fate_message, "Success")
         finally:
             quit()
 elif args.fw:
@@ -485,8 +490,7 @@ elif args.fw:
             if "SDX Bundle" in sdxrelease and "Maintenance Phase" in sdxrelease:
                 print(style.LIGHTRED + sdxrelease + style.RESET)
         try:
-            payload = {"version": version, "user": username, "action": "show -fw --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-            resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+            fate_message = "show -fw"; send_request(version, username, url, fate_message, "Success")
         finally:
             quit()
 elif args.gz:
@@ -514,8 +518,7 @@ elif args.gz:
         else:
             print(style.RED + "Nothing to do here in var/nslog/" + style.RESET)
         try:
-            payload = {"version": version, "user": username, "action": "show -gz --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-            resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+            fate_message = "show -gz"; send_request(version, username, url, fate_message, "Success")
         finally:
             quit()
 elif args.im:
@@ -533,8 +536,7 @@ elif args.im:
                 print(style.RED + '{:-^87}\n'.format('Unable to read ns.log') + style.RESET)
     finally:
         try:
-            payload = {"version": version, "user": username, "action": "show -im --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-            resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+            fate_message = "show -im"; send_request(version, username, url, fate_message, "Success")
         finally:
             quit()
 elif args.imall:
@@ -542,8 +544,7 @@ elif args.imall:
         with open("conFetch/show_output/show_imall.txt", "r") as show_ha:
             print(show_ha.read())
         try:
-            payload = {"version": version, "user": username, "action": "show -imall pre-data --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-            resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+            fate_message = "show -imall"; send_request(version, username, url, fate_message, "Success")
         finally:
             quit()
     else:
@@ -599,8 +600,7 @@ elif args.imall:
                     print(style.RED + '{:-^87}\n'.format('Unable to read newnslog') + style.RESET)
         finally:
             try:
-                payload = {"version": version, "user": username, "action": "show -imall --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                fate_message = "show -imall"; send_request(version, username, url, fate_message, "Success")
             finally:
                 quit()
 
@@ -640,8 +640,7 @@ elif args.N:
             print(gmtheader)
             print(newnslog)
             try:
-                payload = {"version": version, "user": username, "action": "show -N GMT--> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                fate_message = "show -N GMT"; send_request(version, username, url, fate_message, "Success")
             finally:
                 quit()
         else:
@@ -650,8 +649,7 @@ elif args.N:
             for line in final_output:
                 print(line)
             try:
-                payload = {"version": version, "user": username, "action": "show -N N+GMT--> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                fate_message = "show -N N+GMT"; send_request(version, username, url, fate_message, "Success")
             finally:
                 quit()
 
@@ -661,8 +659,7 @@ elif args.error:
         # Highlight all the ERROR|err|down|disconnect|fail containing lines in input file.
         print(sp.run("if test -f var/log/" + args.error + "; then awk '/ERROR|err|Err|down|disconnect|fail/{print \"\033[1;31m\"$0\"\033[0m\";next}{print $0}' var/log/" + args.error + "; else echo \"File not found\"; fi", shell=True).stdout)
     finally:
-        payload = {"version": version, "user": username, "action": "show -error --> " + args.error + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-        resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+        fate_message = "show -error"; send_request(version, username, url, fate_message, "Success")
         quit()
 elif args.show:
     try:
@@ -675,23 +672,20 @@ elif args.show:
             if len(showsuggest) < 1:
                 print(style.RED + "No matching show command found." + style.RESET)
                 try:
-                    payload = {"version": version, "user": username, "action": "show -show " + args.show + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Failed", "format": "string", "sr": os.getcwd().split("/")[3]}
-                    resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                    fate_message = "show -show " + args.show; send_request(version, username, url, fate_message, "Failed")
                 finally:
                     pass
             else:
                 print(style.CYAN + os.popen("cat shell/showcmds.txt | grep exec | grep -i " + "\"" + args.show + "\"" + " | awk '{$1=$2=\"\"}1' | cut -c3-").read().strip() + style.RESET)
                 try:
-                    payload = {"version": version, "user": username, "action": "show -show " + args.show + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Partial", "format": "string", "sr": os.getcwd().split("/")[3]}
-                    resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                    fate_message = "show -show " + args.show; send_request(version, username, url, fate_message, "Partial")
                 finally:
                     pass
         else:
             print(style.YELLOW + '{:-^87}'.format('Showcmd '+args.show+' Output') + "\n" + style.RESET)
             print(showout)
             try:
-                payload = {"version": version, "user": username, "action": "show -show " + args.show + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                fate_message = "show -show " + args.show; send_request(version, username, url, fate_message, "Success")
             finally:
                 pass
     finally:
@@ -707,23 +701,20 @@ elif args.stat:
             if len(statsuggest) < 1:
                 print(style.RED + "No matching stat command found." + style.RESET)
                 try:
-                    payload = {"version": version, "user": username, "action": "show -stat " + args.stat + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Failed", "format": "string", "sr": os.getcwd().split("/")[3]}
-                    resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                    fate_message = "show -stat " + args.stat; send_request(version, username, url, fate_message, "Failed")
                 finally:
                     pass
             else:
                 print(style.CYAN + os.popen("cat shell/statcmds.txt | grep exec | grep -i " + "\"" + args.stat + "\"" + " | awk '{$1=$2=\"\"}1' | cut -c3-").read().strip() + style.RESET)
                 try:
-                    payload = {"version": version, "user": username, "action": "show -stat " + args.stat + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Partial", "format": "string", "sr": os.getcwd().split("/")[3]}
-                    resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                    fate_message = "show -stat " + args.stat; send_request(version, username, url, fate_message, "Partial")
                 finally:
                     pass
         else:
             print(style.YELLOW + '{:-^87}'.format('Statcmd '+args.stat+' Output') + "\n" + style.RESET)
             print(statout)
             try:
-                payload = {"version": version, "user": username, "action": "show -stat " + args.stat + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                fate_message = "show -stat " + args.stat; send_request(version, username, url, fate_message, "Success")
             finally:
                 pass
     finally:
@@ -734,6 +725,7 @@ elif args.vip:
         # Prining formatted VIP output from file shell/ns_running_config.conf.txt
         lbvipout = os.popen("awk '/^add lb/&&/vserver/{printf \"\033[0;92m%s\033[00m | %s | %s | %s | %s |\\n\", $2, $4, $5, $7, $6}' shell/ns_running_config.conf  | column -t -s'|'").read().strip()
         csvipout = os.popen("awk '/^add cs/&&/vserver/{printf \"\033[0;96m%s\033[00m | %s | %s | %s | %s |\\n\", $2, $4, $7, $11, $8}' shell/ns_running_config.conf  | column -t -s'|'").read().strip()
+        gslbvipout = os.popen("awk '/^add gslb/&&/vserver/{printf \"\033[38;5;208m%s\033[00m | %s | %s | %s | %s |\\n\", $2, $4, $7, $9, $11}' shell/ns_running_config.conf  | column -t -s'|'").read().strip()
         authvipout = os.popen("awk '/^add authentication/&&/vserver/{printf \"\033[0;95m%s\033[00m | %s | %s | %s\\n\", $2, $4, $5, $6}' shell/ns_running_config.conf  | column -t -s'|'").read().strip()
         vpnvipout = os.popen("awk '/^add vpn/&&/vserver/{printf \"\033[0;94m%s\033[00m | %s | %s | %s\\n\", $2, $4, $5, $6}' shell/ns_running_config.conf  | column -t -s'|'").read().strip()
     finally:
@@ -747,6 +739,11 @@ elif args.vip:
             print(csvipout + "\n")
         else:
             pass
+        if len(gslbvipout) > 2:
+            print(style.YELLOW + '{:-^87}'.format('GSLB VIP Basic Info'))
+            print(gslbvipout + "\n")
+        else:
+            pass
         if len(authvipout) > 2:
             print(style.YELLOW + '{:-^87}'.format('Authentication VIP Basic Info'))
             print(authvipout + "\n")
@@ -758,8 +755,7 @@ elif args.vip:
         else:
             pass
         try:
-            payload = {"version": version, "user": username, "action": "show -vip --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-            resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+            fate_message = "show -vip"; send_request(version, username, url, fate_message, "Success")
         finally:
             quit()
 
@@ -774,8 +770,7 @@ elif args.v:
             print(style.RED + '{:-^87}'.format('No ns.conf files found under nsconfig/') + style.RESET)
     finally:
         try:
-            payload = {"version": version, "user": username, "action": "show -v --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-            resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+            fate_message = "show -v"; send_request(version, username, url, fate_message, "Success")
         finally:
             quit()
 
@@ -906,8 +901,7 @@ elif args.case:
         print("")
 
         try:
-            payload = {"version": version, "user": username, "action": "show --case --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-            resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+            fate_message = "show --case"; send_request(version, username, url, fate_message, "Success")
         finally:
             quit()
 
@@ -922,11 +916,7 @@ elif args.bt:
         count_collectorprocesscrashfile = sp.run("awk '/bgpd-[0-9]|httpd-[0-9]|iked-[0-9]|imi-[0-9]|imish-[0-9]|iprep-[0-9]|iprep_tool-[0-9]|isisd-[0-9]|metricscollector-[0-9]|nsaaad-[0-9]|nscopo-[0-9]|nskrb_debug-[0-9]|nsm-[0-9]|ospf6d-[0-9]|ospfd-[0-9]|ripd-[0-9]|ripngd-[0-9]|snmpd-[0-9]|nsaggregatord-[0-9]|nscfsyncd-[0-9]|nscollect-[0-9]|nsconfigd-[0-9]|nsconmsg-[0-9]|nslped-[0-9]|nsnetsvc-[0-9]|nsnewstat-[0-9]|nssetup-[0-9]|nstraceaggregator-[0-9]|syshealthd-[0-9]|pitboss-[0-9]|sshd-[0-9]/&&/-rw------/{print $NF | \"sort -r| uniq -c\"}' shell/ls_lRtrp.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
         collectorprocesscrashfile = sp.run("awk '/bgpd-[0-9]|httpd-[0-9]|iked-[0-9]|imi-[0-9]|imish-[0-9]|iprep-[0-9]|iprep_tool-[0-9]|isisd-[0-9]|metricscollector-[0-9]|nsaaad-[0-9]|nscopo-[0-9]|nskrb_debug-[0-9]|nsm-[0-9]|ospf6d-[0-9]|ospfd-[0-9]|ripd-[0-9]|ripngd-[0-9]|snmpd-[0-9]|nsaggregatord-[0-9]|nscfsyncd-[0-9]|nscollect-[0-9]|nsconfigd-[0-9]|nsconmsg-[0-9]|nslped-[0-9]|nsnetsvc-[0-9]|nsnewstat-[0-9]|nssetup-[0-9]|nstraceaggregator-[0-9]|syshealthd-[0-9]|pitboss-[0-9]|sshd-[0-9]/&&/-rw------/{print $NF}' shell/ls_lRtrp.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.split()
         if len(nsppecrashfile) != 0:
-            try:
-                payload = {"version": version, "user": username, "action": "show -bt --> NSPPE crash" + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
-            finally:
-                pass
+            fate_message = "show -bt --> NSPPE crash"; send_request(version, username, url, fate_message, "Success")
             print(style.YELLOW + '{:-^87}'.format('Its a NSPPE Crash'))
             print(style.YELLOW + "\nAvailable NSPPE Core files in Case directory " + style.RESET)
             print(style.CYAN + '\n'.join(nsppecrashfile) + style.RESET)
@@ -993,8 +983,7 @@ elif args.bt:
             artesa = ("curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_artesa/build_artesa_" + codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild)
             if "200" in sp.run(manaq, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout:
                 try:
-                    payload = {"version": version, "user": username, "action": "show -bt --> mana process crash" + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                    resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                    fate_message = "show -bt --> mana process crash"; send_request(version, username, url, fate_message, "Success")
                 finally:
                     pass
                 sp.run(mana, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
@@ -1034,8 +1023,7 @@ elif args.bt:
                                 quit()
             elif "200" in sp.run(artesaq, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout:
                 try:
-                    payload = {"version": version, "user": username, "action": "show -bt --> artesa process crash" + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                    resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                    fate_message = "show -bt --> artesa process crash"; send_request(version, username, url, fate_message, "Success")
                 finally:
                     pass
                 sp.run(artesa, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
@@ -1067,8 +1055,7 @@ elif args.bt:
                                 os.chdir("dbgbins-" + codebuild[:-4])
                                 btout = sp.run("gdb amd64/" + processcrash.split("-")[0].split("/")[-1] + " " + processcrash + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                                 print(btout.stdout)
-                                sp.run("rm -rf dbgbins*", shell=True,
-                                       text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                                sp.run("rm -rf dbgbins*", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                                 os.chdir("..")
                             else:
                                 print(style.RED + "Unable to find this process: " + processcrash.split("-")[0].split("/")[-1] + " in debug binaries" + style.RESET)
@@ -1077,8 +1064,7 @@ elif args.bt:
         else:
             print(style.RED + "Unable to find Process / NSPPE Crash in Either Collector Bundle or No Core File in Case Directory !!!" + style.RESET)
             try:
-                payload = {"version": version, "user": username, "action": "show -bt --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Failed", "format": "string", "sr": os.getcwd().split("/")[3]}
-                resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                fate_message = "show -bt"; send_request(version, username, url, fate_message, "Failed")
             finally:
                 pass
     finally:
@@ -1086,8 +1072,7 @@ elif args.bt:
 elif args.bt1:
     try:
         try:
-            payload = {"version": version, "user": username, "action": "show -bt1 --> NSPPE crash" + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-            resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+            fate_message = "show -bt1 --> NSPPE crash"; send_request(version, username, url, fate_message, "Success")
         finally:
             pass
         manual_core = input(style.YELLOW + "\nPlease specify the core file full path for manual analysis: " + style.RESET)
@@ -1114,16 +1099,14 @@ elif args.author:
     logger.info(os.getcwd() + " - author")
     print(sp.run(["lolcat"], input=showscriptauthor, capture_output=True, text=True).stdout)
     try:
-        payload = {"version": version, "user": username, "action": "show --author --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-        resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+        fate_message = "show --author"; send_request(version, username, url, fate_message, "Success")
     finally:
         pass
 elif args.about:
     logger.info(os.getcwd() + " - about")
     print(sp.run(["lolcat"], input=showscriptabout, capture_output=True, text=True).stdout)
     try:
-        payload = {"version": version, "user": username, "action": "show --about --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-        resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+        fate_message = "show --about"; send_request(version, username, url, fate_message, "Success")
     finally:
         pass
 elif args.G:
@@ -1172,8 +1155,7 @@ elif args.G:
             finally:
                 os.popen("fixperms ./conFetch").read()
                 try:
-                    payload = {"version": version, "user": username, "action": "show -G " + ''.join(args.G) + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                    resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                    fate_message = "show -G " + ''.join(args.G); send_request(version, username, url, fate_message, "Success")
                 finally:
                     pass
         elif "ha" in args.G:
@@ -1203,8 +1185,7 @@ elif args.G:
             finally:
                 os.popen("fixperms ./conFetch").read()
                 try:
-                    payload = {"version": version, "user": username, "action": "show -G " + ''.join(args.G) + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                    resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                    fate_message = "show -G " + ''.join(args.G); send_request(version, username, url, fate_message, "Success")
                 finally:
                     pass
         elif "mem" in args.G:
@@ -1228,8 +1209,7 @@ elif args.G:
             finally:
                 os.popen("fixperms ./conFetch").read()
                 try:
-                    payload = {"version": version, "user": username, "action": "show -G " + ''.join(args.G) + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                    resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                    fate_message = "show -G " + ''.join(args.G); send_request(version, username, url, fate_message, "Success")
                 finally:
                     pass
         elif "nic" in args.G:
@@ -1249,8 +1229,7 @@ elif args.G:
             finally:
                 os.popen("fixperms ./conFetch").read()
                 try:
-                    payload = {"version": version, "user": username, "action": "show -G " + ''.join(args.G) + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                    resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                    fate_message = "show -G " + ''.join(args.G); send_request(version, username, url, fate_message, "Success")
                 finally:
                     pass
     finally:
@@ -1260,8 +1239,7 @@ elif args.ha:
         with open("conFetch/show_output/show_ha.txt", "r") as show_ha:
             print(show_ha.read())
             try:
-                payload = {"version": version, "user": username, "action": "show -ha pre-data --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                fate_message = "show -ha pre-data"; send_request(version, username, url, fate_message, "Success")
             finally:
                 quit()
     else:
@@ -1276,8 +1254,7 @@ elif args.ha:
             if "Standalone" in ha_state:
                 print(style.RED + "Since this is a Standalone node, unable to proceed further !!!" + style.RESET + "\n")
                 try:
-                    payload = {"version": version, "user": username, "action": "show -ha Standalone --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                    resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                    fate_message = "show -ha Standalone"; send_request(version, username, url, fate_message, "Success")
                 finally:
                     quit()
             else:
@@ -1294,8 +1271,7 @@ elif args.ha:
                         print(ha_transition + "\n")
                         ha_transition_timestamp = re.findall(timestamp_pattern, ha_transition)
                         try:
-                            payload = {"version": version, "user": username, "action": "show -ha Analysis --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                            resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                            fate_message = "show -ha Analysis"; send_request(version, username, url, fate_message, "Success")
                         finally:
                             pass
                 else:
@@ -1318,8 +1294,7 @@ elif args.ha:
                                 print(line.replace("'''", ""))
                                 ha_transition_timestamp = re.findall(timestamp_pattern, line)
                     try:
-                        payload = {"version": version, "user": username, "action": "show -ha Analysis --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                        resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                        fate_message = "show -ha Analysis"; send_request(version, username, url, fate_message, "Success")
                     finally:
                         pass
         finally:
@@ -1465,8 +1440,7 @@ elif args.g:
             finally:
                 os.popen("fixperms ./conFetch").read()
                 try:
-                    payload = {"version": version, "user": username, "action": "show -g " + ''.join(args.K) + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                    resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                    fate_message = "show -g " + ''.join(args.K) ; send_request(version, username, url, fate_message, "Success")
                 finally:
                     pass
         elif "ha" in args.g:
@@ -1501,8 +1475,7 @@ elif args.g:
             finally:
                 os.popen("fixperms ./conFetch").read()
                 try:
-                    payload = {"version": version, "user": username, "action": "show -g " + ''.join(args.K) + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                    resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                    fate_message = "show -g " + ''.join(args.K) ; send_request(version, username, url, fate_message, "Success")
                 finally:
                     pass
         elif "mem" in args.g:
@@ -1525,8 +1498,7 @@ elif args.g:
             finally:
                 os.popen("fixperms ./conFetch").read()
                 try:
-                    payload = {"version": version, "user": username, "action": "show -g " + ''.join(args.g + " -- ".split() + args.K) + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                    resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                    fate_message = "show -g " + ''.join(args.K) ; send_request(version, username, url, fate_message, "Success")
                 finally:
                     pass
         elif "nic" in args.g:
@@ -1549,14 +1521,11 @@ elif args.g:
             finally:
                 os.popen("fixperms ./conFetch").read()
                 try:
-                    payload = {"version": version, "user": username, "action": "show -g " + ''.join(args.g + " -- ".split() + args.K) + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                    resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                    fate_message = "show -g " + ''.join(args.K) ; send_request(version, username, url, fate_message, "Success")
                 finally:
                     pass
     finally:
         pass
-
-
 elif args.z:
     try:
         path = "conFetch"
@@ -1601,13 +1570,7 @@ elif args.z:
                 else:
                     pass
                 custom_counter = re.sub('.*,\s\].*', '', custom_counter)
-                if True:
-                    try:
-                        payload = {"version": version, "user": username, "action": "show -z " + ''.join(args.z) + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                        resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
-                    finally:
-                        pass
-                    file = open(path+"/"+counter_name+"_Graph.html", "w")
+                file = open(path+"/"+counter_name+"_Graph.html", "w")
                 file.write('''<html><head> <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script> <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.js"></script> <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.css"> <script type="text/javascript">google.charts.load('current',{'packages': ['annotationchart']}); google.charts.setOnLoadCallback(allnic_tot_rx_tx_mbits); function allnic_tot_rx_tx_mbits(){var data=new google.visualization.DataTable(); ''' + custom_counter +
                             ''' var chart=new google.visualization.AnnotationChart(document.getElementById('allnic_tot_rx_tx_mbits')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}</script></head><body> <h1 class="txt-primary">'''+counter_name+'''</h1> <hr> <p class="txt-title">Collector_Bundle_Name: '''+collector_bundle_name+'''<br>Device_Name: '''+adchostname+'''<br>Log_file: All newnslogs<br>Log_Timestamp: '''+start_end+'''</p><hr> <div style="width: 100%"><p class="txt-primary">'''+ counter_name +''' Graph</p><div id="allnic_tot_rx_tx_mbits" style="height:450px"></div></div><div class="footer">Project conFetch</div></body></html>''')
                 file.close()
@@ -1615,8 +1578,7 @@ elif args.z:
                 os.popen("fixperms ./conFetch/").read()
                 print(style.GREEN + f'Processed {counter_name} Graph for all newnslogs' + style.RESET)
                 try:
-                    payload = {"version": version, "user": username, "action": "show -z " + ''.join(args.z) + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                    resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                    fate_message = "show -z " + ''.join(args.z); send_request(version, username, url, fate_message, "Success")
                 finally:
                     pass
             elif int(num_columns) == 11:
@@ -1632,13 +1594,7 @@ elif args.z:
                 else:
                     pass
                 custom_counter = re.sub('.*,\s\].*', '', custom_counter)
-                if True:
-                    try:
-                        payload = {"version": version, "user": username, "action": "show -z " + ''.join(args.z) + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                        resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
-                    finally:
-                        pass
-                    file = open(path+"/"+counter_name+"_Graph.html", "w")
+                file = open(path+"/"+counter_name+"_Graph.html", "w")
                 file.write('''<html><head> <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script> <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.js"></script> <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.css"> <script type="text/javascript">google.charts.load('current',{'packages': ['annotationchart']}); google.charts.setOnLoadCallback(allnic_tot_rx_tx_mbits); function allnic_tot_rx_tx_mbits(){var data=new google.visualization.DataTable(); ''' + custom_counter +
                             ''' var chart=new google.visualization.AnnotationChart(document.getElementById('allnic_tot_rx_tx_mbits')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}</script></head><body> <h1 class="txt-primary">'''+counter_name+'''</h1> <hr> <p class="txt-title">Collector_Bundle_Name: '''+collector_bundle_name+'''<br>Device_Name: '''+adchostname+'''<br>Log_file: All newnslogs<br>Log_Timestamp: '''+start_end+'''</p><hr> <div style="width: 100%"><p class="txt-primary">'''+ counter_name +''' Graph</p><div id="allnic_tot_rx_tx_mbits" style="height:450px"></div></div><div class="footer">Project conFetch</div></body></html>''')
                 file.close()
@@ -1646,15 +1602,13 @@ elif args.z:
                 os.popen("fixperms ./conFetch/").read()
                 print(style.GREEN + f'Processed {counter_name} Graph for all newnslogs' + style.RESET)
                 try:
-                    payload = {"version": version, "user": username, "action": "show -z " + ''.join(args.z) + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Success", "format": "string", "sr": os.getcwd().split("/")[3]}
-                    resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                    fate_message = "show -z " + ''.join(args.z); send_request(version, username, url, fate_message, "Success")
                 finally:
                     pass
         except ValueError:
             print(style.RED + f'Please check the counter name once again !!!' + style.RESET)
             try:
-                payload = {"version": version, "user": username, "action": "show -z " + ''.join(args.z) + " --> " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Failed", "format": "string", "sr": os.getcwd().split("/")[3]}
-                resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+                fate_message = "show -z " + ''.join(args.z); send_request(version, username, url, fate_message, "Failed")
             finally:
                 pass
     finally:
@@ -1665,7 +1619,6 @@ else:
     print("Please use -h for help")
     logger.error(os.getcwd() + " - No switch")
     try:
-        payload = {"version": version, "user": username, "action": "No Switch Used " + os.getcwd() + " --> " + str(int(time.time())), "runtime": 0, "result": "Error", "format": "string", "sr": os.getcwd().split("/")[3]}
-        resp = request.urlopen(request.Request(url, data=parse.urlencode(payload).encode()))
+        fate_message = "No Switch Used"; send_request(version, username, url, fate_message, "Error")
     finally:
         quit()
