@@ -5,7 +5,7 @@ import pandas as pd
 
 def grabber(caseNum):
     pattern = re.compile(r'collector_.*')
-    base_path = f'/home/CITRITE/manjeshn/manscript/cases/{caseNum}/'    
+    base_path = f'/home/CITRITE/manjeshn/manscript/{caseNum}/'    
     try:
         all_directories = [os.path.join(base_path, d) for d in os.listdir(base_path) if os.path.isdir(os.path.join(base_path, d))]
         sorted_directories = sorted(all_directories, key=lambda x: os.path.basename(x))
@@ -40,7 +40,7 @@ jsondataasbytes = jsondata.encode('utf-8')
 sfdcreq.add_header('Content-Length', len(jsondataasbytes))
 sfdctoken = json.loads(request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore"))['options'][0]['values'][0]
 
-with open('/home/CITRITE/manjeshn/manscript/cases/caseList.txt', 'r') as caseList:
+with open('/home/CITRITE/manjeshn/manscript/caseList.txt', 'r') as caseList:
     for idx, case in enumerate(caseList, start=1):
         lb_vserver_count = 0
         cs_vserver_count = 0
