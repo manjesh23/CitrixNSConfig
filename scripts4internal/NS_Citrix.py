@@ -24,7 +24,7 @@ def left_align_numbers(x):
     else:
         return str(x)
 
-excel_file_path = '/home/CITRITE/manjeshn/manscript/NS_Citrix.xlsx'
+excel_file_path = '/home/CITRITE/manjeshn/manscript/Archive_NS_Citrix.xlsx'
 if os.path.exists(excel_file_path):
     os.remove(excel_file_path)
 
@@ -63,7 +63,7 @@ with open('/home/CITRITE/manjeshn/manscript/caseList.txt', 'r') as caseList:
             gslb_vserver_count = sp.run('''awk '/add gslb vserver/{count++} END{print count+0}' ''' + caseDir, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
             auth_vserver_count = sp.run('''awk '/add authentication vserver/{count++} END{print count+0}' ''' + caseDir, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
             waf_count = sp.run('''awk '/bind appfw profile/{print $4 | "sort | uniq | wc -l"; found=1} END {if (!found) print 0}' ''' + caseDir + ''' | sed "s/^[ \t]*//"''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
-            ica_vpn_count = sp.run('''awk '/bind vpn/ && /staServer/ {print $4} END{print count+0}' ''' + caseDir + ''' | sort | uniq | wc -l''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+            ica_vpn_count = sp.run('''awk '/bind vpn vserver/ && /staServer/ {print $4} END{print count+0}' ''' + caseDir + ''' | sort | uniq | wc -l''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
             all_vpn_count = sp.run('''awk '/bind vpn vserver/{print $4} END{print count+0}' ''' + caseDir + ''' | sort | uniq | wc -l''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
             try:
                 non_ica_vpn_vserver_count = int(all_vpn_count) - int(ica_vpn_count)

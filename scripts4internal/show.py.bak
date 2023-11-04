@@ -51,7 +51,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "4.17"
+version = "4.23"
 
 # About script
 showscriptabout = '''
@@ -179,13 +179,27 @@ if args.i:
         adcpartitionName = sp.run("find shell/partitions/ -maxdepth 1 -mindepth 1 | awk -F'/' '{print $NF}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
         adcha = sp.run( "sed -n -e \"/show ns version/I,/Done/p\" shell/showcmds.txt | grep Node | awk -F':' '{print $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         adcfirmware = sp.run("cat shell/ns_running_config.conf | grep \"#NS\" | cut -c 2-", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        admconnected = sp.run("awk '/add service adm_metric_collector_svc_/{printf \"%s (%s : %s)\", $4, $5, $6}' shell/ns_running_config.conf", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
         firmwarehistory = sp.run("awk -F'NetScaler' 'BEGIN{nores=1;}/upgrade from NetScaler/{if ($0 ~ \"upgrade|build\") history=$2; nores=0} END {if (nores) print \"None found recently\"; else print history}' shell/dmesg-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         nsinstall = sp.run("awk '/VERSION/||/_TIME/{$1=\"\"; printf \"%s -->\", $0}' var/nsinstall/installns_state | sed -E 's/^\s|[0-9]{9,15}.|-->$//g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         platformserial = sp.run("sed -n '/^exec: show ns hardware/,/Done/p' shell/showcmds.txt | awk '/Serial/{print $NF}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         platformmodel = sp.run("sed -n '/^exec: show ns hardware/,/Done/p' shell/showcmds.txt | awk '/Platform/{print $1=\"\"; print}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        licmodel = sp.run("awk '/Users/{print}' var/log/license.log | awk -F: '{print $1}' | awk '{printf \"%s | \", $NF}' | sed 's/..$//'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        licmodel_licfile = sp.run("awk '/Users/{print}' var/log/license.log | awk -F: '{print $1}' | awk '{printf \"%s | \", $NF}' | sed 's/..$//'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        licmodel_cloudlic = sp.run("awk '/Cloud Subscription License/{if ($0 ~ YES) print \"Cloud Subscription License\"}' shell/showcmds.txt", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        if len(licmodel_cloudlic.stdout.strip()) > 1:
+            licmodel = licmodel_cloudlic.stdout.strip()
+        else:
+            licmodel = licmodel_licfile.stdout.strip()
         hwplatform = sp.run("egrep \"netscaler.descr\" shell/sysctl-a.out | awk -F':' '{print $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        vmplatform = sp.run("egrep \"platform\" var/nslog/dmesg.boot | grep -iE \"hyper-v|vmware\" | head -2 | tail -1 | awk -F':' '{if ($2 ~ \"bios\") print \"No Hypervisor found\"; else print $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        vmplatform_sdx = sp.run('''awk '/vpx_on_sdx/{if ($0 ~ 1) print "VPX on SDX"}' shell/sysctl-a.out''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        vmplatform_cloud = sp.run('''awk '/vpx_on_cloud/{if ($0 ~ 1) print "VPX on AWS"; else if ($0 ~ 3) print "VPX on Azure"; else if ($0 ~ 4) print "VPX on GCP"}' shell/sysctl-a.out''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        vmplatform_esx = sp.run('''awk '/platform: sysid / {exit} END {if ($0 ~ /450000|450001/) print "Citrix Hypervisor"; else if ($0 ~ /450010|450011/) print "ESX"; else if (($0 ~ /450020|450021/) && ($0 !~ /vpx_on_cloud = 0/)) print "Hyper-V"; else if (($0 ~ /450070|450071/) && ($0 !~ /vpx_on_cloud = 0/)) print "KVM"; else print "Unknown" }' shell/sysctl-a.out''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        if len(vmplatform_sdx.stdout.strip()) > 1:
+            vmplatform = vmplatform_sdx.stdout.strip()
+        elif len(vmplatform_cloud.stdout.strip()) > 1:
+            vmplatform = vmplatform_cloud.stdout.strip()
+        else:
+            vmplatform = vmplatform_esx.stdout.strip()
         modelid = sp.run("awk '/Model Number ID:/{print $NF}' shell/showcmds.txt", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         licensetype = sp.run("awk '/License Type/{$1=$2=\"\"; print}' shell/showcmds.txt", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         licensemode = sp.run("awk '/Licensing mode/{$1=$2=\"\"; print}' shell/showcmds.txt", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
@@ -204,7 +218,7 @@ if args.i:
         systemtimezone = sp.run("""awk '/Timezone:/&&/GMT/{print $2}' shell/showcmds.txt | awk '{print substr($1,1,9)}' | awk -F'GMT' '{printf "GMT " $2" "}'; awk '/Timezone:/&&/GMT/{print $2}' shell/showcmds.txt | awk '{print substr($1,11)}' | awk -F- '{print "["$1"]" " - "$2}' | awk 'BEGIN { found = 0 } { output = $0; found = 1 } END { if (found) print output; else print "GMT 00:00 [UTC] - Coordinated Universal Time" }'""", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         cpuinfo = sp.run("awk '/hw.model/{$1=\"\"; print}' shell/sysctl-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         loadaverage = sp.run("awk '/load average/{printf \"%s %s %s\", \"1 min: \"$6, \"5 min: \"$7, \"15 min: \"$8}' shell/top-b.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        mgmtcpu = sp.run("awk '!/100% idle/{printf \"%s User: %s | Nice: %s | System: %s | Interrupt: %s | Idle: %s\", $1, $2, $4, $6, $8, $(NF-1)}' shell/mgmtcpupercent.txt | awk '{if($NF>75) print $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, \"\033[32m\"$15\"\033[0m\"; else print $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, \"\033[31m\"$15\"\033[0m\"}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        mgmtcpu = sp.run("awk '!/100% idle/{printf \"Management: %s User: %s | Nice: %s | System: %s | Interrupt: %s | Idle: %s\\n\", $1, $2, $4, $6, $8, $(NF-1)}' shell/mgmtcpupercent.txt | awk '{if($NF>75) print $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, \"\\033[32m\"$16\"\\033[0m\"; else print $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, \"\\033[31m\"$16\"\\033[0m\"}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         memoryinfo = sp.run("awk '(/hw.usermem/ && ORS=\" ,\") || (/hw.realmem/ && ORS=RS)' shell/sysctl-a.out | head -n1 | awk '{printf \"%s | %s\", \"Total Memory: \"$4/1048576, \"Available Memory: \"$2/1048576}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         varsize = sp.run("awk '/\/var$/{printf \"%s -> %s | %s | %s | %s\", $1,\"Total: \"$2,\"Used: \"$3, \"Free: \"$4, \"Capacity Used: \"substr($5, 1, length($5)-1)}' shell/df-akin.out | awk '{if ($NF > 75){printf \"%s\", substr($0, 1, length($0)-2)\"\033[0;31m\"$NF\"%\033[0m\"}else{printf \"%s\", substr($0, 1, length($0)-2)\"\033\[0;32m\"$NF\"%\033[0m\"}}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         sslcards = sp.run("awk '/SSL cards UP/{printf \"%s%s - \",\"[UP: \" $NF,\"]\"}/SSL cards present/{printf \"%s%s\\n\", \"[Present: \"$NF,\"]\";exit}' shell/statcmds.txt", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
@@ -217,6 +231,18 @@ if args.i:
             memfreepercent = round(memfreepercent, 2)
         else:
             pass
+        virtual_physical = sp.run('''awk '/VPXEnvironment/{if ($0 ~ /VPX/) {print "VPX"; exit}}' shell/showcmds.txt''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+        required_mem = sp.run('''awk '/System Detected/{print $(NF-1)*4000;exit}' var/nslog/dmesg.boot''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+        configured_mem = sp.run('''awk '/hw.realmem/{print $2/1048576}' shell/sysctl-a.out''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+        try:
+            mem_decision_output = int(required_mem) < int(configured_mem)
+        finally:
+            if mem_decision_output is False:
+                configured_mem_val = int(configured_mem) / 1000
+                required_mem_val = int(required_mem) / 1000
+                print(style.YELLOW + f"Warning: Allocated memory {configured_mem_val} Gigs is not matching the vCPU calculated {required_mem_val} Gigs\n" + style.RESET)
+            else:
+                pass
     except IOError as io:
         print(io)
     finally:
@@ -227,12 +253,10 @@ if args.i:
         print("System TimeZone: " + systemtimezone.stdout.strip())
         print("Newnslog Overall Start_End Time: " + newnslogsetime.stdout.strip())
         print("")
-        if not len(adcpartitionName) == 0:
-            print("Partition Name: " + adcpartitionName)
-        else:
-            print("Partition Name: default")
+        print(f"Partition Name: {adcpartitionName if adcpartitionName else 'default'}")
         print("NetScaler Hostname: " + adchostname.stdout.strip())
         print("NetScaler HA State: " + adcha.stdout.strip())
+        print(f"ADM Connected: {admconnected if admconnected else 'No'}")
         print("NetScaler Firmware version: " + adcfirmware.stdout.strip())
         print("Firmware history: " + firmwarehistory.stdout.strip())
         print("Last Upgrade Stats: " + nsinstall.stdout.strip())
@@ -240,12 +264,12 @@ if args.i:
         print("Platform Serial: " + platformserial.stdout.strip())
         print("Platform Model: " + platformmodel.stdout.strip())
         print("HW Platform: " + hwplatform.stdout.strip())
-        print("VM Platform: " + vmplatform.stdout.strip())
+        print("VM Platform: " + vmplatform)
         print("Model ID: " + modelid.stdout.strip())
         print("")
         print("License Type: " + licensetype.stdout.strip())
         print("Licensing Mode: " + licensemode.stdout.strip())
-        print("License Model: " + licmodel.stdout.strip())
+        print("License Model: " + licmodel)
         print("HostID: " + hostid.stdout.strip())
         print("")
         print("NSIP Address: " + nsip.stdout.strip() + " | " + nsipsubnet.stdout.strip())
@@ -256,7 +280,7 @@ if args.i:
         print("")
         print("CPU Info: " + cpuinfo.stdout.strip())
         print("Load Average: " + loadaverage.stdout.strip())
-        print("Management " + mgmtcpu.stdout.strip())
+        print(mgmtcpu.stdout.strip())
         try:
             if memfreepercent > 40:
                 print("Memory Info: " + memoryinfo.stdout.strip() + " | Free Percent: " + style.GREEN + str(memfreepercent) + "%" + style.RESET)
