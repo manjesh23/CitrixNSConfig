@@ -51,7 +51,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "4.23"
+version = "5.03"
 
 # About script
 showscriptabout = '''
@@ -104,6 +104,7 @@ def send_request(version, username, url, fate_message, result):
 parser = argparse.ArgumentParser(description="NetScaler Support Bundle Show Script", formatter_class=argparse.RawTextHelpFormatter)
 parser.add_argument('--author', action="store_true", help=argparse.SUPPRESS)
 parser.add_argument('-i', action="store_true", help="NetScaler Basic Information")
+parser.add_argument('-P', action="store_true", help="NetScaler Admin Partition Details")
 parser.add_argument('-n', action="store_true", help="NetScaler Networking Information")
 parser.add_argument('-p', action="store_true", help="NetScaler Process Related Information")
 parser.add_argument('-c', metavar="", help="Display all possible counter names within newnslog")
@@ -177,7 +178,8 @@ if args.i:
         print(style.YELLOW + '{:-^87}'.format('NetScaler Show Configuration') + "\n" + style.RESET)
         adchostname = sp.run("awk '{print $2}' shell/uname-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         adcpartitionName = sp.run("find shell/partitions/ -maxdepth 1 -mindepth 1 | awk -F'/' '{print $NF}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
-        totalpartition = sp.run('''awk '/bind ns partition/{partitions = partitions $4 " | "} END {sub(/ \| $/, "", partitions); print partitions}' shell/ns_running_config.conf''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+        totalpartition = sp.run('''awk '/add ns partition/{partitions = partitions $4 " | "} END {sub(/ \| $/, "", partitions); print partitions}' shell/ns_running_config.conf''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+        partition_count = sp.run('''awk '/add ns partition/{count++} END{print count}' shell/ns_running_config.conf''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
         adcha = sp.run( "sed -n -e \"/show ns version/I,/Done/p\" shell/showcmds.txt | grep Node | awk -F':' '{print $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         adcfirmware = sp.run("cat shell/ns_running_config.conf | grep \"#NS\" | cut -c 2-", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         admconnected = sp.run("awk '/add service adm_metric_collector_svc_/{printf \"%s (%s : %s)\", $4, $5, $6}' shell/ns_running_config.conf", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
@@ -255,14 +257,15 @@ if args.i:
         print("System TimeZone: " + systemtimezone.stdout.strip())
         print("Newnslog Overall Start_End Time: " + newnslogsetime.stdout.strip())
         print("")
-        print(f"Partition Name: {adcpartitionName if adcpartitionName else 'default'}")
-        print(f"Total Partition's: {totalpartition if totalpartition else 'default'}")
         print("NetScaler Hostname: " + adchostname.stdout.strip())
         print("NetScaler HA State: " + adcha.stdout.strip())
         print(f"ADM Connected: {admconnected if admconnected else 'No'}")
         print("NetScaler Firmware version: " + adcfirmware.stdout.strip())
         print("Firmware history: " + firmwarehistory.stdout.strip())
         print("Last Upgrade Stats: " + nsinstall.stdout.strip())
+        print(f"Partition Name: {adcpartitionName if adcpartitionName else 'default'}")
+        print(f"Admin Partition's: {totalpartition if totalpartition else 'default'}")
+        print(f"Number of admin partition's: {partition_count if partition_count else '0'}")
         print("")
         print("Platform Serial: " + platformserial.stdout.strip())
         print("Platform Model: " + platformmodel.stdout.strip())
@@ -299,6 +302,42 @@ if args.i:
             fate_message = "show -i"; send_request(version, username, url, fate_message, "Success")
         finally:
             quit()
+elif args.P:
+    try:
+        partition_basic = sp.run("awk '/add ns partition/{printf \"%s\\t%s\\t%s\\t%s\\t%s\\t%s\\n\", $6,$8/1024,$10,$12,$4,$14 ~ /:/ ? $14 : \"Not-Configured\"}' shell/ns_running_config.conf", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+        partition_basic_data = [line.split() for line in partition_basic.split('\n')]
+        partition_vlan = sp.run("awk '/bind ns partition/{printf \"%s\\t%s\\n\", $4, $NF}' shell/ns_running_config.conf", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+        partition_vlan_data = [line.split() for line in partition_vlan.split('\n')]
+    finally:
+        print(style.YELLOW + '{:-^87}'.format('NetScaler Admin Partition Details') + "\n" + style.RESET)
+        if len(partition_basic_data) > 2:
+            mapping = {row[-2]: row for row in partition_basic_data}
+            mapped_result = [[row[1]] + mapping[row[0]] for row in partition_vlan_data]
+            header = ["vlan | ", "partitionid | ", "maxBandwidth Mbps | ", "maxConn | ", "maxMemLimit MB | ", "partitionName | ", "partitionMAC |"]
+            column_widths = [len(header[i]) for i in range(len(header))]
+            for row in mapped_result:
+                for i in range(len(row)):
+                    column_widths[i] = max(column_widths[i], len(str(row[i])))
+            formatted_header = [header[i].ljust(column_widths[i]) for i in range(len(header))]
+            print(' '.join(formatted_header))
+            separator = '-' * (sum(column_widths) + len(column_widths) - 1)
+            print(separator)
+            for row in mapped_result:
+                formatted_row = [str(row[i]).ljust(column_widths[i]) for i in range(len(row))]
+                print(' '.join(formatted_row))
+            # Tooltrack
+            try:
+                fate_message = "show -P"; send_request(version, username, url, fate_message, "Success")
+            finally:
+                quit()
+        else:
+            print(style.RED + "No admin partition details to dsiplay" + style.RESET)
+            # Tooltrack
+            try:
+                fate_message = "show -P"; send_request(version, username, url, fate_message, "Failed")
+            finally:
+                quit()
+
 elif args.pt:
     box_time = str(sp.run("awk -F'GMT' '/Timezone:/&&/GMT/{print substr($2,1,6)}' shell/showcmds.txt | awk 'BEGIN { found = 0 } { output = $0; found = 1 } END { if (found) print output; else print \"00:00\" }'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
     box_time_mins = (int(re.match(r"([-+]?)(\d+):(\d+)", box_time).group(2)) * 60) + int(re.match(r"([-+]?)(\d+):(\d+)", box_time).group(3)); box_time_mins *= -1 if re.match(r"([-+]?)(\d+):(\d+)", box_time).group(1) == "-" else 1
