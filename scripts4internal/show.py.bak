@@ -196,7 +196,7 @@ if args.i:
         hwplatform = sp.run("egrep \"netscaler.descr\" shell/sysctl-a.out | awk -F':' '{print $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         vmplatform_sdx = sp.run('''awk '/vpx_on_sdx/||/netscaler.sdxvpx/{if ($0 ~ 1) print "VPX on SDX"}' shell/sysctl-a.out''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         vmplatform_cloud = sp.run('''awk '/vpx_on_cloud/{if ($0 ~ 1) print "VPX on AWS"; else if ($0 ~ 3) print "VPX on Azure"; else if ($0 ~ 4) print "VPX on GCP"}' shell/sysctl-a.out''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        vmplatform_esx = sp.run('''awk '/platform: sysid / {exit} END {if ($0 ~ /450000|450001/) print "Citrix Hypervisor"; else if ($0 ~ /450010|450011/) print "ESX"; else if (($0 ~ /450020|450021/) && ($0 !~ /vpx_on_cloud = 0/)) print "Hyper-V"; else if (($0 ~ /450070|450071/) && ($0 !~ /vpx_on_cloud = 0/)) print "KVM"; else print "Unknown" }' shell/sysctl-a.out''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        vmplatform_esx = sp.run('''awk '/platform: sysid /||/sysid/{exit} END {if ($0 ~ /450000|450001/) print "Citrix Hypervisor"; else if ($0 ~ /450010|450011/) print "ESX"; else if (($0 ~ /450020|450021/) && ($0 !~ /vpx_on_cloud = 0/)) print "Hyper-V"; else if (($0 ~ /450070|450071/) && ($0 !~ /vpx_on_cloud = 0/)) print "KVM"; else print "Unknown" }' shell/sysctl-a.out''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         if len(vmplatform_sdx.stdout.strip()) > 1:
             vmplatform = vmplatform_sdx.stdout.strip()
         elif len(vmplatform_cloud.stdout.strip()) > 1:
@@ -257,15 +257,15 @@ if args.i:
         print("System TimeZone: " + systemtimezone.stdout.strip())
         print("Newnslog Overall Start_End Time: " + newnslogsetime.stdout.strip())
         print("")
-        print(f"Partition Name: {adcpartitionName if adcpartitionName else 'default'}")
-        print(f"Total Partition's: {totalpartition if totalpartition else 'default'}")
-        print(f"Number of admin partition's: {partition_count if partition_count else '0'}")
         print("NetScaler Hostname: " + adchostname.stdout.strip())
         print("NetScaler HA State: " + adcha.stdout.strip())
         print(f"ADM Connected: {admconnected if admconnected else 'No'}")
         print("NetScaler Firmware version: " + adcfirmware.stdout.strip())
         print("Firmware history: " + firmwarehistory.stdout.strip())
         print("Last Upgrade Stats: " + nsinstall.stdout.strip())
+        print(f"Partition Name: {adcpartitionName if adcpartitionName else 'default'}")
+        print(f"Admin Partition's: {totalpartition if totalpartition else 'default'}")
+        print(f"Number of admin partition's: {partition_count if partition_count else '0'}")
         print("")
         print("Platform Serial: " + platformserial.stdout.strip())
         print("Platform Model: " + platformmodel.stdout.strip())
@@ -310,10 +310,10 @@ elif args.P:
         partition_vlan_data = [line.split() for line in partition_vlan.split('\n')]
     finally:
         print(style.YELLOW + '{:-^87}'.format('NetScaler Admin Partition Details') + "\n" + style.RESET)
-        if len(partition_basic_data) > 2:
+        if len(partition_basic_data) >= 2:
             mapping = {row[-2]: row for row in partition_basic_data}
             mapped_result = [[row[1]] + mapping[row[0]] for row in partition_vlan_data]
-            header = ["vlan | ", "partitionid | ", "maxBandwidth Mbps | ", "maxConn | ", "maxMemLimit | ", "partitionName | ", "partitionMAC |"]
+            header = ["vlan | ", "partitionid | ", "maxBandwidth Mbps | ", "maxConn | ", "maxMemLimit MB | ", "partitionName | ", "partitionMAC |"]
             column_widths = [len(header[i]) for i in range(len(header))]
             for row in mapped_result:
                 for i in range(len(row)):
@@ -499,7 +499,7 @@ elif args.c:
         else:
             print(style.RED + "Unable to find any counter name with the keyword " + args.c + style.RESET)
             try:
-                fate_message = "show -n"; send_request(version, username, url, fate_message, "Failed")
+                fate_message = "show -c"; send_request(version, username, url, fate_message, "Failed")
             finally:
                 pass
         quit()

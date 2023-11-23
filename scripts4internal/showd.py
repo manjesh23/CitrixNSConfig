@@ -51,7 +51,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "5.03"
+version = "5.11"
 
 # About script
 showscriptabout = '''
@@ -131,6 +131,8 @@ parser.add_argument('-ha', action="store_true", help="HA Analysis (Potential RCA
 parser.add_argument('-pt', metavar="", action="append", help="Check if the given problem time present in the bundle (\"Aug 02 13:40:00\")")
 parser.add_argument('-z', action="append", metavar="", help="Generate HTML Graph for all newnslog(s) at once per user-input counter\n--divide <integer> --> value used to divide 'totalcount-val' in nsconmsg output")
 parser.add_argument('--divide', action="append", metavar="divide column 3 by", help=argparse.SUPPRESS)
+parser.add_argument('-T', action="append", choices={"ha"}, help="Generate PNG file for specific feature")
+parser.add_argument('--cpu', action="store_true", help="Analyse High Mgmt CPU and its potential cause")
 parser.add_argument('--case', action="store_true", help="Salesforce Case Details")
 parser.add_argument('--about', action="store_true", help="About Show Script")
 args = parser.parse_args()
@@ -196,7 +198,7 @@ if args.i:
         hwplatform = sp.run("egrep \"netscaler.descr\" shell/sysctl-a.out | awk -F':' '{print $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         vmplatform_sdx = sp.run('''awk '/vpx_on_sdx/||/netscaler.sdxvpx/{if ($0 ~ 1) print "VPX on SDX"}' shell/sysctl-a.out''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         vmplatform_cloud = sp.run('''awk '/vpx_on_cloud/{if ($0 ~ 1) print "VPX on AWS"; else if ($0 ~ 3) print "VPX on Azure"; else if ($0 ~ 4) print "VPX on GCP"}' shell/sysctl-a.out''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        vmplatform_esx = sp.run('''awk '/platform: sysid / {exit} END {if ($0 ~ /450000|450001/) print "Citrix Hypervisor"; else if ($0 ~ /450010|450011/) print "ESX"; else if (($0 ~ /450020|450021/) && ($0 !~ /vpx_on_cloud = 0/)) print "Hyper-V"; else if (($0 ~ /450070|450071/) && ($0 !~ /vpx_on_cloud = 0/)) print "KVM"; else print "Unknown" }' shell/sysctl-a.out''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        vmplatform_esx = sp.run('''awk '/platform: sysid /||/sysid/{exit} END {if ($0 ~ /450000|450001/) print "Citrix Hypervisor"; else if ($0 ~ /450010|450011/) print "ESX"; else if (($0 ~ /450020|450021/) && ($0 !~ /vpx_on_cloud = 0/)) print "Hyper-V"; else if (($0 ~ /450070|450071/) && ($0 !~ /vpx_on_cloud = 0/)) print "KVM"; else print "Unknown" }' shell/sysctl-a.out''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         if len(vmplatform_sdx.stdout.strip()) > 1:
             vmplatform = vmplatform_sdx.stdout.strip()
         elif len(vmplatform_cloud.stdout.strip()) > 1:
@@ -238,6 +240,7 @@ if args.i:
         total_core = sp.run('''awk '/System Detected/{print $(NF-1);exit}' var/nslog/dmesg.boot''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
         required_mem = sp.run('''awk '/System Detected/{print $(NF-1)*4000;exit}' var/nslog/dmesg.boot''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
         configured_mem = sp.run('''awk '/hw.realmem/{print $2/1048576}' shell/sysctl-a.out''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+        major_version = sp.run("awk '/Build/{print $1}' shell/ns_running_config.conf | awk -FS '{print $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
         try:
             mem_decision_output = int(required_mem) < int(configured_mem)
         finally:
@@ -245,6 +248,11 @@ if args.i:
                 configured_mem_val = int(configured_mem) / 1000
                 required_mem_val = int(required_mem) / 1000
                 print(style.YELLOW + f"Warning: Optimal performance recommended memory is {required_mem_val} Gigs for {total_core} vCPU vs configured {configured_mem_val} Gigs\n" + style.RESET)
+            else:
+                pass
+            if float(major_version) >= 13.1:
+                classic_policies = sp.run("awk '/ns_true/{count++} END{if (count+0 > 0) print \"Found Classic Policies\"}' shell/ns_running_config.conf", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                print(style.YELLOW + f"Warning: {classic_policies}\n" + style.RESET)
             else:
                 pass
     except IOError as io:
@@ -310,7 +318,7 @@ elif args.P:
         partition_vlan_data = [line.split() for line in partition_vlan.split('\n')]
     finally:
         print(style.YELLOW + '{:-^87}'.format('NetScaler Admin Partition Details') + "\n" + style.RESET)
-        if len(partition_basic_data) > 2:
+        if len(partition_basic_data) >= 2:
             mapping = {row[-2]: row for row in partition_basic_data}
             mapped_result = [[row[1]] + mapping[row[0]] for row in partition_vlan_data]
             header = ["vlan | ", "partitionid | ", "maxBandwidth Mbps | ", "maxConn | ", "maxMemLimit MB | ", "partitionName | ", "partitionMAC |"]
@@ -499,7 +507,7 @@ elif args.c:
         else:
             print(style.RED + "Unable to find any counter name with the keyword " + args.c + style.RESET)
             try:
-                fate_message = "show -n"; send_request(version, username, url, fate_message, "Failed")
+                fate_message = "show -c"; send_request(version, username, url, fate_message, "Failed")
             finally:
                 pass
         quit()
@@ -1680,8 +1688,87 @@ elif args.z:
                 pass
     finally:
         pass
+elif args.T:
+    try:
+        path = "conFetch"
+        isExist = os.path.exists(path)
+        if not isExist:
+            os.popen("fixperms ../").read()
+            os.makedirs(path)
+        else:
+            pass
+        if 'ha' in args.T:
+            raw_file_path = str("conFetch/ha.dot")
+            try:
+                old_working_dir = os.getcwd()
+                peer_ip = sp.run("sed -n '/Node in this Master State/,/SSL Card Status/p' shell/showcmds.txt | awk '/IP/{printf $NF}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                pair_bundle = sp.run("ls -lah .. | awk '/"+peer_ip+"/&&/drwxrwxrwx/&&/collector_/{printf $NF; exit}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                cur_bundle_name = sp.run("pwd", shell=True, text=True, capture_output=True).stdout
+                cur_bundle_name = re.search(r"collector_.*_[0-9]{2}", cur_bundle_name).group(0)
+                cur_hb_received = sp.run("awk '/Heartbeats received/{print \"HB received:\", $NF; exit}' shell/statcmds.txt", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                cur_hb_sent = sp.run("awk '/Heartbeats received/{print \"HB sent:\", $NF; exit}' shell/statcmds.txt", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                cur_version = sp.run("awk '/Build/&&/#NS/{gsub(/[^0-9]+/, \" \"); gsub(/ /, \".\"); sub(/^./, \"\"); printf $0; exit}' shell/ns_running_config.conf", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                cur_master_node_state = sp.run("sed -n '/exec: show HA node/,/Node in this Master State/p' shell/showcmds.txt | awk '!/for/&&(/Node State/||/Master State/){printf \"%s%s\", sep, $3; sep=\" | \"} END {printf \"\\n\"}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                cur_ip_name = sp.run("sed -n '/exec: show HA node/,/Node in this Master State/p' shell/showcmds.txt | awk '/IP:/{print $2, $3}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                cur_sync_prop = sp.run("sed -n '/exec: show HA node/,/Node in this Master State/p' shell/showcmds.txt | awk '/Propagation/||/Sync State:/{printf \"%s%s\", sep, $0; sep=\" | \"} END {printf \"\\n\"}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                cur_ena_dis_Interfaces = sp.run("sed -n '/exec: show HA node/,/Node in this Master State/p' shell/showcmds.txt | awk '/Interfaces/&&/(Enabled|Disabled)/{printf \"%s%s\", sep, $0; sep=\" | \"} END {printf \"\\n\"}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                cur_beat_mon_Interfaces = sp.run("sed -n '/exec: show HA node/,/Node in this Master State/p' shell/showcmds.txt | awk '/Interfaces/&&/HA/{printf \"%s%s\", sep, $0; sep=\" | \"} END {printf \"\\n\"}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                cur_beat_notseen = sp.run("sed -n '/exec: show HA node/,/Node in this Master State/p' shell/showcmds.txt | awk '/Interfaces on which heartbeats are not seen/{printf}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                cur_ss_card = sp.run("sed -n '/exec: show HA node/,/Node in this Master State/p' shell/showcmds.txt | awk '/SSL Card Status/{printf}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                cur_intervals = sp.run("sed -n '/exec: show HA node/,/Node in this Master State/p' shell/showcmds.txt | awk '/Interval/{printf \"%s%s\", sep, $0; sep=\" | \"} END {printf \"\\n\"}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                cur_node_in_state = sp.run("sed -n '/exec: show HA node/,/Node in this Master State/p' shell/showcmds.txt | awk '/Node in this Master State/{printf}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                os.chdir("../"+pair_bundle)
+                peer_bundle_name = sp.run("pwd", shell=True, text=True, capture_output=True).stdout
+                peer_bundle_name = re.search(r"collector_.*_[0-9]{2}", peer_bundle_name).group(0)
+                peer_hb_received = sp.run("awk '/Heartbeats received/{print \"HB received:\", $NF; exit}' shell/statcmds.txt", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                peer_hb_sent = sp.run("awk '/Heartbeats received/{print \"HB sent:\", $NF; exit}' shell/statcmds.txt", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                peer_version = sp.run("awk '/Build/&&/#NS/{gsub(/[^0-9]+/, \" \"); gsub(/ /, \".\"); sub(/^./, \"\"); printf $0; exit}' shell/ns_running_config.conf", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                peer_master_node_state = sp.run("sed -n '/exec: show HA node/,/Node in this Master State/p' shell/showcmds.txt | awk '!/for/&&(/Node State/||/Master State/){printf \"%s%s\", sep, $3; sep=\" | \"} END {printf \"\\n\"}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                peer_ip_name = sp.run("sed -n '/exec: show HA node/,/Node in this Master State/p' shell/showcmds.txt | awk '/IP:/{print $2, $3}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                peer_sync_prop = sp.run("sed -n '/exec: show HA node/,/Node in this Master State/p' shell/showcmds.txt | awk '/Propagation/||/Sync State:/{printf \"%s%s\", sep, $0; sep=\" | \"} END {printf \"\\n\"}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                peer_ena_dis_Interfaces = sp.run("sed -n '/exec: show HA node/,/Node in this Master State/p' shell/showcmds.txt | awk '/Interfaces/&&/(Enabled|Disabled)/{printf \"%s%s\", sep, $0; sep=\" | \"} END {printf \"\\n\"}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                peer_beat_mon_Interfaces = sp.run("sed -n '/exec: show HA node/,/Node in this Master State/p' shell/showcmds.txt | awk '/Interfaces/&&/HA/{printf \"%s%s\", sep, $0; sep=\" | \"} END {printf \"\\n\"}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                peer_beat_notseen = sp.run("sed -n '/exec: show HA node/,/Node in this Master State/p' shell/showcmds.txt | awk '/Interfaces on which heartbeats are not seen/{printf}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                peer_ss_card = sp.run("sed -n '/exec: show HA node/,/Node in this Master State/p' shell/showcmds.txt | awk '/SSL Card Status/{printf}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                peer_intervals = sp.run("sed -n '/exec: show HA node/,/Node in this Master State/p' shell/showcmds.txt | awk '/Interval/{printf \"%s%s\", sep, $0; sep=\" | \"} END {printf \"\\n\"}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                peer_node_in_state = sp.run("sed -n '/exec: show HA node/,/Node in this Master State/p' shell/showcmds.txt | awk '/Node in this Master State/{printf}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                os.chdir(old_working_dir)
+            finally:
+                ha_pair_bundle_name = f'{cur_bundle_name} and {peer_bundle_name}'
+                dot_data = f'''
+                digraph NetScaler {{
+                    label="{ha_pair_bundle_name}"
+                    graph [
+                        rankdir = "LR"
+                    ]
 
+                    node [
+                        shape = record
+                    ]
 
+                    Primary[
+                        label="{{{cur_ip_name}}} | {{{cur_version}}}| {{{cur_master_node_state}}} | {{{cur_sync_prop}}}  | {{{cur_ena_dis_Interfaces}}} | {{{cur_beat_mon_Interfaces}}} | {{{cur_beat_notseen}}} | {{{cur_ss_card}}} | {{{cur_intervals}}} | {{{cur_node_in_state}}} | {{{cur_hb_received + " - " + cur_hb_sent}}}"
+                    ]
+
+                    Secondary[
+                        label="{{{peer_ip_name}}} | {{{peer_version}}} | {{{peer_master_node_state}}} | {{{peer_sync_prop}}}  | {{{peer_ena_dis_Interfaces}}} | {{{peer_beat_mon_Interfaces}}} | {{{peer_beat_notseen}}} | {{{peer_ss_card}}} | {{{peer_intervals}}} | {{{peer_node_in_state}}} | {{{peer_hb_received + " - " + peer_hb_sent}}}"
+                    ]
+
+                    Primary -> Secondary[label="HA Pair"]
+                }}'''
+                with open(raw_file_path, "w") as file:
+                        file.write(dot_data)
+                sp.run("dot -Tpng ha.dot -o ha.png", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                os.popen("dot -Tpng conFetch/ha.dot -o conFetch/ha.png").read()
+                os.popen("fixperms ../").read()
+                os.popen("rm -rf conFetch/ha.dot").read()
+    finally:
+        fate_message = "show -T " + ''.join(args.T); send_request(version, username, url, fate_message, "Success")
+elif args.cpu:
+    try:
+        mgmtcpu100 = sp.run("for i in $(ls -lah var/nslog/ | awk '/drwxrwxrwx/&&/newnslog./{print \"var/nslog/\"$NF}END{print \"var/nslog/newnslog\"}'); do nsconmsg -K $i -d current -s disptime=1 -f mgmt_cpu_use 2>&1 | awk '/mgmt_cpu_use/{if ($3/10 == 100) printf \"%s%% at %s %s %s %s %s\\n\", $3/10, $7, $8, $9, $10, $11}'; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+    finally:
+        print(mgmtcpu100)
 else:
     print("Please use -h for help")
     logger.error(os.getcwd() + " - No switch")
