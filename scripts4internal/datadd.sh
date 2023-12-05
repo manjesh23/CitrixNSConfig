@@ -17,13 +17,14 @@ if [[ $1 =~ $caseformat ]]; then
     # create a conFetch directory structure
     mkdir -p "${dir}/conFetch/nsconmsg" "${dir}/conFetch/Graph" "${dir}/conFetch/show_output"
     # run command inside the directory
-    (cd "${dir}" && show -imall > "conFetch/show_output/show_imall.txt")
+    (cd "${dir}" && show -gz > /dev/null 2>&1 &)
+    (cd "${dir}" && [ ! -e "conFetch/show_output/show_imall.txt" ] && show -imall > "conFetch/show_output/show_imall.txt" 2>&1 &)
+    (cd "${dir}" && [ ! -e "conFetch/show_output/show_ha.txt" ] && show -ha > "conFetch/show_output/show_ha.txt" 2>&1 &)
+    (cd "${dir}" && [ ! -e "conFetch/nsconmsg/nsconmsg_counters.txt" ] && nsconmsg -K var/nslog/newnslog -d current | awk '!/reltime|Index/{print $6}' | sort | uniq -c | egrep '([a-z].*[_]).*' > "conFetch/nsconmsg/nsconmsg_counters.txt" 2>&1 &)
+    curl --silent --data $successq $url >/dev/null 2>&1
 done
-
-
     # display the list of matching directories
-    echo "Matching directories:"
-    find . -type d -name '*collector_*' -print
+    find ./ -type d -name "collector_*" -exec ls -ld {} + | cut -d: -f2- | cut -c 6- | sed 's/ /\\ /g' | sed 's/(/\\(/g' | sed 's/)/\\)/g' | awk 'BEGIN{printf "\n\t%s\n\n", "\033[1;97mCollector_Bundles\033[0m"}!/tar|gz/{printf "%s%s\n", "\033[36m","./"$0"\033[0m"}'
   else
     echo -e "\e[31m/upload/ftp/$1 unable to navigate to case directory\e[0m"
     echo "$(date) -- $(whoami) -- used datad -- Invalid" >> "/home/CITRITE/manjeshn/manscript/showdata/$(whoami).datad.txt"
@@ -34,3 +35,4 @@ else
   echo "$(date) -- $(whoami) -- used datad -- Failed" >> "/home/CITRITE/manjeshn/manscript/showdata/$(whoami).datad.txt"
   curl --silent --data $failedq $url >/dev/null 2>&1
 fi
+screen -dmS "fixperms" fixperms ./
