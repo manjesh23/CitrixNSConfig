@@ -51,7 +51,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "5.23"
+version = "5.33"
 
 # About script
 showscriptabout = '''
@@ -119,7 +119,6 @@ parser.add_argument('-show', metavar="", help="Selected Show Commands")
 parser.add_argument('-stat', metavar="", help="Selected Stat Commands")
 parser.add_argument('-vip', action="store_true", help="Get VIP Basic Details")
 parser.add_argument('-v', action="store_true", help="ns.conf Version and Last Saved")
-parser.add_argument('-case', action="store_true", help=argparse.SUPPRESS)
 parser.add_argument('-bt', action="store_true", help="Auto bt for both NSPPE and Process core files")
 parser.add_argument('-bt1', action="store_true", help="Specify NSPPE Core file absolute path to run a bt")
 parser.add_argument('-G', action="append", choices={"cpu", "mem", "ha", "nic"}, help="Generate HTML Graph for all newnslog(s)")
@@ -133,45 +132,48 @@ parser.add_argument('-z', action="append", metavar="", help="Generate HTML Graph
 parser.add_argument('--divide', action="append", metavar="divide column 3 by", help=argparse.SUPPRESS)
 parser.add_argument('-T', action="append", choices={"ha"}, help="Generate PNG file for specific feature")
 parser.add_argument('--cpu', action="store_true", help="Analyse High Mgmt CPU and its potential cause")
+parser.add_argument('--nic', action="store_true", help="NIC Specific details")
 parser.add_argument('--case', action="store_true", help="Salesforce Case Details")
 parser.add_argument('--about', action="store_true", help="About Show Script")
 args = parser.parse_args()
 
 # Set correct support bundle path
-try:
-    if (os.popen("pwd").read().index("collector") >= 0):
-        os.chdir(re.search('.*\/collecto.*_[0-9]{2}', os.popen("pwd").read()).group(0))
-except AttributeError as e:
-    print(style.RED + "Collector Bundle not in Correct Naming Convention" + style.RESET)
-    os.chdir(re.search('.*\/collecto.*_[0-9|_|\-|a-zA-Z|\.]{1,30}', os.popen("pwd").read()).group(0))
-except FileNotFoundError as e:
-    print(style.RED + "Collector Bundle not in Correct Naming Convention" + style.RESET)
-    os.chdir(re.search('.*\/collecto.*_[0-9|_|\-|a-z|\.]{1,30}', os.popen("pwd").read()).group(0))
-except ValueError:
-    print("\nPlease navigate to correct support bundle path")
-    print("Available directories with support bundle names: \n\n" + style.CYAN + "\n".join(re.findall("collect.*", "\n".join(next(os.walk('.'))[1]))) + style.RESET)
+if not (args.fw or args.case):
     try:
-        fate_message = "Out of Support Bundle"; send_request(version, username, url, fate_message, "Partial")
-    finally:
-        quit()
+        if (os.popen("pwd").read().index("collector") >= 0):
+            os.chdir(re.search('.*\/collecto.*_[0-9]{2}', os.popen("pwd").read()).group(0))
+    except AttributeError as e:
+        print(style.RED + "Collector Bundle not in Correct Naming Convention" + style.RESET)
+        os.chdir(re.search('.*\/collecto.*_[0-9|_|\-|a-zA-Z|\.]{1,30}', os.popen("pwd").read()).group(0))
+    except FileNotFoundError as e:
+        print(style.RED + "Collector Bundle not in Correct Naming Convention" + style.RESET)
+        os.chdir(re.search('.*\/collecto.*_[0-9|_|\-|a-z|\.]{1,30}', os.popen("pwd").read()).group(0))
+    except ValueError:
+        print("\nPlease navigate to correct support bundle path")
+        print("Available directories with support bundle names: \n\n" + style.CYAN + "\n".join(re.findall("collect.*", "\n".join(next(os.walk('.'))[1]))) + style.RESET)
+        try:
+            fate_message = "Out of Support Bundle"; send_request(version, username, url, fate_message, "Partial")
+        finally:
+            quit()
 
 # Assign correct files and its path to variables
-try:
-    nsconf = "nsconfig/ns.conf"
-    showcmd = "shell/showcmds.txt"
-    statcmd = "shell/statcmds.txt"
-    sysctl = "shell/sysctl-a.out"
-    uptime = "shell/uptime.out"
-    df = "shell/df-akin.out"
-    dmesgboot = "var/nslog/dmesg.boot"
-    allrequiredfiles = [nsconf] + [showcmd] + [statcmd] + [sysctl] + [uptime] + [df] + [dmesgboot]
-    for i in allrequiredfiles:
-        if file_exists(i):
-            pass
-        else:
-            print(style.RED + "File " + i + " is missing from collector pack and script might not work fully !!" + style.RESET)
-finally:
-    pass
+if not (args.fw or args.case):
+    try:
+        nsconf = "nsconfig/ns.conf"
+        showcmd = "shell/showcmds.txt"
+        statcmd = "shell/statcmds.txt"
+        sysctl = "shell/sysctl-a.out"
+        uptime = "shell/uptime.out"
+        df = "shell/df-akin.out"
+        dmesgboot = "var/nslog/dmesg.boot"
+        allrequiredfiles = [nsconf] + [showcmd] + [statcmd] + [sysctl] + [uptime] + [df] + [dmesgboot]
+        for i in allrequiredfiles:
+            if file_exists(i):
+                pass
+            else:
+                print(style.RED + "File " + i + " is missing from collector pack and script might not work fully !!" + style.RESET)
+    finally:
+        pass
 
 if args.i:
     try:
@@ -247,7 +249,7 @@ if args.i:
             if mem_decision_output is False:
                 configured_mem_val = int(configured_mem) / 1000
                 required_mem_val = int(required_mem) / 1000
-                print(style.YELLOW + f"Warning: Optimal performance recommended memory is {required_mem_val} Gigs for {total_core} vCPU vs configured {configured_mem_val} Gigs\n" + style.RESET)
+                print(style.YELLOW + f"Warning: For optimal performance, please allocate {required_mem_val} GB RAM for {total_core} vCPU vs currently configured {configured_mem_val} GB (Refer VPX Datasheet)\n" + style.RESET)
             else:
                 pass
             if float(major_version) >= 13.1:
@@ -292,8 +294,8 @@ if args.i:
         print("NSIP Address: " + nsip.stdout.strip() + " | " + nsipsubnet.stdout.strip())
         print("NS Enabled Feature: " + nsfeatures.stdout.strip())
         print("NS Enabled Mode: " + nsmode.stdout.strip())
-        print("NS Last Boot Time: " + nsboottime.stdout.strip())
-        print("Device uptime: " + deviceuptime.stdout.strip())
+        print("NS Last Warm Boot Time: " + nsboottime.stdout.strip())
+        print("Device uptime (Cold boot): " + deviceuptime.stdout.strip())
         print("")
         print("CPU Info: " + cpuinfo.stdout.strip())
         print("Load Average: " + loadaverage.stdout.strip())
@@ -868,7 +870,7 @@ elif args.case:
 
     # Get case number from path
     try:
-        casenum = os.popen("pwd").read().split("/")[3]
+        casenum = str(os.popen("pwd").read().strip().split("/")[3])
     except IndexError:
         print(style.RED + "Unable to get case number from your current working directory" + style.RESET)
     # Get CaseAge and Entitlement Details
@@ -914,7 +916,8 @@ elif args.case:
         data = ({"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "EndDate", "isbase64": "false"}, {"name": "tablename", "value": "Entitlement", "isbase64": "false"}, {"name": "selectcondition", "value": "Id = '"+EntitlementId+"'", "isbase64": "false"}]})
         case_serial_data = ({"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "Name,Maintenance_End_Date__c", "isbase64": "false"}, {"name": "tablename", "value": "Asset_Component__c", "isbase64": "false"}, {"name": "selectcondition", "value": "Id = '"+Serial_Number__c+"'", "isbase64": "false"}]})
         platformserial = str(sp.run("sed -n '/^exec: show ns hardware/,/Done/p' shell/showcmds.txt | awk '/Serial/{printf $NF}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout)
-        platformserial_json = ({"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "Id,Maintenance_End_Date__c", "isbase64": "false"}, {"name": "tablename", "value": "Asset_Component__c", "isbase64": "false"}, {"name": "selectcondition", "value": "Name = '"+platformserial+"'", "isbase64": "false"}]})
+        print(platformserial)
+        platformserial_json = ({"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "Asset_ID__c,Maintenance_End_Date__c", "isbase64": "false"}, {"name": "tablename", "value": "Asset_Component__c", "isbase64": "false"}, {"name": "selectcondition", "value": "Name = '"+platformserial+"'", "isbase64": "false"}]})
         # Entitlement cooking
         jsondata = json.dumps(data)
         jsondataasbytes = jsondata.encode('utf-8')
@@ -945,14 +948,30 @@ elif args.case:
         jsondata = json.dumps(platformserial_json)
         jsondataasbytes = jsondata.encode('utf-8')
         try:
-            platformserial_Maintenance_End_Date__c = ast.literal_eval(json.loads(request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore"))['options'][0]['values'][0])["Maintenance_End_Date__c"]
-            platformserial_Maintenance_End_Date__c = datetime.strptime(platformserial_Maintenance_End_Date__c, "%Y-%m-%d").date()
-            current_date = datetime.today()
-            current_date = current_date.strftime("%Y-%m-%d")
-            if platformserial_Maintenance_End_Date__c.strftime("%Y-%m-%d") > current_date:
-                platformserial_Maintenance_End_Date__c = style.GREEN + str(platformserial_Maintenance_End_Date__c) + style.RESET
+            platformserial_Maintenance_End_Date__c = ((json.loads(request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore"))['options']))
+            end_dates = []
+            if not len(platformserial_Maintenance_End_Date__c) == 0:
+                for entry in platformserial_Maintenance_End_Date__c:
+                    values = entry['values']
+                    if values:
+                        json_data = json.loads(values[0])
+                        end_date = json_data.get('Maintenance_End_Date__c')
+                        if end_date:
+                            end_dates.append(end_date)
+                try:
+                    # Find the latest date
+                    platformserial_Maintenance_End_Date__c = max(end_dates)
+                    platformserial_Maintenance_End_Date__c = datetime.strptime(platformserial_Maintenance_End_Date__c, "%Y-%m-%d").date()
+                    current_date = datetime.today()
+                    current_date = current_date.strftime("%Y-%m-%d")
+                    if platformserial_Maintenance_End_Date__c.strftime("%Y-%m-%d") > current_date:
+                        platformserial_Maintenance_End_Date__c = style.GREEN + str(platformserial_Maintenance_End_Date__c) + style.RESET
+                    else:
+                        platformserial_Maintenance_End_Date__c = style.RED + str(platformserial_Maintenance_End_Date__c) + style.RESET
+                except:
+                    pass
             else:
-                platformserial_Maintenance_End_Date__c = style.RED + str(platformserial_Maintenance_End_Date__c) + style.RESET
+                platformserial_Maintenance_End_Date__c = style.YELLOW + "Not a HW Model" + style.RESET
         except IndexError:
             platformserial_Maintenance_End_Date__c = style.YELLOW + "Not a HW Model" + style.RESET
         # Engineering Logic
@@ -1001,7 +1020,7 @@ elif args.case:
 
         print(style.YELLOW + '{:-^87}'.format('Account Related') + style.RESET)
         print("Serial Number on Case: " + Serial_Number__c + " and its Maintenance End Date: " + Maintenance_End_Date__c)
-        print("Serial Number on Support Bundle: " + platformserial + " and its Maintenance End Date: " + platformserial_Maintenance_End_Date__c)
+        print("Serial Number on Support Bundle: " + platformserial + " and its Maintenance End Date: " + str(platformserial_Maintenance_End_Date__c))
         print("Entitlement End Date: "+Entitlement_EndDate)
         print("End of Support: " + End_of_Support__c)
         print("Account Name: " + Account_Name__c)
@@ -1354,6 +1373,7 @@ elif args.G:
                     if len(allnic_tot_rx_tx_mbits.stdout) < 52:
                         allnic_tot_rx_tx_mbits.stdout = "data.addColumn('date', 'Manjesh');data.addColumn('Manjesh', 'Manjesh');"
                     if True:
+                        allnic_tot_rx_tx_mbits.stdout = re.sub('data.addRow\(\[new\s.{10,60}(,\s){1,30}\]\);', '', allnic_tot_rx_tx_mbits.stdout)
                         file = open(path+"/"+newnslog_file.split("/")
                                     [2]+"_nic.html", "w")
                         file.write('''<html><head> <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script> <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.js"></script> <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.css"> <script type="text/javascript">google.charts.load('current',{'packages': ['annotationchart']}); google.charts.setOnLoadCallback(allnic_tot_rx_tx_mbits); function allnic_tot_rx_tx_mbits(){var data=new google.visualization.DataTable();'''+allnic_tot_rx_tx_mbits.stdout +
@@ -1563,11 +1583,9 @@ elif args.g:
                     cc_cpu_use.stdout = re.sub('.*,\s,.*', '', cc_cpu_use.stdout)
                     cc_cpu_use.stdout = re.sub('.*,\s\].*', '', cc_cpu_use.stdout)
                     cc_cpu_use.stdout = cc_cpu_use.stdout.replace("\n", "")
-                    cc_cpu_use.stdout = re.findall('data.addColumn.{0,52}\);|data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s' +
-                                                   starttime+'..*data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s'+endtime+'..{2,100}\);', cc_cpu_use.stdout)
+                    cc_cpu_use.stdout = re.findall('data.addColumn.{0,52}\);|data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s' + starttime+'..*data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s'+endtime+'..{2,100}\);', cc_cpu_use.stdout)
                     cc_cpu_use.stdout = ''.join(cc_cpu_use.stdout)
-                    cc_cpu_use.stdout = re.sub(
-                        'data.addRow\(\[new\s.{10,60}(,\s){1,30}\]\);', '', cc_cpu_use.stdout)
+                    cc_cpu_use.stdout = re.sub('data.addRow\(\[new\s.{10,60}(,\s){1,30}\]\);', '', cc_cpu_use.stdout)
                 if True:
                     file = open(path+"/"+newnslogFile+"_cpu_Usage.html", "w")
                     file.write('''<html><head> <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script> <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.js"></script> <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.css"> <script type="text/javascript">google.charts.load('current',{'packages': ['annotationchart']}); google.charts.setOnLoadCallback(mgmt_cpu_use);google.charts.setOnLoadCallback(master_cpu_use); google.charts.setOnLoadCallback(cc_cpu_use);function mgmt_cpu_use(){var data=new google.visualization.DataTable(); '''+mgmt_cpu_use + ''' var chart=new google.visualization.AnnotationChart(document.getElementById('mgmt_cpu')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}function master_cpu_use(){var data=new google.visualization.DataTable(); '''+master_cpu_use +
@@ -1650,6 +1668,7 @@ elif args.g:
                     allnic_tot_rx_tx_mbits.stdout = re.findall('data.addColumn.{0,52}\);|data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s' + starttime+'..*data.addRow\(\[new Date\(\\\'[a-zA-Z]{3}\s[0-9]{0,2},[0-9]{4}\s'+endtime+'..{2,60}\);', allnic_tot_rx_tx_mbits.stdout)
                     allnic_tot_rx_tx_mbits = ''.join(allnic_tot_rx_tx_mbits.stdout)
                 if True:
+                    allnic_tot_rx_tx_mbits = re.sub('data.addRow\(\[new\s.{10,60}(,\s){1,30}\]\);', '', allnic_tot_rx_tx_mbits)
                     file = open(path+"/"+newnslogFile+"_nic.html", "w")
                 file.write('''<html><head> <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script> <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.js"></script> <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.css"> <script type="text/javascript">google.charts.load('current',{'packages': ['annotationchart']}); google.charts.setOnLoadCallback(allnic_tot_rx_tx_mbits); function allnic_tot_rx_tx_mbits(){var data=new google.visualization.DataTable();'''+allnic_tot_rx_tx_mbits +
                            ''' var chart=new google.visualization.AnnotationChart(document.getElementById('allnic_tot_rx_tx_mbits')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}</script></head><body> <h1 class="txt-primary">NIC Graph</h1> <hr> <p class="txt-title">Collector_Bundle_Name: '''+collector_bundle_name+'''<br>Device_Name: '''+adchostname+'''<br>Log_file: '''+newnslogFile+'''<br>Log_Timestamp: '''+time_range+'''</p><hr> <div style="width: 100%"><p class="txt-primary">allnic_tot_tx_mbits - allnic_tot_rx_mbits</p><div id="allnic_tot_rx_tx_mbits" style="height:450px"></div></div><div class="footer">Project conFetch</div></body></html>''')
@@ -1843,6 +1862,42 @@ elif args.cpu:
         else:
             print(style.YELLOW + '{:-^87}'.format('NetScaler Mgmt CPU at 100% and its breakup') + "\n" + style.RESET)
             print(style.RED + "NetScaler has not hit 100% mgmt CPU")
+elif args.nic:
+    try:
+        lic_throughput = sp.run("nsconmsg -K var/nslog/newnslog -d stats -f sys_licensed_throughput | awk '/sys_licensed_throughput/{printf $3}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        max_rx_throughput = sp.run("for i in $(ls -lah var/nslog/ | awk '/newnslo/{print \"var/nslog/\"$NF}'); do nsconmsg -K $i -d maxrate -f allnic_tot_rx_mbits; done | awk '/allnic_tot_rx_mbits/{printf $2; exit}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        #iface_speed = sp.run("nsconmsg -K var/nslog/newnslog -d finalstats | awk '/nic_info_throughput/{print $NF, \"-->\", $3/1000, \"Gbits\"}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        all_nic_counter = sp.run("nsconmsg -K var/nslog/newnslog -d finalstats -g nic_ | awk '/nic/{$1=$2=\"\"; print $0}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+    finally:
+        print(style.YELLOW + '{:-^87}'.format('NetScaler NIC Details') + "\n" + style.RESET)
+        print("Licensed Throughput: " + lic_throughput + " Mbps")
+        print("Max Throughput received on all nic's: " + max_rx_throughput + " Mbytes\n")
+        #print(style.GREEN + "Throughput did not exceed system license\n" + style.RESET if int(lic_throughput) > int(max_rx_throughput) else style.RED + "Throughput exceeded system license\n" + style.RESET)
+        print((style.GREEN + "Throughput did not exceed system license\n" + style.RESET) if max_rx_throughput and int(lic_throughput) > int(max_rx_throughput) else (style.RED + "Throughput exceeded system license\n" + style.RESET) if max_rx_throughput else "Max Throughput not available")
+        result_dict = {}
+        # Use a single loop for all three categories
+        for match in re.finditer(r'(\w.*|\d.*)\s+(nic_cur_MAC_addr|nic_info_mtu|nic_cur_link_uptime|nic_info_throughput|nic_conf_vlan|nic_tot_rx_packets|nic_tot_tx_packets|nic_tot_rx_mbits|nic_tot_tx_mbits)\s+interface\((\S+)\)', all_nic_counter):
+            value, category, interface = match.groups()
+            result_dict.setdefault(interface, {})[category] = value
+        # Display headers
+        print(f"{'Interface':<10}\t{'nic_cur_MAC_addr':<15}\t{'nic_info_mtu':<15}\t{'nic_cur_link_uptime':<15}\t{'nic_info_throughput':<20}\t{'nic_conf_vlan':<15}\t{'nic_tot_rx_packets':<15}\t{'nic_tot_tx_packets':<15}\t{'nic_tot_rx_mbits':<15}\t{'nic_tot_tx_mbits':<15}")
+        print("----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------")
+        # Display row values with auto-alignment
+        for interface, values in result_dict.items():
+            nic_cur_MAC_addr_value = values.get('nic_cur_MAC_addr', '')
+            tot_rx_pkts_value = values.get('nic_tot_rx_packets', '')
+            tot_tx_pkts_value = values.get('nic_tot_tx_packets', '')
+            tot_rx_mbits_value = values.get('nic_tot_rx_mbits', '')
+            tot_tx_mbits_value = values.get('nic_tot_tx_mbits', '')
+            throughput_value = values.get('nic_info_throughput', '')
+            throughput_value = f"{int(throughput_value) / 1000} Gbps" if throughput_value else ''
+            mtu_value = values.get('nic_info_mtu', '')
+            nic_cur_link_uptime_value = values.get('nic_cur_link_uptime', '')
+            nic_cur_link_uptime_value = f"{round(int(nic_cur_link_uptime_value) / 60)} Mins"
+            nic_conf_vlan_value = values.get('nic_conf_vlan', '')
+            print(f"{interface:<10}\t{nic_cur_MAC_addr_value:<15}\t{mtu_value:<15}\t{nic_cur_link_uptime_value:<20}\t{throughput_value:<20}\t{nic_conf_vlan_value:<15}\t{tot_rx_pkts_value:<20}\t{tot_tx_pkts_value:<20}\t{tot_rx_mbits_value:<20}\t{tot_tx_mbits_value:<15}")
+        
+        
 else:
     print("Please use -h for help")
     logger.error(os.getcwd() + " - No switch")

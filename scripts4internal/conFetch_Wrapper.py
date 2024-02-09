@@ -12,7 +12,7 @@ args = parser.parse_args()
 NSPath = ''.join(args.i)
 
 # show command options
-showcmd = ["i", "stat \"system memory\"", "p", "v"]
+showcmd = ["i", "stat \"system memory\"", "p", "v", "-case"]
 
 if args.i:
     try:
