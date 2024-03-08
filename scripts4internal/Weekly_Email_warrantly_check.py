@@ -1,0 +1,132 @@
+import psycopg2
+from datetime import datetime, timedelta
+import pandas as pd
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
+import os
+
+today = datetime.now().strftime("%b-%d-%Y")
+
+# Connect to your PostgreSQL database
+def connect_to_database():
+    try:
+        connection = psycopg2.connect(
+            user="manjeshn",
+            password="manjeshhere123",
+            host="10.14.18.27",
+            port="5432",
+            database="tooltrack"
+        )
+        return connection
+    except (Exception, psycopg2.Error) as error:
+        print("Error while connecting to PostgreSQL", error)
+        return None
+
+# Function to execute the query and write results to Excel file
+def execute_query_and_write_to_xlsx(connection):
+    try:
+        cursor = connection.cursor()
+        query = """
+        SELECT timestamp, user_name, sr_number, action, result 
+        FROM "ToolTrack_tooltrack" 
+        WHERE tool_name_id = 'warranty_check' AND timestamp >= NOW() - INTERVAL '1 week'
+        ORDER BY timestamp DESC;
+        """
+        cursor.execute(query)
+        records = cursor.fetchall()
+        # Create a DataFrame to hold the records
+        df = pd.DataFrame(records, columns=['Timestamp', 'User_Name', 'SR_Number', 'Action', 'Result'])
+        # Convert timestamp to timezone-unaware datetime objects
+        df['Timestamp'] = df['Timestamp'].apply(lambda x: x.replace(tzinfo=None))
+        # Split Bundle_Path to get Account Name and SerialNumber
+        df['Bundle_Path'] = df['Action'].apply(lambda x: x.split(' -- ')[-1])
+        df['SerialNumber'] = df['Action'].apply(lambda x: x.split(' -- ')[0])
+        df['Account_Name'] = df['User_Name']
+        df['Case_Owner'] = df['Action'].apply(lambda x: x.split(' -- ')[1])
+        df['Manager_Email'] = df['Action'].apply(lambda x: x.split(' -- ')[2])
+        df['Case_Age'] = df['Action'].apply(lambda x: int(round(float(x.split(' -- ')[3]))))
+        df['Date_Time_Opened (GMT)'] = pd.to_datetime(df['Action'].apply(lambda x: x.split(' -- ')[4]))
+        # Rename columns
+        df.rename(columns={'Timestamp': 'Email_Sent_Date (GMT)', 'Result': 'Expired_On'}, inplace=True)
+        # Reorder columns
+        df = df[['Email_Sent_Date (GMT)', 'Account_Name', 'SR_Number', 'Case_Age', 'Date_Time_Opened (GMT)', 'Case_Owner', 'Manager_Email', 'Bundle_Path', 'SerialNumber', 'Expired_On']]
+        # Write DataFrame to Excel file
+        excel_filename = f"{today}_warranty_check.xlsx"
+        # create a pandas.ExcelWriter object
+        writer = pd.ExcelWriter(excel_filename, engine='xlsxwriter')
+        # write the data frame to Excel
+        df.to_excel(writer, index=False, sheet_name='Details')
+        # get the XlsxWriter workbook and worksheet objects
+        workbook = writer.book
+        worksheet = writer.sheets['Details']
+        # adjust the column widths based on the content
+        for i, col in enumerate(df.columns):
+            width = max(df[col].apply(lambda x: len(str(x))).max(), len(col))
+            worksheet.set_column(i, i, width)
+        # close the Pandas Excel writer
+        writer.close()
+        return excel_filename  # Return the filename of the Excel file
+    except (Exception, psycopg2.Error) as error:
+        print("Error while executing query:", error)
+        return None
+
+# Function to send email with attached Excel file
+def send_email_with_attachment(filename):
+    # Email configurations
+    from_email = "warranty_check@citrix.com"
+    to_email = "manjesh.n@cloud.com, manjesh.n@cloud.com"
+    cc_email = "anand.sathya@cloud.com, bhagyaraj.isaiahm@cloud.com, manjesh.n@cloud.com"
+    subject = f"Consolidated Weekly Report for Project warranty_check for the Week {today}"
+    # HTML version of the email body
+    body = """
+    <html>
+      <body>
+        Hello Pradeep and Ginu,<br><br>
+        Automated email: Weekly report for expired entitlements raised by our customers with support. Please find the attached Excel file containing the full details.
+      </body>
+    </html>
+    """
+
+    # Create a multipart message and set headers
+    message = MIMEMultipart()
+    message["From"] = from_email
+    message["To"] = to_email
+    message["Cc"] = cc_email
+    message["Subject"] = subject
+    # Attach HTML body to email
+    message.attach(MIMEText(body, "html"))
+    # Open Excel file in binary mode
+    with open(filename, "rb") as attachment:
+        # Add file as application/octet-stream
+        part = MIMEBase("application", "octet-stream")
+        part.set_payload(attachment.read())
+    # Encode file in ASCII characters to send by email
+    encoders.encode_base64(part)
+    # Add header as key/value pair to attachment part
+    part.add_header(
+        "Content-Disposition",
+        f"attachment; filename= {filename}",
+    )
+    # Add attachment to message and convert message to string
+    message.attach(part)
+    text = message.as_string()
+    # Send email
+    with smtplib.SMTP("mail.citrix.com", 25) as server:
+        server.starttls()
+        server.sendmail(from_email, to_email.split(", ") + cc_email.split(", "), text)
+
+def main():
+    connection = connect_to_database()
+    if connection:
+        filename = execute_query_and_write_to_xlsx(connection)
+        if filename:
+            send_email_with_attachment(filename)
+            # Delete the Excel file
+            os.remove(filename)
+        connection.close()
+
+if __name__ == "__main__":
+    main()

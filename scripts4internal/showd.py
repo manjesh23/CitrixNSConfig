@@ -51,7 +51,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "5.33"
+version = "5.53"
 
 # About script
 showscriptabout = '''
@@ -175,6 +175,28 @@ if not (args.fw or args.case):
     finally:
         pass
 
+# For newnslog start and end time
+def find_min_max_dates(data):
+    # Split the data into lines
+    lines = data.strip().split("\n")
+    # Initialize lists to store start and end datetimes
+    start_times = []
+    end_times = []
+    # Iterate over each line
+    for i in range(0, len(lines), 2):
+        start_line = lines[i]
+        end_line = lines[i + 1]
+        # Extract start and end datetimes from each line
+        start_time = datetime.strptime(start_line.split("start time ")[1], "%a %b %d %H:%M:%S %Y")
+        end_time = datetime.strptime(end_line.split("end   time ")[1], "%a %b %d %H:%M:%S %Y")
+        # Append to respective lists
+        start_times.append(start_time.strftime("%b %d %H:%M:%S %Y"))
+        end_times.append(end_time.strftime("%b %d %H:%M:%S %Y"))
+    # Find min and max dates
+    min_date = min(start_times)
+    max_date = max(end_times)
+    return f"{min_date} --> {max_date}"
+
 if args.i:
     try:
         logger.info(os.getcwd() + " - show -i")
@@ -211,13 +233,17 @@ if args.i:
         licensetype = sp.run("awk '/License Type/{$1=$2=\"\"; print}' shell/showcmds.txt", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         licensemode = sp.run("awk '/Licensing mode/{$1=$2=\"\"; print}' shell/showcmds.txt", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         hostid = sp.run("awk '/HostID/&&/Server/{print $NF}' var/log/license.log | tail -n1", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        if len(hostid.stdout) == 0:
+            hostid = sp.run("awk '/Host Id:/{print $NF}' shell/showcmds.txt | tail -n1", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         nsip = sp.run("sed -n '/ns config/,/Done/p' shell/showcmds.txt | grep \"NetScaler IP\" | egrep -o \"[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\" | grep -v 255", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         nsipsubnet = sp.run("sed -n '/ns config/,/Done/p' shell/showcmds.txt | grep \"NetScaler IP\" | egrep -o \"[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\" | grep 255", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         nsfeatures = sp.run("awk '$0 ~ /^enable/&&/enable ns feature/{$1=$2=$3=\"\";print $0}' shell/ns_running_config.conf", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         if os.path.isfile("conFetch/nsconmsg/newnslog_setime.txt"):
             newnslogsetime = sp.run("cat conFetch/nsconmsg/newnslog_setime.txt", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         else:
-            newnslogsetime = sp.run("echo $(nsconmsg -K $(find ./ -type d -name \"newnslog.*\" | sort |  sed 's/ .\\//\\n.\\//g' | awk -F/ '{print \"var/nslog/\"$NF}' | sed -n '1p') -d setime | awk '/start/&&!/Displaying/{$1=$2=\"\"; printf }' | awk '{$1=$1=\"\"}1'; printf \" --> \"; nsconmsg -K var/nslog/newnslog -d setime | awk '/end/&&!/Displaying/{$1=$2=\"\"; print}' | awk '{$1=$1=\"\"}1')", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+            all_newnslog_startend_times = str(sp.run('''for i in $(find ./ -type d -name "newnslog*"); do nsconmsg -K $i -d setime | awk '!/Display/&&/ time/'; done''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout)
+            newnslogsetime = find_min_max_dates(all_newnslog_startend_times)
+            #newnslogsetime = sp.run("echo $(nsconmsg -K $(find ./ -type d -name \"newnslog.*\" | sort |  sed 's/ .\\//\\n.\\//g' | awk -F/ '{print \"var/nslog/\"$NF}' | sed -n '1p') -d setime | awk '/start/&&!/Displaying/{$1=$2=\"\"; printf }' | awk '{$1=$1=\"\"}1'; printf \" --> \"; nsconmsg -K var/nslog/newnslog -d setime | awk '/end/&&!/Displaying/{$1=$2=\"\"; print}' | awk '{$1=$1=\"\"}1')", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         nsmode = sp.run("awk '/ns mode/{$1=$2=$3=\"\";print $0}' nsconfig/ns.conf", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         nsboottime = sp.run("egrep \"nsstart\" var/nslog/ns.log | tail -1 | awk '{$1=$NF=$(NF-1)=\"\"; print}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         collectorpacktime = sp.run("cat shell/date.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
@@ -268,7 +294,7 @@ if args.i:
         print(nstimes.stdout.strip())
         print("Collector pack generated @ " + collectorpacktime.stdout.strip())
         print("System TimeZone: " + systemtimezone.stdout.strip())
-        print("Newnslog Overall Start_End Time: " + newnslogsetime.stdout.strip())
+        print("Newnslog Overall Start_End Time: " + newnslogsetime)
         print("")
         print("NetScaler Hostname: " + adchostname.stdout.strip())
         print("NetScaler HA State: " + adcha.stdout.strip())
@@ -875,8 +901,10 @@ elif args.case:
         print(style.RED + "Unable to get case number from your current working directory" + style.RESET)
     # Get CaseAge and Entitlement Details
     try:
+        CxContact_Email__c = 'None'
+        OtherCommunicationEmail__c = 'None'
         headers = {'Content-Type': 'application/json'}
-        data = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "EntitlementId,Age__c,Account_Name__c,Account_Org_ID__c,Case_Created_Date_Qual__c,Case_Owner__c,Case_Review_Flag__c,Case_Status__c,Case_Team__c,CaseReopened__c,Contact_Email__c,ContactCountry__c,ContactMobile,ContactPhone,Dev_Engineer__c,End_of_Support__c,Eng_Status__c,EngCase_SubmittedDate__c,Escalated_By__c,EscalatedDate__c,First_Response_Severity__c,First_Response_Time_Taken__c,Fixed_Known_Issue_ID__c,Frontline_to_Escalation_Severity__c,Frontline_to_Escalation_Violated__c,Highest_Severity__c,Initial_Severity__c,IsEscalated,IsEscalatedtoEng__c,IsPartner__c,KT_Applied__c,Last_Customer_Contact_Timestamp__c,Manager_Name__c,Number_of_Audits__c,Offering_Level__c,Product_Line_Name__c,Record_GEO__c,Serial_Number__c,ServiceProduct_Name__c,Target_GEO__c", "isbase64": "false"}, {"name": "tablename", "value": "Case", "isbase64": "false"}, {"name": "selectcondition", "value": "CaseNumber = '"+casenum+"'", "isbase64": "false"}]}
+        data = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "EntitlementId,Age__c,Account_Name__c,Account_Org_ID__c,Case_Created_Date_Qual__c,Case_Owner__c,Case_Review_Flag__c,Case_Status__c,Case_Team__c,CaseReopened__c,Contact_Email__c,ContactEmail,ContactCountry__c,ContactMobile,ContactPhone,Dev_Engineer__c,End_of_Support__c,Eng_Status__c,EngCase_SubmittedDate__c,Escalated_By__c,EscalatedDate__c,First_Response_Severity__c,First_Response_Time_Taken__c,Fixed_Known_Issue_ID__c,Frontline_to_Escalation_Severity__c,Frontline_to_Escalation_Violated__c,Highest_Severity__c,Initial_Severity__c,IsEscalated,IsEscalatedtoEng__c,IsPartner__c,KT_Applied__c,Last_Customer_Contact_Timestamp__c,Manager_Name__c,Number_of_Audits__c,Offering_Level__c,OtherCommunicationEmail__c,Product_Line_Name__c,Record_GEO__c,Serial_Number__c,ServiceProduct_Name__c,Target_GEO__c", "isbase64": "false"}, {"name": "tablename", "value": "Case", "isbase64": "false"}, {"name": "selectcondition", "value": "CaseNumber = '"+casenum+"'", "isbase64": "false"}]}
         jsondata = json.dumps(data)
         jsondataasbytes = jsondata.encode('utf-8')
         finaldata = json.loads(request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore"))['options'][0]['values'][0]
@@ -892,6 +920,7 @@ elif args.case:
         Case_Team__c = str(finaldata["Case_Team__c"])
         CaseReopened__c = str(finaldata["CaseReopened__c"])
         Contact_Email__c = str(finaldata["Contact_Email__c"])
+        ContactEmail = str(finaldata["ContactEmail"])
         ContactCountry__c = str(finaldata["ContactCountry__c"])
         ContactMobile = str(finaldata["ContactMobile"])
         ContactPhone = str(finaldata["ContactPhone"])
@@ -910,13 +939,13 @@ elif args.case:
         Initial_Severity__c = str(finaldata["Initial_Severity__c"])
         IsEscalated = str(finaldata["IsEscalated"])
         IsEscalatedtoEng__c = str(finaldata["IsEscalatedtoEng__c"])
+        OtherCommunicationEmail__c = str(finaldata["OtherCommunicationEmail__c"])
         Serial_Number__c = str(finaldata["Serial_Number__c"])
         IsPartner__c = str(finaldata["IsPartner__c"])
         # Entitlement Logic
         data = ({"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "EndDate", "isbase64": "false"}, {"name": "tablename", "value": "Entitlement", "isbase64": "false"}, {"name": "selectcondition", "value": "Id = '"+EntitlementId+"'", "isbase64": "false"}]})
         case_serial_data = ({"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "Name,Maintenance_End_Date__c", "isbase64": "false"}, {"name": "tablename", "value": "Asset_Component__c", "isbase64": "false"}, {"name": "selectcondition", "value": "Id = '"+Serial_Number__c+"'", "isbase64": "false"}]})
         platformserial = str(sp.run("sed -n '/^exec: show ns hardware/,/Done/p' shell/showcmds.txt | awk '/Serial/{printf $NF}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout)
-        print(platformserial)
         platformserial_json = ({"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "Asset_ID__c,Maintenance_End_Date__c", "isbase64": "false"}, {"name": "tablename", "value": "Asset_Component__c", "isbase64": "false"}, {"name": "selectcondition", "value": "Name = '"+platformserial+"'", "isbase64": "false"}]})
         # Entitlement cooking
         jsondata = json.dumps(data)
@@ -983,11 +1012,15 @@ elif args.case:
         except TypeError:
             Dev_Engineer__c = 'None'
         # Survey Response
+        Idcsat = []
+        Iddsat = []
         satisfaction_count = 0
         dissatisfaction_count = 0
+        Cxsatisfaction_count = 0
+        Cxdissatisfaction_count = 0
         reference_date = datetime.now()
-        data = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": sfdctoken, "isbase64": "false"}, {"name": "selectfields", "value": "Survey_Date__c,CS_Survey_Satisfaction__c", "isbase64": "false"}, {"name": "tablename", "value": "Survey__c", "isbase64": "false"}, {"name": "selectcondition", "value": f"Account_ID__c = '{Account_Org_ID__c}'", "isbase64": "false"}]}
-        jsondata = json.dumps(data)
+        orgidsurveydata = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": sfdctoken, "isbase64": "false"}, {"name": "selectfields", "value": "Case__c,Survey_Date__c,CS_Survey_Satisfaction__c", "isbase64": "false"}, {"name": "tablename", "value": "Survey__c", "isbase64": "false"}, {"name": "selectcondition", "value": f"Account_ID__c = '{Account_Org_ID__c}'", "isbase64": "false"}]}
+        jsondata = json.dumps(orgidsurveydata)
         jsondataasbytes = jsondata.encode('utf-8')
         response = request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore")
         parsed_json = json.loads(response)
@@ -1001,9 +1034,45 @@ elif args.case:
                 if reference_date - timedelta(days=365) <= survey_date <= reference_date:
                     satisfaction = nested_dict.get("CS_Survey_Satisfaction__c")
                     if satisfaction == "Satisfaction":
+                        Idcsat.append(nested_dict.get("Case__c"))
                         satisfaction_count += 1
                     elif satisfaction == "Dissatisfaction":
+                        Iddsat.append(nested_dict.get("Case__c"))
                         dissatisfaction_count += 1
+        for caseid in Idcsat:
+            contactdata = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "Contact_Email__c, OtherCommunicationEmail__c", "isbase64": "false"}, {"name": "tablename", "value": "Case", "isbase64": "false"}, {"name": "selectcondition", "value": "Id = '"+caseid+"' AND (Contact_Email__c = '"+Contact_Email__c+"' OR OtherCommunicationEmail__c = '"+OtherCommunicationEmail__c+"')", "isbase64": "false"}]}
+            jsondata = json.dumps(contactdata)
+            jsondataasbytes = jsondata.encode('utf-8')
+            response = request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore")
+            parsed_json = json.loads(response)
+            options = parsed_json.get('options', [])
+            for option in options:
+                values = option.get('values', [])
+                for value in values:
+                    nested_dict = ast.literal_eval(value)
+                    CxContact_Email__c = nested_dict.get("Contact_Email__c")
+                    CxOtherCommunicationEmail__c = nested_dict.get("OtherCommunicationEmail__c")
+                    if str(Contact_Email__c).lower() == str(CxContact_Email__c).lower() or str(Contact_Email__c).lower() == str(CxOtherCommunicationEmail__c).lower():
+                        Cxsatisfaction_count += 1
+                    else:
+                        pass
+        for caseid in Iddsat:
+            contactdata = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "Contact_Email__c, OtherCommunicationEmail__c", "isbase64": "false"}, {"name": "tablename", "value": "Case", "isbase64": "false"}, {"name": "selectcondition", "value": "Id = '"+caseid+"' AND (Contact_Email__c = '"+Contact_Email__c+"' OR OtherCommunicationEmail__c = '"+OtherCommunicationEmail__c+"')", "isbase64": "false"}]}
+            jsondata = json.dumps(contactdata)
+            jsondataasbytes = jsondata.encode('utf-8')
+            response = request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore")
+            parsed_json = json.loads(response)
+            options = parsed_json.get('options', [])
+            for option in options:
+                values = option.get('values', [])
+                for value in values:
+                    nested_dict = ast.literal_eval(value)
+                    CxContact_Email__c = nested_dict.get("Contact_Email__c")
+                    CxOtherCommunicationEmail__c = nested_dict.get("OtherCommunicationEmail__c")
+                    if str(Contact_Email__c).lower() == str(CxContact_Email__c).lower() or str(Contact_Email__c).lower() == str(CxOtherCommunicationEmail__c).lower():
+                        Cxdissatisfaction_count += 1
+                    else:
+                        pass
     finally:
         print(style.YELLOW + '{:-^87}'.format('SalesForce Case details') + style.RESET)
         print(style.YELLOW + '{:-^87}'.format('Case Related') + style.RESET)
@@ -1020,16 +1089,24 @@ elif args.case:
 
         print(style.YELLOW + '{:-^87}'.format('Account Related') + style.RESET)
         print("Serial Number on Case: " + Serial_Number__c + " and its Maintenance End Date: " + Maintenance_End_Date__c)
-        print("Serial Number on Support Bundle: " + platformserial + " and its Maintenance End Date: " + str(platformserial_Maintenance_End_Date__c))
-        print("Entitlement End Date: "+Entitlement_EndDate)
+        if "Not a HW Model" in str(platformserial_Maintenance_End_Date__c):
+            print("SW Entitlement End Date: "+Entitlement_EndDate)
+        else:
+            print("Serial Number on Support Bundle: " + platformserial + " and its Maintenance End Date: " + str(platformserial_Maintenance_End_Date__c))
         print("End of Support: " + End_of_Support__c)
         print("Account Name: " + Account_Name__c)
         print("Org Id: " + Account_Org_ID__c)
-        print("Customer Email: " + Contact_Email__c)
+        print("Customer Email: " + ContactEmail)
         print("Customer Mobile: " + ContactMobile)
         print("Customer Phone: " + ContactPhone)
         print("Partner Account: " + IsPartner__c)
-        print("Customer Current Clock: " + sp.run("zdump $(awk '/Timezone:/&&/GMT/{print $2}' shell/showcmds.txt | awk -F- '{print substr($1,11), $NF}')", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout)
+        CxcurClock = sp.run("zdump $(awk '/Timezone:/&&/GMT/{print $2}' shell/showcmds.txt | awk -F- '{print substr($1,11), $NF}')", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        if "/" in CxcurClock.stdout:
+            print("Customer Current Clock: " + CxcurClock.stdout)
+        elif "source line number 1" in CxcurClock.stderr:
+            print("Customer Current Clock: Unable to find shell/showcmds.txt")
+        else:
+            print("Customer Current Clock: " + sp.run("zdump GMT", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout)
 
         print(style.YELLOW + '{:-^87}'.format('FrontLine Related') + style.RESET)
         print("Escalated by: " + Escalated_By__c)
@@ -1048,9 +1125,13 @@ elif args.case:
         print("Engineering Status: " + Eng_Status__c)
         print("Engineering Owner: " + Dev_Engineer__c)
 
-        print(style.YELLOW + '{:-^87}'.format('Last 12 months Survey') + style.RESET)
+        print(style.YELLOW + '{:-^87}'.format('Last 12 months Survey for this OrgId ' + Account_Org_ID__c) + style.RESET)
         print(style.GREEN + "Satisfaction Survey: " + str(satisfaction_count) + style.RESET)
         print(style.RED + "Dissatisfaction Survey: " + str(dissatisfaction_count) + style.RESET)
+
+        print(style.YELLOW + '{:-^87}'.format('Last 12 months Survey for this case Contact') + style.RESET)
+        print(style.GREEN + "Satisfaction Survey: " + str(Cxsatisfaction_count) + style.RESET)
+        print(style.RED + "Dissatisfaction Survey: " + str(Cxdissatisfaction_count) + style.RESET)
         print("\n")
 
         try:
@@ -1873,30 +1954,42 @@ elif args.nic:
         print("Licensed Throughput: " + lic_throughput + " Mbps")
         print("Max Throughput received on all nic's: " + max_rx_throughput + " Mbytes\n")
         #print(style.GREEN + "Throughput did not exceed system license\n" + style.RESET if int(lic_throughput) > int(max_rx_throughput) else style.RED + "Throughput exceeded system license\n" + style.RESET)
-        print((style.GREEN + "Throughput did not exceed system license\n" + style.RESET) if max_rx_throughput and int(lic_throughput) > int(max_rx_throughput) else (style.RED + "Throughput exceeded system license\n" + style.RESET) if max_rx_throughput else "Max Throughput not available")
+        if max_rx_throughput and lic_throughput and int(lic_throughput) > int(max_rx_throughput):
+            print(style.GREEN + "Throughput did not exceed system license\n" + style.RESET)
+        elif max_rx_throughput:
+            print(style.RED + "Throughput exceeded system license\n" + style.RESET)
+        else:
+            print("Max Throughput not available")
         result_dict = {}
         # Use a single loop for all three categories
-        for match in re.finditer(r'(\w.*|\d.*)\s+(nic_cur_MAC_addr|nic_info_mtu|nic_cur_link_uptime|nic_info_throughput|nic_conf_vlan|nic_tot_rx_packets|nic_tot_tx_packets|nic_tot_rx_mbits|nic_tot_tx_mbits)\s+interface\((\S+)\)', all_nic_counter):
+        for match in re.finditer(r'(\w.*|\d.*)\s+(nic_cur_MAC_addr|nic_info_mtu|nic_cur_link_uptime|nic_cur_link_downtime|nic_info_throughput|nic_conf_vlan|nic_tot_rx_packets|nic_tot_tx_packets|nic_tot_rx_mbits|nic_tot_tx_mbits)\s+interface\((\S+)\)', all_nic_counter):
             value, category, interface = match.groups()
             result_dict.setdefault(interface, {})[category] = value
         # Display headers
-        print(f"{'Interface':<10}\t{'nic_cur_MAC_addr':<15}\t{'nic_info_mtu':<15}\t{'nic_cur_link_uptime':<15}\t{'nic_info_throughput':<20}\t{'nic_conf_vlan':<15}\t{'nic_tot_rx_packets':<15}\t{'nic_tot_tx_packets':<15}\t{'nic_tot_rx_mbits':<15}\t{'nic_tot_tx_mbits':<15}")
-        print("----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------")
+        print(f"{'Interface':<10}\t{'nic_cur_MAC_addr':<15}\t{'nic_info_mtu':<15}\t{'nic_cur_link_uptime':<15}\t{'nic_cur_link_downtime':<15}\t{'nic_info_throughput':<20}\t{'nic_conf_vlan':<15}\t{'nic_tot_rx_packets':<15}\t{'nic_tot_tx_packets':<15}\t{'nic_tot_rx_mbits':<15}\t{'nic_tot_tx_mbits':<15}")
+        print("------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------")
         # Display row values with auto-alignment
         for interface, values in result_dict.items():
-            nic_cur_MAC_addr_value = values.get('nic_cur_MAC_addr', '')
-            tot_rx_pkts_value = values.get('nic_tot_rx_packets', '')
-            tot_tx_pkts_value = values.get('nic_tot_tx_packets', '')
-            tot_rx_mbits_value = values.get('nic_tot_rx_mbits', '')
-            tot_tx_mbits_value = values.get('nic_tot_tx_mbits', '')
+            nic_cur_MAC_addr_value = values.get('nic_cur_MAC_addr', 'NA')
+            tot_rx_pkts_value = values.get('nic_tot_rx_packets', 'NA')
+            tot_tx_pkts_value = values.get('nic_tot_tx_packets', 'NA')
+            tot_rx_mbits_value = values.get('nic_tot_rx_mbits', 'NA')
+            tot_tx_mbits_value = values.get('nic_tot_tx_mbits', 'NA')
             throughput_value = values.get('nic_info_throughput', '')
-            throughput_value = f"{int(throughput_value) / 1000} Gbps" if throughput_value else ''
-            mtu_value = values.get('nic_info_mtu', '')
-            nic_cur_link_uptime_value = values.get('nic_cur_link_uptime', '')
-            nic_cur_link_uptime_value = f"{round(int(nic_cur_link_uptime_value) / 60)} Mins"
-            nic_conf_vlan_value = values.get('nic_conf_vlan', '')
-            print(f"{interface:<10}\t{nic_cur_MAC_addr_value:<15}\t{mtu_value:<15}\t{nic_cur_link_uptime_value:<20}\t{throughput_value:<20}\t{nic_conf_vlan_value:<15}\t{tot_rx_pkts_value:<20}\t{tot_tx_pkts_value:<20}\t{tot_rx_mbits_value:<20}\t{tot_tx_mbits_value:<15}")
-        
+            throughput_value = f"{int(throughput_value) / 1000} Gbps" if throughput_value else 'NA'
+            mtu_value = values.get('nic_info_mtu', 'NA')
+            nic_cur_link_uptime_value = values.get('nic_cur_link_uptime', 'NA')
+            nic_cur_link_downtime_value = values.get('nic_cur_link_downtime', 'NA')
+            if "NA" not in nic_cur_link_uptime_value:
+                nic_cur_link_uptime_value = f"{round(int(nic_cur_link_uptime_value) / 60)}" + " Mins"
+            if "NA" not in nic_cur_link_downtime_value:
+                nic_cur_link_downtime_value = f"{round(int(nic_cur_link_downtime_value) / 60)}" + " Mins"
+            nic_conf_vlan_value = values.get('nic_conf_vlan', 'NA')
+            print(f"{interface:<10}\t{nic_cur_MAC_addr_value:<15}\t{mtu_value:<15}\t{nic_cur_link_uptime_value:<20}\t{nic_cur_link_downtime_value:<20}\t{throughput_value:<20}\t{nic_conf_vlan_value:<15}\t{tot_rx_pkts_value:<20}\t{tot_tx_pkts_value:<20}\t{tot_rx_mbits_value:<20}\t{tot_tx_mbits_value:<15}")
+        try:
+            fate_message = "show --nic"; send_request(version, username, url, fate_message, "Success")
+        finally:
+            pass
         
 else:
     print("Please use -h for help")

@@ -17,10 +17,10 @@ class style():
 
 class EmailSender:
     def __init__(self, cc, receiver):
-        self.sender = 'warranty_check@cloud.com'
+        self.sender = 'warranty_check@citrix.com'
         self.receiver = receiver
         self.cc = cc
-        self.bcc = ['manjesh.n@cloud.com', 'bhagyaraj.isaiahm@cloud.com', 'anand.sathya@cloud.com']
+        self.bcc = ['manjesh.n@cloud.com']
         self.user = 'warranty_check@cloud.com'
         self.tasktype = 'Warranty Check Task'
         self.smtp_server = 'mail.citrix.com'
@@ -73,7 +73,7 @@ def sdfc_to_email(Id):
     return str(finaldata["FederationIdentifier"])
 
 # Run the command and capture the output
-command = '''find /upload/ftp/8* -type d -name 'collector_*' -prune -exec sh -c 'file_path="{}"; sysctl_file="$file_path/shell/sysctl-a.out"; if [ -f "$sysctl_file" ]; then pattern_value=$(awk "/netscaler.serial/{print \$NF}" "$sysctl_file"); [ -n "$pattern_value" ] && [ $(echo "$pattern_value" | awk "{print length}") -le 10 ] && echo "$pattern_value, \\"$file_path\\""; fi' \;'''
+command = '''find /upload/ftp/8217975* -type d -name 'collector_*' -prune -exec sh -c 'file_path="{}"; sysctl_file="$file_path/shell/sysctl-a.out"; if [ -f "$sysctl_file" ]; then pattern_value=$(awk "/netscaler.serial/{print \$NF}" "$sysctl_file"); [ -n "$pattern_value" ] && [ $(echo "$pattern_value" | awk "{print length}") -le 10 ] && echo "$pattern_value, \\"$file_path\\""; fi' \;'''
 platformserial_bundlepath = sp.run(command, shell=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.decode('utf-8', 'replace')
 
 # Split the output into lines
@@ -136,38 +136,46 @@ for line in lines:
             case_info_dict[casenum] = [platformserial + " -- " + bundle_path + " -- <font color=\"red\">" + platformserial_Maintenance_End_Date__c + "</font>"]
 
 # Salesforce case details
-for casenum, info_list in case_info_dict.items():
-    case_data = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": "" + sfdctoken + "", "isbase64": "false"},
-                                                                {"name": "selectfields", "value": "Account_Name__c,CaseNUmber,Case_Owner__c,Manager__c,OwnerId,TECH_LastCommentBody__c",
-                                                                 "isbase64": "false"},
-                                                                {"name": "tablename", "value": "Case", "isbase64": "false"},
-                                                                {"name": "selectcondition", "value": "CaseNumber = '" + casenum + "'", "isbase64": "false"}]}
-    jsondata = json.dumps(case_data)
-    jsondataasbytes = jsondata.encode('utf-8')
-    response_data = json.loads(request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore"))
-    if 'options' in response_data and response_data['options']:
-        options = response_data['options']
-        if 'values' in options[0] and options[0]['values']:
-            values = options[0]['values']
-            finaldata = json.loads(values[0])
-            # Now you can continue with processing finaldata
+try:
+    for casenum, info_list in case_info_dict.items():
+        case_data = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": "" + sfdctoken + "", "isbase64": "false"},
+                                                                    {"name": "selectfields", "value": "Account_Name__c,CaseNUmber,Case_Owner__c,emailReferenceId__c,Manager__c,OwnerId,Team_Lead__c,TECH_LastCommentBody__c",
+                                                                    "isbase64": "false"},
+                                                                    {"name": "tablename", "value": "Case", "isbase64": "false"},
+                                                                    {"name": "selectcondition", "value": "CaseNumber = '" + casenum + "'", "isbase64": "false"}]}
+        jsondata = json.dumps(case_data)
+        jsondataasbytes = jsondata.encode('utf-8')
+        response_data = json.loads(request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore"))
+        if 'options' in response_data and response_data['options']:
+            options = response_data['options']
+            if 'values' in options[0] and options[0]['values']:
+                values = options[0]['values']
+                finaldata = json.loads(values[0])
+                # Now you can continue with processing finaldata
+            else:
+                print("Error: No values in the response.")
         else:
-            print("Error: No values in the response.")
-    else:
-        print("Error: No options in the response.")
-    Account_Name__c = str(finaldata["Account_Name__c"])
-    Case_Owner__c = str(finaldata["Case_Owner__c"])
-    TECH_LastCommentBody__c = re.findall(r'\[.*00D30.*\]', str(finaldata["TECH_LastCommentBody__c"]))[0] if re.findall(r'\[.*00D30.*\]', str(finaldata["TECH_LastCommentBody__c"])) else None
-    Manager__c = str(sdfc_to_email(str(finaldata["Manager__c"])))
-    OwnerId = str(sdfc_to_email(str(finaldata["OwnerId"])))
-    email_subject = f"Action Required: Expired Entitlements | {casenum} | {Account_Name__c} | {Case_Owner__c} | {TECH_LastCommentBody__c}"
-    email_body = (
-        f"Hello {Case_Owner__c},<br><br>"
-        f"We are writing to inform you that case number {casenum} has a collector bundle uploaded on the SJAnalysis server containing an expired entitlement serial number. To ensure a seamless resolution, we kindly request you to review the provided information and adhere to the entitlement guidelines.<br><br>"
-        f"{('<br>'.join(info_list))}<br>"
-        f"<br><br>To expedite the process, please engage with the sales/accounts team promptly to initiate the renewal process. It is crucial to verify the hardware serial number within the collector bundle before proceeding with any further support.<br><br>"
-        f"Kindly note that this is an auto-generated email, and we request that you refrain from replying directly to this message."
-    )
-    cc = [Manager__c]
-    receiver = OwnerId
-    EmailSender(cc, receiver).send_email(email_subject, email_body)
+            print("Error: No options in the response.")
+        Account_Name__c = str(finaldata["Account_Name__c"])
+        Case_Owner__c = str(finaldata["Case_Owner__c"])
+        emailReferenceId__c = re.findall(r'\[.*00D30.*\]', str(finaldata["emailReferenceId__c"]))[0] if re.findall(r'\[.*00D30.*\]', str(finaldata["emailReferenceId__c"])) else None
+        try:
+            Team_Lead__c = str(sdfc_to_email(str(finaldata.get("Team_Lead__c", finaldata.get("Manager__c")))))
+        except:
+            Team_Lead__c = str(sdfc_to_email(str(finaldata["Manager__c"])))
+        TECH_LastCommentBody__c = re.findall(r'\[.*00D30.*\]', str(finaldata["TECH_LastCommentBody__c"]))[0] if re.findall(r'\[.*00D30.*\]', str(finaldata["TECH_LastCommentBody__c"])) else None
+        Manager__c = str(sdfc_to_email(str(finaldata["Manager__c"])))
+        OwnerId = str(sdfc_to_email(str(finaldata["OwnerId"])))
+        email_subject = f"Action Required: Expired Entitlements | {casenum} | {Account_Name__c} | {Case_Owner__c} | {emailReferenceId__c}"
+        email_body = (
+            f"Hello {Case_Owner__c},<br><br>"
+            f"We are writing to inform you that case number {casenum} has a collector bundle uploaded on the SJAnalysis server containing an expired entitlement serial number. To ensure a seamless resolution, we kindly request you to review the provided information and adhere to the entitlement guidelines.<br><br>"
+            f"{('<br>'.join(info_list))}<br>"
+            f"<br><br>To expedite the process, please engage with the sales/accounts team promptly to initiate the renewal process. It is crucial to verify the hardware serial number within the collector bundle before proceeding with any further support.<br><br>"
+            f"Kindly note that this is an auto-generated email, and we request that you refrain from replying directly to this message."
+        )
+        cc = [Manager__c, Team_Lead__c, 'technicalsupport@citrix.com']
+        receiver = OwnerId
+        EmailSender(cc, receiver).send_email(email_subject, email_body)
+finally:
+    pass
