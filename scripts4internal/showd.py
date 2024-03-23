@@ -51,7 +51,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "5.53"
+version = "5.64"
 
 # About script
 showscriptabout = '''
@@ -881,6 +881,7 @@ elif args.v:
             quit()
 
 elif args.case:
+    appliance_org_check = None
     # Get SFDC API Keys
     try:
         sfdcurl = "https://ftltoolswebapi.deva.citrite.net/sfaas/api/salesforce"
@@ -946,7 +947,7 @@ elif args.case:
         data = ({"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "EndDate", "isbase64": "false"}, {"name": "tablename", "value": "Entitlement", "isbase64": "false"}, {"name": "selectcondition", "value": "Id = '"+EntitlementId+"'", "isbase64": "false"}]})
         case_serial_data = ({"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "Name,Maintenance_End_Date__c", "isbase64": "false"}, {"name": "tablename", "value": "Asset_Component__c", "isbase64": "false"}, {"name": "selectcondition", "value": "Id = '"+Serial_Number__c+"'", "isbase64": "false"}]})
         platformserial = str(sp.run("sed -n '/^exec: show ns hardware/,/Done/p' shell/showcmds.txt | awk '/Serial/{printf $NF}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout)
-        platformserial_json = ({"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "Asset_ID__c,Maintenance_End_Date__c", "isbase64": "false"}, {"name": "tablename", "value": "Asset_Component__c", "isbase64": "false"}, {"name": "selectcondition", "value": "Name = '"+platformserial+"'", "isbase64": "false"}]})
+        platformserial_json = ({"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "Asset_ID__c,frmAccount_Org_ID__c,Maintenance_End_Date__c", "isbase64": "false"}, {"name": "tablename", "value": "Asset_Component__c", "isbase64": "false"}, {"name": "selectcondition", "value": "Name = '"+platformserial+"'", "isbase64": "false"}]})
         # Entitlement cooking
         jsondata = json.dumps(data)
         jsondataasbytes = jsondata.encode('utf-8')
@@ -985,6 +986,7 @@ elif args.case:
                     if values:
                         json_data = json.loads(values[0])
                         end_date = json_data.get('Maintenance_End_Date__c')
+                        frmAccount_Org_ID__c = json_data.get('frmAccount_Org_ID__c')
                         if end_date:
                             end_dates.append(end_date)
                 try:
@@ -997,6 +999,8 @@ elif args.case:
                         platformserial_Maintenance_End_Date__c = style.GREEN + str(platformserial_Maintenance_End_Date__c) + style.RESET
                     else:
                         platformserial_Maintenance_End_Date__c = style.RED + str(platformserial_Maintenance_End_Date__c) + style.RESET
+                    if int(frmAccount_Org_ID__c) != int(Account_Org_ID__c):
+                        appliance_org_check = ("Appliance Org Check: " + style.RED + "Appliance belongs to " + frmAccount_Org_ID__c + " but Case Org Id is " + Account_Org_ID__c + "" + style.RESET)
                 except:
                     pass
             else:
@@ -1094,6 +1098,8 @@ elif args.case:
         else:
             print("Serial Number on Support Bundle: " + platformserial + " and its Maintenance End Date: " + str(platformserial_Maintenance_End_Date__c))
         print("End of Support: " + End_of_Support__c)
+        if appliance_org_check is not None:
+            print(appliance_org_check)
         print("Account Name: " + Account_Name__c)
         print("Org Id: " + Account_Org_ID__c)
         print("Customer Email: " + ContactEmail)
@@ -1981,9 +1987,9 @@ elif args.nic:
             nic_cur_link_uptime_value = values.get('nic_cur_link_uptime', 'NA')
             nic_cur_link_downtime_value = values.get('nic_cur_link_downtime', 'NA')
             if "NA" not in nic_cur_link_uptime_value:
-                nic_cur_link_uptime_value = f"{round(int(nic_cur_link_uptime_value) / 60)}" + " Mins"
+                nic_cur_link_uptime_value = f"{round(int(nic_cur_link_uptime_value) / 60)}" + " Mins, " + f"{int(nic_cur_link_uptime_value) % 60}" + " Sec"
             if "NA" not in nic_cur_link_downtime_value:
-                nic_cur_link_downtime_value = f"{round(int(nic_cur_link_downtime_value) / 60)}" + " Mins"
+                nic_cur_link_downtime_value = f"{round(int(nic_cur_link_downtime_value) / 60)}" + " Mins " + f"{int(nic_cur_link_downtime_value) % 60}" + " Sec"
             nic_conf_vlan_value = values.get('nic_conf_vlan', 'NA')
             print(f"{interface:<10}\t{nic_cur_MAC_addr_value:<15}\t{mtu_value:<15}\t{nic_cur_link_uptime_value:<20}\t{nic_cur_link_downtime_value:<20}\t{throughput_value:<20}\t{nic_conf_vlan_value:<15}\t{tot_rx_pkts_value:<20}\t{tot_tx_pkts_value:<20}\t{tot_rx_mbits_value:<20}\t{tot_tx_mbits_value:<15}")
         try:

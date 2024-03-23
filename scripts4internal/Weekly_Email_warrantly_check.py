@@ -45,14 +45,16 @@ def execute_query_and_write_to_xlsx(connection):
         df['Bundle_Path'] = df['Action'].apply(lambda x: x.split(' -- ')[-1])
         df['SerialNumber'] = df['Action'].apply(lambda x: x.split(' -- ')[0])
         df['Account_Name'] = df['User_Name']
-        df['Case_Owner'] = df['Action'].apply(lambda x: x.split(' -- ')[1])
-        df['Manager_Email'] = df['Action'].apply(lambda x: x.split(' -- ')[2])
-        df['Case_Age'] = df['Action'].apply(lambda x: int(round(float(x.split(' -- ')[3]))))
-        df['Date_Time_Opened (GMT)'] = pd.to_datetime(df['Action'].apply(lambda x: x.split(' -- ')[4]))
+        df['Offering_Level'] = df['Action'].apply(lambda x: x.split(' -- ')[1])
+        df['Case_Owner'] = df['Action'].apply(lambda x: x.split(' -- ')[2])
+        df['Manager_Email'] = df['Action'].apply(lambda x: x.split(' -- ')[3])
+        df['Case_Age'] = df['Action'].apply(lambda x: int(round(float(x.split(' -- ')[4]))))
+        df['Date_Time_Opened (GMT)'] = pd.to_datetime(df['Action'].apply(lambda x: x.split(' -- ')[5]))
         # Rename columns
         df.rename(columns={'Timestamp': 'Email_Sent_Date (GMT)', 'Result': 'Expired_On'}, inplace=True)
         # Reorder columns
-        df = df[['Email_Sent_Date (GMT)', 'Account_Name', 'SR_Number', 'Case_Age', 'Date_Time_Opened (GMT)', 'Case_Owner', 'Manager_Email', 'Bundle_Path', 'SerialNumber', 'Expired_On']]
+        #df = df[['Email_Sent_Date (GMT)', 'Account_Name', 'SR_Number', 'Case_Age', 'Date_Time_Opened (GMT)', 'Case_Owner', 'Manager_Email', 'Bundle_Path', 'SerialNumber', 'Expired_On']].drop_duplicates(subset='SR_Number', keep='first')
+        df = df[['SR_Number', 'Account_Name', 'Offering_Level', 'Case_Age', 'Date_Time_Opened (GMT)', 'Case_Owner', 'Manager_Email', 'SerialNumber', 'Expired_On']].drop_duplicates(subset='SR_Number', keep='first')
         # Write DataFrame to Excel file
         excel_filename = f"{today}_warranty_check.xlsx"
         # create a pandas.ExcelWriter object
@@ -78,14 +80,14 @@ def send_email_with_attachment(filename):
     # Email configurations
     from_email = "warranty_check@citrix.com"
     to_email = "manjesh.n@cloud.com, manjesh.n@cloud.com"
-    cc_email = "anand.sathya@cloud.com, bhagyaraj.isaiahm@cloud.com, manjesh.n@cloud.com"
+    cc_email = "manjesh.n@cloud.com, manjesh.n@cloud.com, manjesh.n@cloud.com"
     subject = f"Consolidated Weekly Report for Project warranty_check for the Week {today}"
     # HTML version of the email body
     body = """
     <html>
       <body>
         Hello Pradeep and Ginu,<br><br>
-        Automated email: Weekly report for expired entitlements raised by our customers with support. Please find the attached Excel file containing the full details.
+        Automated email: Weekly report for expired entitlements raised by our customers with teschnical support. Please find the attached Excel file containing the full details.
       </body>
     </html>
     """
@@ -117,6 +119,7 @@ def send_email_with_attachment(filename):
     with smtplib.SMTP("mail.citrix.com", 25) as server:
         server.starttls()
         server.sendmail(from_email, to_email.split(", ") + cc_email.split(", "), text)
+    print("Email sent successfully!")
 
 def main():
     connection = connect_to_database()

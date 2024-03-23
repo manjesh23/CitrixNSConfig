@@ -222,6 +222,7 @@ def get_entitlement_end_date_data(serial_string):
                 print("Error processing Maintenance End Date:", e)
                 platformserial_Maintenance_End_Date__c = "Error"
         else:
+            quit()
             check_SW_Support(casenum)
     except IndexError:
         platformserial_Maintenance_End_Date__c = "Not a HW Model"
@@ -234,7 +235,7 @@ def SFDC_Case_Details(entitlement_end_date_details):
         if casenum is not None:
             casenum = entitlement_end_date_details["casenum"]
             case_data = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": "" + sfdctoken + "", "isbase64": "false"},
-                                                                        {"name": "selectfields", "value": "Account_Name__c,Age__c,CaseNUmber,Case_Owner__c,CreatedDate,emailReferenceId__c,Manager__c,OwnerId,Team_Lead__c,TECH_LastCommentBody__c",
+                                                                        {"name": "selectfields", "value": "Account_Name__c,Age__c,CaseNUmber,Case_Owner__c,CreatedDate,emailReferenceId__c,Manager__c,Offering_Level__c,OwnerId,Team_Lead__c,TECH_LastCommentBody__c",
                                                                         "isbase64": "false"},
                                                                         {"name": "tablename", "value": "Case", "isbase64": "false"},
                                                                         {"name": "selectcondition", "value": "CaseNumber = '" + casenum + "'", "isbase64": "false"}]}
@@ -259,6 +260,7 @@ def SFDC_Case_Details(entitlement_end_date_details):
             except:
                 Team_Lead__c = str(sdfc_to_email(str(finaldata["Manager__c"])))
             Manager__c = str(sdfc_to_email(str(finaldata["Manager__c"])))
+            Offering_Level__c = str(finaldata["Offering_Level__c"])
             OwnerId = str(sdfc_to_email(str(finaldata["OwnerId"])))
             email_subject = f"Action Required: Expired Entitlements HW | {casenum} | {Account_Name__c} | {Case_Owner__c} | {emailReferenceId__c}"
             if emailReferenceId__c is None:
@@ -287,7 +289,7 @@ def SFDC_Case_Details(entitlement_end_date_details):
             EmailSender(cc, receiver).send_email(email_subject, email_body, actual_data)
             # Tooltrack
             try:
-                fate_message = entitlement_end_date_details['serial'] + " -- " + Case_Owner__c + " -- " + Manager__c + " -- " + Age__c + " -- " + CreatedDate; send_request(version, Account_Name__c, fate_message, entitlement_end_date_details['maintenance_end_date'])
+                fate_message = entitlement_end_date_details['serial'] + " -- " + Offering_Level__c + " -- " + Case_Owner__c + " -- " + Manager__c + " -- " + Age__c + " -- " + CreatedDate; send_request(version, Account_Name__c, fate_message, entitlement_end_date_details['maintenance_end_date'])
             finally:
                 quit()
 
