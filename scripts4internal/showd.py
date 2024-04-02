@@ -51,7 +51,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "5.64"
+version = "5.66"
 
 # About script
 showscriptabout = '''
@@ -242,7 +242,10 @@ if args.i:
             newnslogsetime = sp.run("cat conFetch/nsconmsg/newnslog_setime.txt", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         else:
             all_newnslog_startend_times = str(sp.run('''for i in $(find ./ -type d -name "newnslog*"); do nsconmsg -K $i -d setime | awk '!/Display/&&/ time/'; done''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout)
-            newnslogsetime = find_min_max_dates(all_newnslog_startend_times)
+            if len(all_newnslog_startend_times) == 0:
+                newnslogsetime = (style.RED + 'No newnslog available in the collector bundle' + style.RESET)
+            else:
+                newnslogsetime = find_min_max_dates(all_newnslog_startend_times)
             #newnslogsetime = sp.run("echo $(nsconmsg -K $(find ./ -type d -name \"newnslog.*\" | sort |  sed 's/ .\\//\\n.\\//g' | awk -F/ '{print \"var/nslog/\"$NF}' | sed -n '1p') -d setime | awk '/start/&&!/Displaying/{$1=$2=\"\"; printf }' | awk '{$1=$1=\"\"}1'; printf \" --> \"; nsconmsg -K var/nslog/newnslog -d setime | awk '/end/&&!/Displaying/{$1=$2=\"\"; print}' | awk '{$1=$1=\"\"}1')", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         nsmode = sp.run("awk '/ns mode/{$1=$2=$3=\"\";print $0}' nsconfig/ns.conf", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         nsboottime = sp.run("egrep \"nsstart\" var/nslog/ns.log | tail -1 | awk '{$1=$NF=$(NF-1)=\"\"; print}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)

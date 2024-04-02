@@ -12,17 +12,31 @@ invalidq="version=$ver&user=$(whoami)&sr=$1&action=$datad&runtime=0&result=$i&fo
 if [[ $1 =~ $caseformat ]]; then
   cd "/upload/ftp/$1" >/dev/null 2>&1
   if [ $? -eq 0 ]; then
-    # find directories containing "collector_" pattern
+    # Rename directories and files with spaces or parentheses
+    find . \( -name '* *' -o -name '*(*' -o -name '*)*' \) -exec bash -c '
+      for target; do
+        dirname=$(dirname "$target")
+        base=$(basename "$target")
+        # Replace open parentheses with underscore, remove closing parentheses, and replace spaces with underscore
+        new_name=$(echo "$base" | tr -d "()" | sed -E "s/\(([0-9])\)/_\1/" | tr " " "_")
+        mv "$target" "$dirname/$new_name"
+        echo "Renamed: $target -> $dirname/$new_name"
+        fixperms "$dirname/$new_name"
+      done
+    ' bash {} +
+    
+    # Rest of your script
     find . -type d -name '*collector_*' | while read dir; do
-    # create a conFetch directory structure
-    mkdir -p "${dir}/conFetch/nsconmsg" "${dir}/conFetch/Graph" "${dir}/conFetch/show_output"
-    # run command inside the directory
-    (cd "${dir}" && show -gz > /dev/null 2>&1 &)
-    (cd "${dir}" && [ ! -e "conFetch/show_output/show_imall.txt" ] && show -imall > "conFetch/show_output/show_imall.txt" 2>&1 &)
-    (cd "${dir}" && [ ! -e "conFetch/show_output/show_ha.txt" ] && show -ha > "conFetch/show_output/show_ha.txt" 2>&1 &)
-    (cd "${dir}" && [ ! -e "conFetch/nsconmsg/nsconmsg_counters.txt" ] && nsconmsg -K var/nslog/newnslog -d current | awk '!/reltime|Index/{print $6}' | sort | uniq -c | egrep '([a-z].*[_]).*' > "conFetch/nsconmsg/nsconmsg_counters.txt" 2>&1 &)
-    curl --silent --data $successq $url >/dev/null 2>&1
-done
+      # create a conFetch directory structure
+      mkdir -p "${dir}/conFetch/nsconmsg" "${dir}/conFetch/Graph" "${dir}/conFetch/show_output"
+      # run command inside the directory
+      (cd "${dir}" && show -gz > /dev/null 2>&1 &)
+      (cd "${dir}" && [ ! -e "conFetch/show_output/show_imall.txt" ] && show -imall > "conFetch/show_output/show_imall.txt" 2>&1 &)
+      (cd "${dir}" && [ ! -e "conFetch/show_output/show_ha.txt" ] && show -ha > "conFetch/show_output/show_ha.txt" 2>&1 &)
+      (cd "${dir}" && [ ! -e "conFetch/nsconmsg/nsconmsg_counters.txt" ] && nsconmsg -K var/nslog/newnslog -d current | awk '!/reltime|Index/{print $6}' | sort | uniq -c | egrep '([a-z].*[_]).*' > "conFetch/nsconmsg/nsconmsg_counters.txt" 2>&1 &)
+      curl --silent --data $successq $url >/dev/null 2>&1
+    done
+
     # display the list of matching directories
     find ./ -type d -name "collector_*" -exec ls -ld {} + | cut -d: -f2- | cut -c 6- | sed 's/ /\\ /g' | sed 's/(/\\(/g' | sed 's/)/\\)/g' | awk 'BEGIN{printf "\n\t%s\n\n", "\033[1;97mCollector_Bundles\033[0m"}!/tar|gz/{printf "%s%s\n", "\033[36m","./"$0"\033[0m"}'
   else
