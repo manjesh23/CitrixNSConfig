@@ -1,160 +1,43 @@
-#!/usr/local/bin/python3.9
-
-import subprocess as sp
-from urllib import request
-import json
-import re
-from datetime import datetime
+import psycopg2
+from datetime import datetime, timedelta
+import pandas as pd
 import smtplib
-from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
+import os
 
-class style():
-    RED = '\033[31m'
-    GREEN = '\033[32m'
-    YELLOW = '\033[33m'
-    RESET = '\033[0m'
+def send_email_with_attachment():
+    # Email configurations
+    from_email = "tejesh.doddikoppad@citrix.com"
+    to_email = "samjose.ns@cloud.com"
+    cc_email = "manjesh.n@cloud.com, tejesh.doddikoppad@cloud.com"
+    subject = f"Hey Sam Jose, Its me Tejesh D"
+    # HTML version of the email body
+    body = """
+    <html>
+        <body>
+            <h1>Hello Sam,</h1>
+            <p>Got my mail !!!</p>
+            <p>Best regards,</p>
+            <p>Tejesh</p>
+        </body>
+    </html>
+    """
 
-# SMTP Params
-class EmailSender:
-    def __init__(self, cc, receiver):
-        self.sender = 'bundle_validator@cloud.com'
-        self.receiver = receiver
-        self.cc = cc
-        self.bcc = ['manjesh.n@cloud.com']
-        self.user = 'bundle_validator@cloud.com'
-        self.tasktype = 'Warranty Check Task'
-        self.smtp_server = 'mail.citrix.com'
-        self.smtp_port = 25
+    message = MIMEMultipart()
+    message["From"] = from_email
+    message["To"] = to_email
+    message["Cc"] = cc_email
+    message["Subject"] = subject
+    # Attach HTML body to email
+    message.attach(MIMEText(body, "html"))
+    text = message.as_string()
+    # Send email
+    with smtplib.SMTP("mail.citrix.com", 25) as server:
+        server.starttls()
+        server.sendmail(from_email, to_email.split(", ") + cc_email.split(", "), text)
+    print("Email sent successfully!")
 
-    def send_email(self, subject, body):
-        try:
-            # Create the MIME object
-            message = MIMEMultipart()
-            message['From'] = self.sender
-            message['To'] = self.receiver
-            message['Cc'] = ', '.join(self.cc)
-            message['Bcc'] = ', '.join(self.bcc)
-            message['Subject'] = subject
-            message.attach(MIMEText(body, 'html'))
-            # Connect to the SMTP server
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                server.starttls()
-                to_addresses = [self.receiver] + self.cc + self.bcc
-                server.sendmail(self.sender, to_addresses, message.as_string())
-            print("Email sent successfully!")
-        except Exception as e:
-            print("Error: Unable to send email.")
-            print(e)
-
-# Get SFDC API keys
-try:
-    sfdcurl = "https://ftltoolswebapi.deva.citrite.net/sfaas/api/salesforce"
-    tokenpayload = {"feature": "login", "parameters": [{"name": "tokenuri", "value": "https://login.salesforce.com/services/oauth2/token", "isbase64": "false"}] }
-    sfdcreq = request.Request(sfdcurl)
-    sfdcreq.add_header('Content-Type', 'application/json; charset=utf-8')
-    jsondata = json.dumps(tokenpayload)
-    jsondataasbytes = jsondata.encode('utf-8')
-    sfdcreq.add_header('Content-Length', len(jsondataasbytes))
-    sfdctoken = json.loads(request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore"))['options'][0]['values'][0]
-except:
-    print("Unable to get SFDC Token")
-
-
-# Pull user email from Salesforce func
-
-def sdfc_to_email(Id):
-    sfdc_outdata = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "Email, FederationIdentifier", "isbase64": "false"}, {"name": "tablename", "value": "user", "isbase64": "false"}, {"name": "selectcondition", "value": "Id = '"+Id+"'", "isbase64": "false"}]}
-    jsondata = json.dumps(sfdc_outdata)
-    jsondataasbytes = jsondata.encode('utf-8')
-    finaldata = json.loads(request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore"))['options'][0]['values'][0]
-    finaldata = json.loads(finaldata)
-    return str(finaldata["FederationIdentifier"])
-
-command = '''find /upload/ftp/82179750 -type d -name 'collector_*' -prune -exec sh -c 'file_path="{}"; sysctl_file="$file_path/shell/sysctl-a.out"; if [ -f "$sysctl_file" ]; then pattern_value=$(awk "/netscaler.serial/{print \$NF}" "$sysctl_file"); [ -n "$pattern_value" ] && [ $(echo "$pattern_value" | awk "{print length}") -le 10 ] && echo "$pattern_value, \\"$file_path\\""; fi' \;'''
-
-# Run the command and capture the output
-platformserial_bundlepath = sp.run(command, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
-
-# Split the output into lines
-lines = platformserial_bundlepath.strip().split('\n')
-
-# Array for sinlge email with multiple bundles
-short_email_bundle = []
-
-# Iterate through lines and extract values
-for line in lines:
-    values = line.split(', ')
-    if len(values) == 2:
-        platformserial, bundle_path = values
-        casenum = bundle_path.strip().split("/")[3]
-
-        # Engine to find and validate serial number
-        platformserial_json = {
-            "feature": "selectcasequery",
-            "parameters": [
-                {"name": "salesforcelogintoken", "value": sfdctoken, "isbase64": "false"},
-                {"name": "selectfields", "value": "Asset_ID__c,Maintenance_End_Date__c", "isbase64": "false"},
-                {"name": "tablename", "value": "Asset_Component__c", "isbase64": "false"},
-                {"name": "selectcondition", "value": "Name = '" + platformserial + "'", "isbase64": "false"}
-            ]
-        }
-        jsondata = json.dumps(platformserial_json)
-        jsondataasbytes = jsondata.encode('utf-8')
-        try:
-            platformserial_Maintenance_End_Date__c = json.loads(request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore"))['options']
-            end_dates = []
-            if platformserial_Maintenance_End_Date__c:
-                for entry in platformserial_Maintenance_End_Date__c:
-                    values = entry['values']
-                    if values:
-                        json_data = json.loads(values[0])
-                        end_date = json_data.get('Maintenance_End_Date__c')
-                        if end_date:
-                            end_dates.append(end_date)
-                try:
-                    # Find the latest date
-                    platformserial_Maintenance_End_Date__c = max(end_dates)
-                    platformserial_Maintenance_End_Date__c = datetime.strptime(platformserial_Maintenance_End_Date__c, "%Y-%m-%d").date()
-                    current_date = datetime.today().date()
-                    if platformserial_Maintenance_End_Date__c > current_date:
-                        continue
-                    else:
-                        platformserial_Maintenance_End_Date__c = str(platformserial_Maintenance_End_Date__c)
-                except Exception as e:
-                    print("Error processing Maintenance End Date:", e)
-                    platformserial_Maintenance_End_Date__c = style.RED + "Error" + style.RESET
-            else:
-                continue
-        except IndexError:
-            platformserial_Maintenance_End_Date__c = style.YELLOW + "Not a HW Model" + style.RESET
-        
-        if casenum in bundle_path:
-            short_email_bundle.append(platformserial + " -- " + bundle_path + " -- " + platformserial_Maintenance_End_Date__c)
-        else:
-            print('None')
-
-        # Salesforce case details
-        case_data = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "Account_Name__c,CaseNUmber,Case_Owner__c,Manager__c,OwnerId,TECH_LastCommentBody__c", "isbase64": "false"}, {"name": "tablename", "value": "Case", "isbase64": "false"}, {"name": "selectcondition", "value": "CaseNumber = '"+casenum+"'", "isbase64": "false"}]}
-        jsondata = json.dumps(case_data)
-        jsondataasbytes = jsondata.encode('utf-8')
-        finaldata = json.loads(request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore"))['options'][0]['values'][0]
-        finaldata = json.loads(finaldata)
-        Account_Name__c = str(finaldata["Account_Name__c"])
-        Case_Owner__c = str(finaldata["Case_Owner__c"])
-        TECH_LastCommentBody__c = re.findall(r'\[.*00D30.*\]', str(finaldata["TECH_LastCommentBody__c"]))[0] if re.findall(r'\[.*00D30.*\]', str(finaldata["TECH_LastCommentBody__c"])) else None # This is reference id of case email
-        Manager__c = str(sdfc_to_email(str(finaldata["Manager__c"])))
-        OwnerId = str(sdfc_to_email(str(finaldata["OwnerId"])))
-        email_subject = f"Action Required: Expired Entitlements | {casenum} | {Account_Name__c} | {Case_Owner__c} | {TECH_LastCommentBody__c}"
-        email_body = (
-        f"Hello {Case_Owner__c},<br><br>"
-        f"We are writing to inform you that case number {casenum} has a collector bundle uploaded on the SJAnalysis server containing an expired entitlement serial number. To ensure a seamless resolution, we kindly request you to review the provided information and adhere to the entitlement guidelines.<br><br>"
-        f"{('<br>'.join(short_email_bundle))}<br>"
-        f"<br><br>To expedite the process, please engage with the sales/accounts team promptly to initiate the renewal process. It is crucial to verify the hardware serial number within the collector bundle before proceeding with any further support.<br><br>"
-        f"Kindly note that this is an auto-generated email, and we kindly request that you refrain from replying directly to this message."
-        )
-        cc = ['manjesh.n@cloud.com']
-        receiver = OwnerId
-        email_sender = EmailSender(cc, receiver).send_email(email_subject, email_body)
-    else:
-        print("Invalid line format:", line)
+send_email_with_attachment()

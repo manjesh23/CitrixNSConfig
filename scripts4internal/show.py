@@ -51,7 +51,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "5.66"
+version = "5.68"
 
 # About script
 showscriptabout = '''
@@ -373,7 +373,7 @@ elif args.P:
             finally:
                 quit()
         else:
-            print(style.RED + "No admin partition details to dsiplay" + style.RESET)
+            print(style.RED + "No admin partition details to display" + style.RESET)
             # Tooltrack
             try:
                 fate_message = "show -P"; send_request(version, username, url, fate_message, "Failed")
@@ -648,6 +648,7 @@ elif args.im:
             fate_message = "show -im"; send_request(version, username, url, fate_message, "Success")
         finally:
             quit()
+
 elif args.imall:
     try:
         logger.info(os.getcwd() + " - show -imall")
@@ -655,7 +656,7 @@ elif args.imall:
             with open("conFetch/show_output/show_imall.txt", "r") as show_ha:
                 print(show_ha.read())
                 try:
-                    fate_message = "show -ha pre-data"; send_request(version, username, url, fate_message, "Success")
+                    fate_message = "show -imall pre-data"; send_request(version, username, url, fate_message, "Success")
                 finally:
                     quit()
         else:
@@ -707,11 +708,12 @@ elif args.imall:
                     print(style.YELLOW + '{:-^87}\n'.format('NetScaler newnslog timestamp IndexMessages') + style.RESET + newnslog.stdout)
                 else:
                     print(style.RED + '{:-^87}\n'.format('Unable to read newnslog') + style.RESET)
+            try:
+                fate_message = "show -imall"; send_request(version, username, url, fate_message, "Success")
+            finally:
+                quit()
     finally:
-        try:
-            fate_message = "show -imall"; send_request(version, username, url, fate_message, "Success")
-        finally:
-            quit()
+        pass
 
 elif args.N:
     box_time = str(sp.run("awk -F'GMT' '/Timezone:/&&/GMT/{print substr($2,1,6)}' shell/showcmds.txt | awk 'BEGIN { found = 0 } { output = $0; found = 1 } END { if (found) print output; else print \"00:00\" }'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
