@@ -1590,8 +1590,7 @@ elif args.ha:
                         timestamp_str = ' '.join(timestamp)
                         for ts in ha_transition_timestamp:
                             ts_dt = datetime.strptime(ts, '%b %d %H:%M:%S')
-                            line_ts_dt = datetime.strptime(
-                                timestamp_str, '%b %d %H:%M:%S')
+                            line_ts_dt = datetime.strptime(timestamp_str, '%b %d %H:%M:%S')
                             diff = line_ts_dt - ts_dt
                             if abs(diff.total_seconds()) < 300:
                                 if not rca_msg_printed:
