@@ -57,6 +57,8 @@ for bug in manjeshn_reported_bugs:
             status_cell.fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")  # Yellow
         elif status == "Ready For Test":
             status_cell.fill = PatternFill(start_color="F88C3C", end_color="F88C3C", fill_type="solid")  # Orange
+        elif status == "Planned":
+            status_cell.fill = PatternFill(start_color="D83B96", end_color="D83B96", fill_type="solid")  # Magenta
 
 # Auto-adjust column width
 for column in ws.columns:
