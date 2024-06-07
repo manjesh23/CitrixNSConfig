@@ -51,7 +51,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "5.67"
+version = "5.68"
 
 # About script
 showscriptabout = '''
@@ -373,7 +373,7 @@ elif args.P:
             finally:
                 quit()
         else:
-            print(style.RED + "No admin partition details to dsiplay" + style.RESET)
+            print(style.RED + "No admin partition details to display" + style.RESET)
             # Tooltrack
             try:
                 fate_message = "show -P"; send_request(version, username, url, fate_message, "Failed")
