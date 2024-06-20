@@ -21,6 +21,9 @@ headers = {"Authorization": "Bearer MzAxNTE5MjE5MzU0OtUTcabB1CEMVwUGotGeibLeghra
 wb = Workbook()
 ws = wb.active
 
+# Rename the active sheet to "Internal_Bugs"
+ws.title = "Internal_Bugs"
+
 # Write headers
 header_row = ["JIRA ID", "Project", "Severity", "Summary", "Status", "Resolution", "Jira Owner", "Created Date", "Resolution Date", "TTR", "Reporter"]
 ws.append(header_row)
@@ -29,6 +32,9 @@ ws.append(header_row)
 for cell in ws[1]:
     cell.font = Font(bold=True)
     cell.fill = PatternFill(start_color="00CCFF", end_color="00CCFF", fill_type="solid")
+
+# Dictionary to store project counts
+project_counts = {}
 
 # Fetch data for each bug
 for bug in manjeshn_reported_bugs:
@@ -55,6 +61,12 @@ for bug in manjeshn_reported_bugs:
         row = [jira_id, project, severity, summary, status, resolution, assignee_name, created_date.strftime("%d-%b-%Y"), resolutiondate.strftime("%d-%b-%Y") if resolutiondate else '', duration, reporter]
         ws.append(row)
         
+        # Increment the project count
+        if project in project_counts:
+            project_counts[project] += 1
+        else:
+            project_counts[project] = 1
+
         # Change the cell background color based on status
         status_cell = ws.cell(row=ws.max_row, column=5)
         if status == "Done":
@@ -85,6 +97,41 @@ for column in ws.columns:
     adjusted_width = (max_length + 2)
     ws.column_dimensions[column_letter].width = adjusted_width
 
+# Create BreakUp_Details sheet
+breakup_ws = wb.create_sheet(title="BreakUp_Details")
+
+# Write headers for BreakUp_Details
+breakup_header_row = ["Project", "Count"]
+breakup_ws.append(breakup_header_row)
+
+# Highlight header row for BreakUp_Details
+for cell in breakup_ws[1]:
+    cell.font = Font(bold=True)
+    cell.fill = PatternFill(start_color="00CCFF", end_color="00CCFF", fill_type="solid")
+
+# Populate BreakUp_Details sheet with project counts
+for project, count in project_counts.items():
+    breakup_ws.append([project, count])
+
+# Add grand total row
+grand_total = sum(project_counts.values())
+breakup_ws.append(["Grand Total", grand_total])
+grand_total_cell = breakup_ws.cell(row=breakup_ws.max_row, column=2)
+grand_total_cell.font = Font(bold=True)
+grand_total_cell.fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")  # Yellow
+
+# Auto-adjust column width for BreakUp_Details
+for column in breakup_ws.columns:
+    max_length = 0
+    column_letter = get_column_letter(column[0].column)
+    for cell in column:
+        try:
+            if len(str(cell.value)) > max_length:
+                max_length = len(cell.value)
+        except:
+            pass
+    adjusted_width = (max_length + 2)
+    breakup_ws.column_dimensions[column_letter].width = adjusted_width
+
 # Save the workbook
-ws.title = "Internal_Bugs"
 wb.save(r"G:\My Drive\bug_report.xlsx")
