@@ -8,7 +8,8 @@ from openpyxl.utils import get_column_letter
 manjeshn_reported_bugs = ["NSUI-19176", "NSUI-19185", "NSUI-19186", "NSUI-19187", "NSUI-19188", "NSUI-19190", "NSAUTH-13672", "NSUI-19215", "NSUI-19214", "NSUI-19892", "NSLINUX-7296", "NSLINUX-7297", "NSLINUX-7298", "NSADM-111975", "NSLINUX-7299", 
                           "NSLINUX-7300", "NSLINUX-7301", "NSADM-111979", "NSLINUX-7303", "NSLINUX-7304", "NSLINUX-7305", "NSADM-112040", "NSLINUX-7306", "NSLINUX-7307", "NSADM-112298", "NSLINUX-7338", "NSLINUX-7345", "NSLINUX-7346", "NSADM-112541",
                           "NSADM-112685", "NSDOC-3777", "NSUI-19962", "NSUI-19963", "NSUI-19964", "NSUI-19965", "NSADM-112734", "NSADM-112738", "NSDOC-3787", "NSADM-113020", "NSADM-113022", "NSADM-113039", "NSADM-113125", "NSADM-113126", "NSADM-113127",
-                          "NSADM-113128", "NSADM-113175", "NSADM-113176", "NSADM-113281"]
+                          "NSADM-113128", "NSADM-113175", "NSADM-113176", "NSADM-113281", "NSADM-113316", "NSADM-113317", "NSADM-113318", "NSLINUX-7403", "NSUI-20009", "NSUI-20010", "NSUI-20011", "NSUI-20012", "NSUI-20013", "NSUI-20014", "NSUI-20015",
+                          "NSUI-20016", "NSADM-113500"]
 
 # Required URL struct
 jira_url = 'https://issues.citrite.net/rest/api/2/issue/'
@@ -21,7 +22,7 @@ wb = Workbook()
 ws = wb.active
 
 # Write headers
-header_row = ["JIRA ID", "Summary", "Status", "Resolution", "Jira Owner", "Created Date", "Resolution Date", "Reporter"]
+header_row = ["JIRA ID", "Project", "Severity", "Summary", "Status", "Resolution", "Jira Owner", "Created Date", "Resolution Date", "TTR", "Reporter"]
 ws.append(header_row)
 
 # Highlight header row
@@ -37,23 +38,25 @@ for bug in manjeshn_reported_bugs:
         jsonData = response.json()
         jira_id = jsonData['key']
         summary = jsonData['fields']['summary']
+        project = jsonData['fields']['project']['key']
         status = jsonData['fields']['status']['name']
         resolution = jsonData['fields']['resolution']['name'] if jsonData['fields'].get('resolution') is not None and 'name' in jsonData['fields']['resolution'] else 'Unresolved'
         raw_resolutiondate = jsonData['fields']['resolutiondate']
+        resolutiondate = ''
         if raw_resolutiondate is not None:
-            resolutiondate = datetime.strptime(raw_resolutiondate, "%Y-%m-%dT%H:%M:%S.%f%z").strftime("%d-%b-%Y")
-        else:
-            resolutiondate = ''
-        assignee_name = jsonData['fields']['assignee']['displayName']
-        created_date = datetime.strptime(jsonData['fields']['created'], "%Y-%m-%dT%H:%M:%S.%f%z").strftime("%d-%b-%Y")
+            resolutiondate = datetime.strptime(raw_resolutiondate, "%Y-%m-%dT%H:%M:%S.%f%z")
+        created_date = datetime.strptime(jsonData['fields']['created'], "%Y-%m-%dT%H:%M:%S.%f%z")
+        severity = jsonData['fields']['customfield_18130']['value']
         reporter = jsonData['fields']['reporter']['displayName']
-        
+        assignee_name = jsonData['fields']['assignee']['displayName'] if jsonData['fields'].get('assignee') is not None else 'Unassigned'
+        duration = '' if resolutiondate == '' else (resolutiondate - created_date).days
+
         # Append the data to the worksheet
-        row = [jira_id, summary, status, resolution, assignee_name, created_date, resolutiondate, reporter]
+        row = [jira_id, project, severity, summary, status, resolution, assignee_name, created_date.strftime("%d-%b-%Y"), resolutiondate.strftime("%d-%b-%Y") if resolutiondate else '', duration, reporter]
         ws.append(row)
         
         # Change the cell background color based on status
-        status_cell = ws.cell(row=ws.max_row, column=3)
+        status_cell = ws.cell(row=ws.max_row, column=5)
         if status == "Done":
             status_cell.fill = PatternFill(start_color="00FF00", end_color="00FF00", fill_type="solid")  # Green
         elif status == "Canceled":
