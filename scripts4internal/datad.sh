@@ -16,6 +16,7 @@ if [[ $1 =~ $caseformat ]];
       then
         # Find and print all the collector bundles of NetScaler (Including nested directories) | Escapes the space and round bracket with backslash
         find ./ -type d -name "collector_*" -exec ls -ld {} + | cut -d: -f2- | cut -c 6- | sed 's/ /\\ /g' | sed 's/(/\\(/g' | sed 's/)/\\)/g' | awk 'BEGIN{printf "\n\t%s\n\n", "\033[1;97mCollector_Bundles\033[0m"}!/tar|gz/{printf "%s%s\n", "\033[36m","./"$0"\033[0m"}'
+        echo -e "\033[5;33m\nCheck out the new features! Use \`show --help\` to learn more.\033[0m"
         # Write the datad usage to tooltrack
         screen -dmS "tooltrack" curl --silent --data $successq $url >/dev/null 2>&1
       else

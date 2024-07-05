@@ -51,7 +51,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "5.69"
+version = "5.70"
 
 # About script
 showscriptabout = '''
@@ -339,6 +339,7 @@ if args.i:
         print("var Size: " + varsize.stdout.strip())
         print("SSL Cards: " + sslcards.stdout.strip())
         print("NSPPE Count: " + nsppe.stdout.strip() + "\n")
+        print("\n\n" + style.LIGHTGREEN + "Check out the new features! Use show --help to learn more" + style.RESET)
         # Tooltrack
         try:
             fate_message = "show -i"; send_request(version, username, url, fate_message, "Success")

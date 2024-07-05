@@ -51,7 +51,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "5.68"
+version = "5.69"
 
 # About script
 showscriptabout = '''
@@ -206,7 +206,7 @@ if args.i:
         adcpartitionName = sp.run("find shell/partitions/ -maxdepth 1 -mindepth 1 | awk -F'/' '{print $NF}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
         totalpartition = sp.run('''awk '/add ns partition/{partitions = partitions $4 " | "} END {sub(/ \| $/, "", partitions); print partitions}' shell/ns_running_config.conf''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
         partition_count = sp.run('''awk '/add ns partition/{count++} END{print count}' shell/ns_running_config.conf''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
-        adcha = sp.run( "sed -n -e \"/show ns version/I,/Done/p\" shell/showcmds.txt | grep Node | awk -F':' '{print $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        adcha = sp.run( "sed -n -e \"/exec: show ns version/I,/Done/p\" shell/showcmds.txt | grep Node | awk -F':' '{print $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         adcfirmware = sp.run("cat shell/ns_running_config.conf | grep \"#NS\" | cut -c 2-", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         admconnected = sp.run("awk '/add service adm_metric_collector_svc_/{printf \"%s (%s : %s)\", $4, $5, $6}' shell/ns_running_config.conf", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
         firmwarehistory = sp.run("awk -F'NetScaler' 'BEGIN{nores=1;}/upgrade from NetScaler/{if ($0 ~ \"upgrade|build\") history=$2; nores=0} END {if (nores) print \"None found recently\"; else print history}' shell/dmesg-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
@@ -1590,8 +1590,7 @@ elif args.ha:
                         timestamp_str = ' '.join(timestamp)
                         for ts in ha_transition_timestamp:
                             ts_dt = datetime.strptime(ts, '%b %d %H:%M:%S')
-                            line_ts_dt = datetime.strptime(
-                                timestamp_str, '%b %d %H:%M:%S')
+                            line_ts_dt = datetime.strptime(timestamp_str, '%b %d %H:%M:%S')
                             diff = line_ts_dt - ts_dt
                             if abs(diff.total_seconds()) < 300:
                                 if not rca_msg_printed:
