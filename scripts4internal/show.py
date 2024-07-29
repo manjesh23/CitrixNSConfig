@@ -51,7 +51,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "5.70"
+version = "5.72"
 
 # About script
 showscriptabout = '''
@@ -206,6 +206,7 @@ if args.i:
         adcpartitionName = sp.run("find shell/partitions/ -maxdepth 1 -mindepth 1 | awk -F'/' '{print $NF}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
         totalpartition = sp.run('''awk '/add ns partition/{partitions = partitions $4 " | "} END {sub(/ \| $/, "", partitions); print partitions}' shell/ns_running_config.conf''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
         partition_count = sp.run('''awk '/add ns partition/{count++} END{print count}' shell/ns_running_config.conf''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+        rcnetscaler = sp.run("[ -f nsconfig/rc.netscaler ] && awk '/nsapim/{count++} END{print count+0}' nsconfig/rc.netscaler", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
         adcha = sp.run( "sed -n -e \"/exec: show ns version/I,/Done/p\" shell/showcmds.txt | grep Node | awk -F':' '{print $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         adcfirmware = sp.run("cat shell/ns_running_config.conf | grep \"#NS\" | cut -c 2-", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         admconnected = sp.run("awk '/add service adm_metric_collector_svc_/{printf \"%s (%s : %s)\", $4, $5, $6}' shell/ns_running_config.conf", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
@@ -308,6 +309,8 @@ if args.i:
         print(f"Partition Name: {adcpartitionName if adcpartitionName else 'default'}")
         print(f"Admin Partition's: {totalpartition if totalpartition else 'default'}")
         print(f"Number of admin partition's: {partition_count if partition_count else '0'}")
+        if rcnetscaler.isdigit() and int(rcnetscaler) > 0:
+            print("Number of nsapimgr commands in nsconfig/rc.netscaler: " + rcnetscaler)
         print("")
         print("Platform Serial: " + platformserial.stdout.strip())
         print("Platform Model: " + platformmodel.stdout.strip())
