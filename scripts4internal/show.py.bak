@@ -11,7 +11,11 @@ import json
 import ast
 import time
 from datetime import datetime, timedelta
+import ssl
+import csv
 
+# Disable SSL certificate validation globally
+ssl._create_default_https_context = ssl._create_unverified_context
 
 # Preparing Required color codes
 
@@ -51,7 +55,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "5.70"
+version = "7.55"
 
 # About script
 showscriptabout = '''
@@ -107,6 +111,7 @@ parser.add_argument('-i', action="store_true", help="NetScaler Basic Information
 parser.add_argument('-P', action="store_true", help="NetScaler Admin Partition Details")
 parser.add_argument('-n', action="store_true", help="NetScaler Networking Information")
 parser.add_argument('-p', action="store_true", help="NetScaler Process Related Information")
+parser.add_argument('-r', action="store_true", help="NetScaler Reboot Timestamps")
 parser.add_argument('-c', metavar="", help="Display all possible counter names within newnslog")
 parser.add_argument('-E', action="store_true", help="Match well known error with KB articles")
 parser.add_argument('-fw', action="store_true", help="Display Latest RTM Firmware Code")
@@ -134,11 +139,13 @@ parser.add_argument('-T', action="append", choices={"ha"}, help="Generate PNG fi
 parser.add_argument('--cpu', action="store_true", help="Analyse High Mgmt CPU and its potential cause")
 parser.add_argument('--nic', action="store_true", help="NIC Specific details")
 parser.add_argument('--case', action="store_true", help="Salesforce Case Details")
+parser.add_argument('--adm', action="append", choices={"i", "md", "imall", "gz", "apps"}, help="ADM Bundles Only\ni --> ADM Basic Information\nmd --> ADM Managed Devices\nimall --> Indexing timestamp of all logs\ngz --> Extract all gz files within ADM Support bundle\napps --> List all the vServer and Instance details")
+parser.add_argument('md', action="store_true", help=argparse.SUPPRESS)
 parser.add_argument('--about', action="store_true", help="About Show Script")
 args = parser.parse_args()
 
 # Set correct support bundle path
-if not (args.fw or args.case):
+if not (args.fw or args.case or args.adm):
     try:
         if (os.popen("pwd").read().index("collector") >= 0):
             os.chdir(re.search('.*\/collecto.*_[0-9]{2}', os.popen("pwd").read()).group(0))
@@ -157,7 +164,7 @@ if not (args.fw or args.case):
             quit()
 
 # Assign correct files and its path to variables
-if not (args.fw or args.case):
+if not (args.fw or args.case or args.adm):
     try:
         nsconf = "nsconfig/ns.conf"
         showcmd = "shell/showcmds.txt"
@@ -197,6 +204,234 @@ def find_min_max_dates(data):
     max_date = max(end_times)
     return f"{min_date} --> {max_date}"
 
+# Unix time to Human time
+unix_to_human = lambda unix_time: datetime.fromtimestamp(int(unix_time)).strftime('%b-%d-%Y %H:%M:%S')
+
+# ADM section of the script
+if args.adm:
+    try:
+        pwd_output = os.popen("pwd").read().strip()
+        if "NetScalerADM" in pwd_output:
+            match = re.search(r'.*/.*/NetScalerADM', pwd_output)
+            if match:
+                os.chdir(match.group(0))
+            else:
+                raise ValueError("Pattern not found for 'NetScalerADM'")
+        elif "NetScaler_ADM" in pwd_output:
+            match = re.search(r'.*/.*/NetScaler_ADM', pwd_output)
+            if match:
+                os.chdir(match.group(0))
+            else:
+                raise ValueError("Pattern not found for 'NetScaler_ADM'")
+        if "i" in args.adm:
+            try:
+                mps_svm_file = str(sp.run("find ./ -name 'svm.conf' | grep '/mps/'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
+                mps_dmesg_file = str(sp.run("find ./ -name 'dmesg-a.out' | grep '/shell/'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
+                shell_sysctl_file = str(sp.run("find ./ -name 'sysctl-a.out' | grep '/shell/'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
+                mps_lic_file = str(sp.run("find ./ -name '*.lic' | grep 'mpsconfig/license'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
+                shell_df_file = str(sp.run("find ./ -name 'df-akin.out' | grep /shell/", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
+                # Math and extract work below
+                admhostname = sp.run("awk '/kern.hostname/{print $NF; exit}' " + shell_sysctl_file, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                admip = sp.run("awk '/ifconfig/{print $(NF-2), $(NF-1), $NF, \"on iface\", $2}' " + mps_svm_file, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                admcpu = sp.run("awk '/hw.model/ { $1=\"\"; sub(/^ /, \"\"); print }' " + shell_sysctl_file, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                admfirmware = sp.run("awk -F/ '/kern.bootfile/{print $NF}' " + shell_sysctl_file, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                admhostid = sp.run("awk '/this_host/{print $(NF-1); exit}' " + mps_lic_file, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                admrealmem = sp.run("awk '/real memory/{print $(NF-1), $NF; exit}' " + mps_dmesg_file, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                admavailmem = sp.run("awk '/avail memory/{print $(NF-1), $NF; exit}' " + mps_dmesg_file, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                admplatform = sp.run('''awk '/netscaler.sysid:/ {sysid=$2} END {if (sysid ~ /450000|450001/) print "Citrix Hypervisor"; else if (sysid ~ /450010|450011/) print "ESX"; else if (sysid ~ /450020|450021/ && !/vpx_on_cloud = 0/) print "Hyper-V"; else if (sysid ~ /450070|450071/ && !/vpx_on_cloud = 0/) print "KVM"; else print "Unknown"}' ''' + shell_sysctl_file, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                admvarsize = sp.run("awk '/\/var$/{printf \"%s -> %s | %s | %s | %s\", $1,\"Total: \"$2,\"Used: \"$3, \"Free: \"$4, \"Capacity Used: \"substr($5, 1, length($5)-1)}' " + shell_df_file + " | awk '{if ($NF > 75){printf \"%s\", substr($0, 1, length($0)-2)\"\033[0;31m\"$NF\"%\033[0m\"}else{printf \"%s\", substr($0, 1, length($0)-2)\"\033\[0;32m\"$NF\"%\033[0m\"}}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                admboottime = sp.run("awk -F} '/kern.boottime/{print $2}' " + shell_sysctl_file, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+            finally:
+                print(style.YELLOW + '{:-^87}'.format('NetScaler Console Show Configuration') + "\n" + style.RESET)
+                print("Support file location: " + os.popen("pwd").read().strip())
+                print("\nConsole Hostname: " + admhostname)
+                print("Console IP Address: " + admip)
+                print("Console Firmware: " + admfirmware)
+                print("Console HostID: " + admhostid)
+                print("Console Hosted Hypervisor: " + admplatform)
+                print("Console Boot Time: " + admboottime)
+                print("\n" + admcpu)
+                print("Real Memory: " + admrealmem + " | " + "Available Memory: " + admavailmem)
+                print("var Size: " + admvarsize)
+                # Tooltrack
+                try:
+                    fate_message = "show --adm i"; send_request(version, username, url, fate_message, "Success")
+                finally:
+                    quit()
+        elif "md" in args.adm:
+            try:
+                managed_devices_file = str(sp.run("find ./ -name managed_device.csv", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
+                columns_to_display = ['ip_address', 'type', 'hostname', 'model_id', 'license_edition', 'instance_mode', 'upsince', 'host_id', 'is_local_license', 'is_licensed', 'license_grace_time', 'status', 'instance_state']
+                def get_max_column_widths(csv_reader, columns):
+                    max_widths = {column: len(column) for column in columns}
+                    for row in csv_reader:
+                        for column in columns:
+                            value = row[column]
+                            if value == "Instance not reachable":
+                                value = "Failed"
+                            elif value == "Out of Service":
+                                value = "OOS"
+                            max_widths[column] = max(max_widths[column], len(value))
+                    return max_widths
+                with open(managed_devices_file, mode='r') as file:
+                    csv_reader = csv.DictReader(file)
+                    max_widths = get_max_column_widths(csv_reader, columns_to_display)
+                    file.seek(0)
+                    csv_reader = csv.DictReader(file)
+                    header = [f"{style.YELLOW}{column:<{max_widths[column]}}{style.RESET}" for column in columns_to_display]
+                    print('  '.join(header))
+                    print('  '.join(['-' * max_widths[column] for column in columns_to_display]))
+                    for row in csv_reader:
+                        selected_data = []
+                        for column in columns_to_display:
+                            value = row[column]
+                            if value == "t":
+                                value = "Yes"
+                            elif value == "f":
+                                value = "No"
+                            elif value == "-1":
+                                value = " "
+                            if value == "Instance not reachable":
+                                value = "Failed"
+                            elif value == "Out of Service":
+                                value = "OOS"
+                            if column == "instance_state":
+                                if value == "Up":
+                                    value = f"{style.GREEN}{value}{style.RESET}"
+                                elif value == "Down" or value == "OOS":
+                                    value = f"{style.RED}{value}{style.RESET}"
+                            else:
+                                if value == "Success":
+                                    value = f"{style.GREEN}{value}{style.RESET}"
+                                elif value == "Failed":
+                                    value = f"{style.RED}{value}{style.RESET}"
+                            formatted_value = f"{value:<{max_widths[column]}}"
+                            selected_data.append(formatted_value)
+                        print('  '.join(selected_data))
+            finally:
+                # Tooltrack
+                try:
+                    fate_message = "show --adm md"; send_request(version, username, url, fate_message, "Success")
+                finally:
+                    quit()
+        elif "apps" in args.adm:
+            try:
+                print(style.YELLOW + '{:-^87}\n'.format('NetScaler Console Applications') + style.RESET)
+                applications_file = str(sp.run("find ./ -name application.csv", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
+                columns_to_display = ['name', 'vServer_Type', 'ns_ip_address', 'application_managed']
+                def get_max_column_widths(csv_reader, columns):
+                    max_widths = {column: len(column) for column in columns}
+                    for row in csv_reader:
+                        for column in columns:
+                            value = row.get(column, '')
+                            max_widths[column] = max(max_widths[column], len(value))
+                    return max_widths
+                try:
+                    with open(applications_file, mode='r') as file:
+                        csv_reader = csv.DictReader(file)
+                        rows = list(csv_reader)
+                        for row in rows:
+                            name = row['name']
+                            if '_' in name:
+                                name, vServer_Type = name.rsplit('_', 1)
+                            else:
+                                name, vServer_Type = name, ''
+                            row['name'] = name
+                            row['vServer_Type'] = vServer_Type
+                        max_widths = get_max_column_widths(rows, columns_to_display)
+                        header = [f"{style.YELLOW}{column:<{max_widths[column]}}{style.RESET}" for column in columns_to_display]
+                        print('  '.join(header))
+                        print('  '.join(['-' * max_widths[column] for column in columns_to_display]))
+                        for row in rows:
+                            selected_data = []
+                            for column in columns_to_display:
+                                value = row[column]
+                                if value == "t":
+                                    value = f"{style.GREEN}Yes{style.RESET}"
+                                elif value == "f":
+                                    value = f"{style.RED}No{style.RESET}"
+                                formatted_value = f"{value:<{max_widths[column]}}"
+                                selected_data.append(formatted_value)
+                            print('  '.join(selected_data))
+                except Exception as e:
+                    print(f"Error reading file: {e}")
+            finally:
+                # Tooltrack
+                try:
+                    fate_message = "show --adm apps"
+                    send_request(version, username, url, fate_message, "Success")
+                finally:
+                    quit()
+        elif "gz" in args.adm:
+            try:
+                # Fix permission
+                sp.run("fixperms ./", shell=True, stdout=sp.PIPE, stderr=sp.PIPE, check=True)
+                # Unzip all gz files under ./var/log
+                gunzipresult = sp.run("find ./ -name \"*.gz\" | xargs -I {} gunzip {}", shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
+            finally:
+                print(style.YELLOW + '{:-^87}\n'.format('NetScaler gz files Extraction') + style.RESET)
+                if gunzipresult.returncode == 0:
+                    sp.run("fixperms ./", shell=True, stdout=sp.PIPE, stderr=sp.PIPE, check=True)
+                    print(style.YELLOW + str(gunzipresult.stderr.decode('utf-8')) + style.RESET)
+                    print(style.GREEN + "Extracted all gz files!!!" + style.RESET)
+                else:
+                    print(style.RED + "No gz files found" + style.RESET)
+                try:
+                    fate_message = "show --adm gz"
+                    send_request(version, username, url, fate_message, "Success")
+                finally:
+                    quit()
+        elif "imall" in args.adm:
+            try:
+                adm_var_log = str(sp.run("find ./ -type d -name var -exec test -d {}/log \; -print | sed 's|/var$|/var/log|'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
+                adm_mps_log = str(sp.run("find ./ -type d -name var -exec test -d {}/mps/log \; -print | sed 's|/var$|/var/mps/log|'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
+                ns_log_timestamp = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' " + adm_var_log + "/ns.lo* | grep -v gz | grep -v tar); do awk 'NR == 2 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\", $1,$2,$3,ARGV[1]}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                mps_afanalytics_timestamp = sp.run("for i in $(printf '%s\\n' " + adm_mps_log + "/mps_afanalytics.lo* | grep -v gz | grep -v tar); do awk 'NR == 2 {printf \"%02d %s %s %s\\t| \", $1,$2,$3,$4}END{printf \"%02d %s %s %s | %s\\n\", $1,$2,$3,$4,ARGV[1]}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                mps_config_timestamp = sp.run("for i in $(printf '%s\\n' " + adm_mps_log + "/mps_config.lo* | grep -v gz | grep -v tar); do awk 'NR == 2 {printf \"%02d %s %s %s\\t| \", $1,$2,$3,$4}END{printf \"%02d %s %s %s | %s\\n\", $1,$2,$3,$4,ARGV[1]}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                mps_counterd_timestamp = sp.run("""for i in $(find """ + adm_mps_log + """ -name "mps_counterd.lo*" | xargs -I {} echo {}); do gawk '/[0-9]{1,2}\s[A-Za-z]{3}\s[0-9]{2}\s[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}/ {if (start == "") start = sprintf("%02d %s %s %s", $1, $2, $3, $4); last = sprintf("%02d %s %s %s", $1, $2, $3, $4)} END {printf "%s\\t| %s | %s\\n", start, last, FILENAME}' $i; done""", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                mps_dataprocessing_timestamp = sp.run("""for i in $(find """ + adm_mps_log + """ -name "mps_dataprocessing.lo*" | xargs -I {} echo {}); do gawk '/^[0-9]{2}\\s[A-Za-z]{3}\\s[0-9]{2}\\s[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}\\s/ {if (start == "") start = sprintf("%02d %s %s %s", $1, $2, $3, $4); last = sprintf("%02d %s %s %s", $1, $2, $3, $4)} END {printf "%s\\t| %s | %s\\n", start, last, FILENAME}' $i; done""", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                mps_event_timestamp = sp.run("""for i in $(find """ + adm_mps_log + """ -name "mps_event.lo*" | xargs -I {} echo {}); do gawk '/^[0-9]{2}\\s[A-Za-z]{3}\\s[0-9]{2}\\s[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}\\s/ {if (start == "") start = sprintf("%02d %s %s %s", $1, $2, $3, $4); last = sprintf("%02d %s %s %s", $1, $2, $3, $4)} END {printf "%s\\t| %s | %s\\n", start, last, FILENAME}' $i; done""", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                mps_inventory_timestamp =  sp.run("""for i in $(find """ + adm_mps_log + """ -name "mps_inventory.lo*" | xargs -I {} echo {}); do gawk '/^[0-9]{2}\\s[A-Za-z]{3}\\s[0-9]{2}\\s[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}\\s/ {if (start == "") start = sprintf("%02d %s %s %s", $1, $2, $3, $4); last = sprintf("%02d %s %s %s", $1, $2, $3, $4)} END {printf "%s\\t| %s | %s\\n", start, last, FILENAME}' $i; done""", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                mps_service_timestamp = sp.run("for i in $(printf '%s\\n' " + adm_mps_log + "/mps_service.lo* | grep -v gz | grep -v tar); do awk 'NR == 2 {printf \"%02d %s %s %s\\t| \", $1,$2,$3,$4}END{printf \"%02d %s %s %s | %s\\n\", $1,$2,$3,$4,ARGV[1]}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+            finally:
+                if ns_log_timestamp.returncode == 0:
+                    print(style.YELLOW + '{:-^87}\n'.format('NetScaler ns.log timestamp IndexMessages') + style.RESET + ns_log_timestamp.stdout)
+                else:
+                    print(style.RED + '{:-^87}\n'.format('Unable to read ns.log') + style.RESET)
+                if mps_afanalytics_timestamp.returncode == 0:
+                    print(style.YELLOW + '{:-^87}\n'.format('NetScaler mps_afanalytics.log timestamp IndexMessages') + style.RESET + mps_afanalytics_timestamp.stdout)
+                else:
+                    print(style.RED + '{:-^87}\n'.format('Unable to read mps_afanalytics.log') + style.RESET)
+                if mps_config_timestamp.returncode == 0:
+                    print(style.YELLOW + '{:-^87}\n'.format('NetScaler mps_config.log timestamp IndexMessages') + style.RESET + mps_config_timestamp.stdout)
+                else:
+                    print(style.RED + '{:-^87}\n'.format('Unable to read mps_config.log') + style.RESET)
+                if mps_counterd_timestamp.returncode == 0:
+                    print(style.YELLOW + '{:-^87}\n'.format('NetScaler mps_counterd.log timestamp IndexMessages') + style.RESET + mps_counterd_timestamp.stdout)
+                else:
+                    print(style.RED + '{:-^87}\n'.format('Unable to read mps_counterd.log') + style.RESET)
+                if mps_dataprocessing_timestamp.returncode == 0:
+                    print(style.YELLOW + '{:-^87}\n'.format('NetScaler mps_dataprocessing.log timestamp IndexMessages') + style.RESET + mps_dataprocessing_timestamp.stdout)
+                else:
+                    print(style.RED + '{:-^87}\n'.format('Unable to read mps_dataprocessing.log') + style.RESET)
+                if mps_event_timestamp.returncode == 0:
+                    print(style.YELLOW + '{:-^87}\n'.format('NetScaler mps_event.log timestamp IndexMessages') + style.RESET + mps_event_timestamp.stdout)
+                else:
+                    print(style.RED + '{:-^87}\n'.format('Unable to read mps_event.log') + style.RESET)
+                if mps_inventory_timestamp.returncode == 0:
+                    print(style.YELLOW + '{:-^87}\n'.format('NetScaler mps_inventory.log timestamp IndexMessages') + style.RESET + mps_inventory_timestamp.stdout)
+                else:
+                    print(style.RED + '{:-^87}\n'.format('Unable to read mps_inventory.log') + style.RESET)
+                if mps_service_timestamp.returncode == 0:
+                    print(style.YELLOW + '{:-^87}\n'.format('NetScaler mps_service.log timestamp IndexMessages') + style.RESET + mps_service_timestamp.stdout)
+                else:
+                    print(style.RED + '{:-^87}\n'.format('Unable to read mps_service.log') + style.RESET)
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    finally:
+        quit()
+# End of ADM section
+
 if args.i:
     try:
         logger.info(os.getcwd() + " - show -i")
@@ -206,9 +441,10 @@ if args.i:
         adcpartitionName = sp.run("find shell/partitions/ -maxdepth 1 -mindepth 1 | awk -F'/' '{print $NF}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
         totalpartition = sp.run('''awk '/add ns partition/{partitions = partitions $4 " | "} END {sub(/ \| $/, "", partitions); print partitions}' shell/ns_running_config.conf''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
         partition_count = sp.run('''awk '/add ns partition/{count++} END{print count}' shell/ns_running_config.conf''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+        rcnetscaler = sp.run("[ -f nsconfig/rc.netscaler ] && awk '/nsapim/{count++} END{print count+0}' nsconfig/rc.netscaler", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
         adcha = sp.run( "sed -n -e \"/exec: show ns version/I,/Done/p\" shell/showcmds.txt | grep Node | awk -F':' '{print $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         adcfirmware = sp.run("cat shell/ns_running_config.conf | grep \"#NS\" | cut -c 2-", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        admconnected = sp.run("awk '/add service adm_metric_collector_svc_/{printf \"%s (%s : %s)\", $4, $5, $6}' shell/ns_running_config.conf", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+        admconnected = sp.run("awk '/add service adm_metric_collector_svc_/{printf \"%s (%s : %s) \", $4, $5, $6}' shell/ns_running_config.conf", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
         firmwarehistory = sp.run("awk -F'NetScaler' 'BEGIN{nores=1;}/upgrade from NetScaler/{if ($0 ~ \"upgrade|build\") history=$2; nores=0} END {if (nores) print \"None found recently\"; else print history}' shell/dmesg-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         nsinstall = sp.run("awk '/VERSION/||/_TIME/{$1=\"\"; printf \"%s -->\", $0}' var/nsinstall/installns_state | sed -E 's/^\s|[0-9]{9,15}.|-->$//g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         platformserial = sp.run("sed -n '/^exec: show ns hardware/,/Done/p' shell/showcmds.txt | awk '/Serial/{print $NF}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
@@ -222,7 +458,7 @@ if args.i:
         hwplatform = sp.run("egrep \"netscaler.descr\" shell/sysctl-a.out | awk -F':' '{print $2}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         vmplatform_sdx = sp.run('''awk '/vpx_on_sdx/||/netscaler.sdxvpx/{if ($0 ~ 1) print "VPX on SDX"}' shell/sysctl-a.out''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         vmplatform_cloud = sp.run('''awk '/vpx_on_cloud/{if ($0 ~ 1) print "VPX on AWS"; else if ($0 ~ 3) print "VPX on Azure"; else if ($0 ~ 4) print "VPX on GCP"}' shell/sysctl-a.out''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        vmplatform_esx = sp.run('''awk '/platform: sysid /||/sysid/{exit} END {if ($0 ~ /450000|450001/) print "Citrix Hypervisor"; else if ($0 ~ /450010|450011/) print "ESX"; else if (($0 ~ /450020|450021/) && ($0 !~ /vpx_on_cloud = 0/)) print "Hyper-V"; else if (($0 ~ /450070|450071/) && ($0 !~ /vpx_on_cloud = 0/)) print "KVM"; else print "Unknown" }' shell/sysctl-a.out''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        vmplatform_esx = sp.run('''awk '/netscaler.sysid/ {sysid=$2} END {if (sysid ~ /450000|450001/) print "Citrix Hypervisor"; else if (sysid ~ /450010|450011/) print "ESX"; else if (sysid ~ /450020|450021/ && !/vpx_on_cloud = 0/) print "Hyper-V"; else if (sysid ~ /450070|450071/ && !/vpx_on_cloud = 0/) print "KVM"; else print "Unknown"}' shell/sysctl-a.out''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         if len(vmplatform_sdx.stdout.strip()) > 1:
             vmplatform = vmplatform_sdx.stdout.strip()
         elif len(vmplatform_cloud.stdout.strip()) > 1:
@@ -308,6 +544,8 @@ if args.i:
         print(f"Partition Name: {adcpartitionName if adcpartitionName else 'default'}")
         print(f"Admin Partition's: {totalpartition if totalpartition else 'default'}")
         print(f"Number of admin partition's: {partition_count if partition_count else '0'}")
+        if rcnetscaler.isdigit() and int(rcnetscaler) > 0:
+            print("Number of nsapimgr commands in nsconfig/rc.netscaler: " + rcnetscaler)
         print("")
         print("Platform Serial: " + platformserial.stdout.strip())
         print("Platform Model: " + platformmodel.stdout.strip())
@@ -380,7 +618,19 @@ elif args.P:
                 fate_message = "show -P"; send_request(version, username, url, fate_message, "Failed")
             finally:
                 quit()
-
+elif args.r:
+    try:
+        nsrestart = sp.run("awk '/nsrestart.sh/{print $3, $4, $5, $6, $7}' var/nslog/ns.log", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+        if not len(nsrestart) > 23:
+            nsrestart = style.GREEN + "No nsrestart detected" + style.RESET
+    finally:
+        print(style.YELLOW + '{:-^87}'.format('NetScaler Restart Timestamp') + style.RESET)
+        print(nsrestart + "\n")
+        # Tooltrack
+        try:
+            fate_message = "show -r"; send_request(version, username, url, fate_message, "Success")
+        finally:
+            quit()
 elif args.pt:
     box_time = str(sp.run("awk -F'GMT' '/Timezone:/&&/GMT/{print substr($2,1,6)}' shell/showcmds.txt | awk 'BEGIN { found = 0 } { output = $0; found = 1 } END { if (found) print output; else print \"00:00\" }'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
     box_time_mins = (int(re.match(r"([-+]?)(\d+):(\d+)", box_time).group(2)) * 60) + int(re.match(r"([-+]?)(\d+):(\d+)", box_time).group(3)); box_time_mins *= -1 if re.match(r"([-+]?)(\d+):(\d+)", box_time).group(1) == "-" else 1
@@ -908,10 +1158,10 @@ elif args.case:
         print(style.RED + "Unable to get case number from your current working directory" + style.RESET)
     # Get CaseAge and Entitlement Details
     try:
-        CxContact_Email__c = 'None'
+        CxContactEmail = 'None'
         OtherCommunicationEmail__c = 'None'
         headers = {'Content-Type': 'application/json'}
-        data = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "EntitlementId,Age__c,Account_Name__c,Account_Org_ID__c,Case_Created_Date_Qual__c,Case_Owner__c,Case_Review_Flag__c,Case_Status__c,Case_Team__c,CaseReopened__c,Contact_Email__c,ContactEmail,ContactCountry__c,ContactMobile,ContactPhone,Dev_Engineer__c,End_of_Support__c,Eng_Status__c,EngCase_SubmittedDate__c,Escalated_By__c,EscalatedDate__c,First_Response_Severity__c,First_Response_Time_Taken__c,Fixed_Known_Issue_ID__c,Frontline_to_Escalation_Severity__c,Frontline_to_Escalation_Violated__c,Highest_Severity__c,Initial_Severity__c,IsEscalated,IsEscalatedtoEng__c,IsPartner__c,KT_Applied__c,Last_Customer_Contact_Timestamp__c,Manager_Name__c,Number_of_Audits__c,Offering_Level__c,OtherCommunicationEmail__c,Product_Line_Name__c,Record_GEO__c,Serial_Number__c,ServiceProduct_Name__c,Target_GEO__c", "isbase64": "false"}, {"name": "tablename", "value": "Case", "isbase64": "false"}, {"name": "selectcondition", "value": "CaseNumber = '"+casenum+"'", "isbase64": "false"}]}
+        data = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "EntitlementId,Age__c,Account_Name__c,Account_Org_ID__c,Case_Created_Date_Qual__c,Case_Owner__c,Case_Review_Flag__c,Case_Status__c,Case_Team__c,CaseReopened__c,ContactEmail,ContactCountry__c,ContactMobile,ContactPhone,Dev_Engineer__c,End_of_Support__c,Eng_Status__c,EngCase_SubmittedDate__c,Escalated_By__c,EscalatedDate__c,First_Response_Severity__c,First_Response_Time_Taken__c,Fixed_Known_Issue_ID__c,Frontline_to_Escalation_Severity__c,Frontline_to_Escalation_Violated__c,Highest_Severity__c,Initial_Severity__c,IsEscalated,IsEscalatedtoEng__c,IsPartner__c,KT_Applied__c,Last_Customer_Contact_Timestamp__c,Manager_Name__c,Number_of_Audits__c,Offering_Level__c,OtherCommunicationEmail__c,Product_Line_Name__c,Record_GEO__c,Serial_Number__c,ServiceProduct_Name__c,Target_GEO__c", "isbase64": "false"}, {"name": "tablename", "value": "Case", "isbase64": "false"}, {"name": "selectcondition", "value": "CaseNumber = '"+casenum+"'", "isbase64": "false"}]}
         jsondata = json.dumps(data)
         jsondataasbytes = jsondata.encode('utf-8')
         finaldata = json.loads(request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore"))['options'][0]['values'][0]
@@ -926,7 +1176,6 @@ elif args.case:
         Case_Status__c = str(finaldata["Case_Status__c"])
         Case_Team__c = str(finaldata["Case_Team__c"])
         CaseReopened__c = str(finaldata["CaseReopened__c"])
-        Contact_Email__c = str(finaldata["Contact_Email__c"])
         ContactEmail = str(finaldata["ContactEmail"])
         ContactCountry__c = str(finaldata["ContactCountry__c"])
         ContactMobile = str(finaldata["ContactMobile"])
@@ -1038,7 +1287,7 @@ elif args.case:
         for option in options:
             values = option.get('values', [])
             for value in values:
-                nested_dict = ast.literal_eval(value)
+                nested_dict = json.loads(value)
                 survey_date_str = nested_dict.get("Survey_Date__c")
                 survey_date = datetime.strptime(survey_date_str, '%Y-%m-%d')
                 if reference_date - timedelta(days=365) <= survey_date <= reference_date:
@@ -1050,7 +1299,7 @@ elif args.case:
                         Iddsat.append(nested_dict.get("Case__c"))
                         dissatisfaction_count += 1
         for caseid in Idcsat:
-            contactdata = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "Contact_Email__c, OtherCommunicationEmail__c", "isbase64": "false"}, {"name": "tablename", "value": "Case", "isbase64": "false"}, {"name": "selectcondition", "value": "Id = '"+caseid+"' AND (Contact_Email__c = '"+Contact_Email__c+"' OR OtherCommunicationEmail__c = '"+OtherCommunicationEmail__c+"')", "isbase64": "false"}]}
+            contactdata = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "ContactEmail, OtherCommunicationEmail__c", "isbase64": "false"}, {"name": "tablename", "value": "Case", "isbase64": "false"}, {"name": "selectcondition", "value": "Id = '"+caseid+"' AND (ContactEmail = '"+ContactEmail+"' OR OtherCommunicationEmail__c = '"+OtherCommunicationEmail__c+"')", "isbase64": "false"}]}
             jsondata = json.dumps(contactdata)
             jsondataasbytes = jsondata.encode('utf-8')
             response = request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore")
@@ -1059,15 +1308,15 @@ elif args.case:
             for option in options:
                 values = option.get('values', [])
                 for value in values:
-                    nested_dict = ast.literal_eval(value)
-                    CxContact_Email__c = nested_dict.get("Contact_Email__c")
+                    nested_dict = json.loads(value)
+                    CxContactEmail = nested_dict.get("ContactEmail")
                     CxOtherCommunicationEmail__c = nested_dict.get("OtherCommunicationEmail__c")
-                    if str(Contact_Email__c).lower() == str(CxContact_Email__c).lower() or str(Contact_Email__c).lower() == str(CxOtherCommunicationEmail__c).lower():
+                    if str(ContactEmail).lower() == str(CxContactEmail).lower() or str(ContactEmail).lower() == str(CxOtherCommunicationEmail__c).lower():
                         Cxsatisfaction_count += 1
                     else:
                         pass
         for caseid in Iddsat:
-            contactdata = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "Contact_Email__c, OtherCommunicationEmail__c", "isbase64": "false"}, {"name": "tablename", "value": "Case", "isbase64": "false"}, {"name": "selectcondition", "value": "Id = '"+caseid+"' AND (Contact_Email__c = '"+Contact_Email__c+"' OR OtherCommunicationEmail__c = '"+OtherCommunicationEmail__c+"')", "isbase64": "false"}]}
+            contactdata = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "ContactEmail, OtherCommunicationEmail__c", "isbase64": "false"}, {"name": "tablename", "value": "Case", "isbase64": "false"}, {"name": "selectcondition", "value": "Id = '"+caseid+"' AND (ContactEmail = '"+ContactEmail+"' OR OtherCommunicationEmail__c = '"+OtherCommunicationEmail__c+"')", "isbase64": "false"}]}
             jsondata = json.dumps(contactdata)
             jsondataasbytes = jsondata.encode('utf-8')
             response = request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore")
@@ -1076,10 +1325,10 @@ elif args.case:
             for option in options:
                 values = option.get('values', [])
                 for value in values:
-                    nested_dict = ast.literal_eval(value)
-                    CxContact_Email__c = nested_dict.get("Contact_Email__c")
+                    nested_dict = json.loads(value)
+                    CxContactEmail = nested_dict.get("ContactEmail")
                     CxOtherCommunicationEmail__c = nested_dict.get("OtherCommunicationEmail__c")
-                    if str(Contact_Email__c).lower() == str(CxContact_Email__c).lower() or str(Contact_Email__c).lower() == str(CxOtherCommunicationEmail__c).lower():
+                    if str(ContactEmail).lower() == str(CxContactEmail).lower() or str(ContactEmail).lower() == str(CxOtherCommunicationEmail__c).lower():
                         Cxdissatisfaction_count += 1
                     else:
                         pass

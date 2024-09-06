@@ -1,11 +1,30 @@
 from urllib import request
-import json, os
+import json
+import os
 import openpyxl
+import tarfile
+import subprocess
+from datetime import datetime
+from dateutil import parser
+from dateutil.relativedelta import relativedelta
+import pytz
+
+# Set timezone (for example, 'UTC', you might need to adjust this based on your requirements)
+timezone = pytz.timezone('UTC')
+
+# Calculate the current datetime and the datetime 2 months ago with timezone awareness
+now = datetime.now(timezone)
+two_months_ago = now - relativedelta(months=2)
 
 # Get SFDC API keys
 try:
     sfdcurl = "https://ftltoolswebapi.deva.citrite.net/sfaas/api/salesforce"
-    tokenpayload = {"feature": "login", "parameters": [{"name": "tokenuri", "value": "https://login.salesforce.com/services/oauth2/token", "isbase64": "false"}]}
+    tokenpayload = {
+        "feature": "login",
+        "parameters": [
+            {"name": "tokenuri", "value": "https://login.salesforce.com/services/oauth2/token", "isbase64": "false"}
+        ]
+    }
     sfdcreq = request.Request(sfdcurl)
     sfdcreq.add_header('Content-Type', 'application/json; charset=utf-8')
     jsondata = json.dumps(tokenpayload)
@@ -16,54 +35,89 @@ except Exception as e:
     print("Unable to get SFDC Token")
     print(e)
 
-# function to check if bundle present or not
+# Function to check if bundle present or not
 def find_collector_file(directory):
-    # Ensure the directory exists
-    if not os.path.isdir(directory):
-        print(f"Directory does not exist: {directory}")
-        return None
-    # Iterate over the files in the directory
-    for filename in os.listdir(directory):
-        if filename.startswith("collector_"):
-            full_path = os.path.join(directory, filename)
-            if os.path.exists(full_path):
-                print(f"Full path: {full_path}")
-                return full_path
-    print("No collector file found")
+    try:
+        # Ensure the directory exists
+        if not os.path.isdir(directory):
+            return None
+        # Iterate over the files in the directory
+        for filename in os.listdir(directory):
+            if filename.startswith("collector_"):
+                full_path = os.path.join(directory, filename)
+                if os.path.exists(full_path):
+                    return full_path
+    except Exception as e:
+        print(f"Error in find_collector_file: {e}")
+    return None
+
+# Function to check upload archive
+def check_archive(caseNumber):
+    find_command = f"find /upload/archive -maxdepth 2 -type f -regex '.*/[1-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/{caseNumber}.tar.gz' -print -quit 2>/dev/null"
+    result = subprocess.run(find_command, shell=True, capture_output=True, text=True)
+    archive_file = result.stdout.strip()
+    if archive_file:
+        archive_dir = os.path.dirname(archive_file)        
+        try:
+            with tarfile.open(archive_file, "r:gz") as tar:
+                for member in tar.getmembers():
+                    if "collector_" in member.name and "ns_runn" in member.name:
+                        full_path = os.path.join(archive_dir, member.name)
+                        return full_path
+        except (tarfile.TarError, FileNotFoundError) as e:
+            print(f"Error opening the tar file: {e}")
     return None
 
 # Main engine
 def accountID_to_bundle_path(each_accountID, ws):
-    finaldata = None
     try:
+        # Define the case_number dictionary
         case_number = {
             "feature": "selectcasequery",
             "parameters": [
                 {"name": "salesforcelogintoken", "value": sfdctoken, "isbase64": "false"},
-                {"name": "selectfields", "value": "Account_Name__c,Account_Org_ID__c,CaseNumber,IsClosed", "isbase64": "false"},
+                {"name": "selectfields", "value": "Account_Name__c,Account_Org_ID__c,CaseNumber,ClosedDate,IsClosed", "isbase64": "false"},
                 {"name": "tablename", "value": "Case", "isbase64": "false"},
-                # {"name": "selectcondition", "value": "Account_Org_ID__c = '{}' AND IsClosed = false".format(each_accountID), "isbase64": "false"} IsClosed = false
-                {"name": "selectcondition", "value": "Account_Org_ID__c = '{}'".format(each_accountID), "isbase64": "false"}
+                {"name": "selectcondition", "value": f"Account_Org_ID__c = '{each_accountID}'", "isbase64": "false"}
             ]
         }
+        # Convert to JSON and encode
         jsondata = json.dumps(case_number)
         jsondataasbytes = jsondata.encode('utf-8')
+        # Send the request and decode the response
         response = request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore")
+        # Parse JSON response
         options = json.loads(response).get('options', [])
-        if options and 'values' in options[0]:
-            finaldata = json.loads(options[0]['values'][0])
+        for option in options:
+            values = option.get('values', [])
+            for value in values:
+                try:
+                    # Convert the value to a Python dictionary
+                    finaldata = json.loads(value)
+                    if finaldata:
+                        Account_Name__c = finaldata.get("Account_Name__c", "")
+                        Account_Org_ID__c = finaldata.get("Account_Org_ID__c", "")
+                        CaseNumber = finaldata.get("CaseNumber", "")
+                        IsClosed = finaldata.get("IsClosed", False)
+                        ClosedDate = finaldata.get("ClosedDate", None)
+                        #Bundle_Path = check_archive(CaseNumber)
+                        Bundle_Path = find_collector_file(f'/upload/ftp/{CaseNumber}')
+                        """ if ClosedDate:
+                            ClosedDate = parser.isoparse(ClosedDate).astimezone(timezone)
+                        Bundle_Path = None
+                        if IsClosed:
+                            Bundle_Path = find_collector_file(f'/upload/ftp/{CaseNumber}')
+                        elif not IsClosed:
+                            Bundle_Path = check_archive(CaseNumber) """
+                        ws.append([Account_Name__c, Account_Org_ID__c, CaseNumber, Bundle_Path])
+                    else:
+                        print(f"No data found for account ID {each_accountID}.")
+                except json.JSONDecodeError as e:
+                    print(f"Error decoding JSON value: {e}")
+                except Exception as e:
+                    print(f"Error processing value: {e}")
     except Exception as e:
         print(f"Error processing account ID {each_accountID}: {e}")
-    finally:
-        if finaldata:
-            Account_Name__c = str(finaldata["Account_Name__c"])
-            Account_Org_ID__c = str(finaldata["Account_Org_ID__c"])
-            CaseNumber = str(finaldata["CaseNumber"])
-            Bundle_Path = find_collector_file(f'/upload/ftp/{CaseNumber}')
-            if Bundle_Path:
-                print(Bundle_Path)
-            # Add data to the Excel sheet
-            ws.append([Account_Name__c, Account_Org_ID__c, CaseNumber, Bundle_Path])
 
 # Create Excel workbook and sheet
 wb = openpyxl.Workbook()

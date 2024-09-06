@@ -7,6 +7,10 @@ from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 import os
+import ssl
+
+# Disable SSL certificate validation globally
+ssl._create_default_https_context = ssl._create_unverified_context
 
 today = datetime.now().strftime("%b-%d-%Y")
 
@@ -79,15 +83,17 @@ def execute_query_and_write_to_xlsx(connection):
 def send_email_with_attachment(filename):
     # Email configurations
     from_email = "warranty_check@citrix.com"
-    to_email = "manjesh.n@cloud.com, manjesh.n@cloud.com"
-    cc_email = "manjesh.n@cloud.com, manjesh.n@cloud.com, manjesh.n@cloud.com"
+    to_email = "pradeep.bhambi@cloud.com, manjesh.n@cloud.com"
+    cc_email = "bhagyaraj.isaiahm@cloud.com, anand.sathya@cloud.com, manjesh.n@cloud.com"
+    #to_email = "manjesh.n@cloud.com"
+    #cc_email = "manjesh.n@cloud.com"
     subject = f"Consolidated Weekly Report for Project warranty_check for the Week {today}"
     # HTML version of the email body
     body = """
     <html>
       <body>
-        Hello Pradeep and Ginu,<br><br>
-        Automated email: Weekly report for expired entitlements raised by our customers with teschnical support. Please find the attached Excel file containing the full details.
+        Hello Pradeep,<br><br>
+        Automated email: Weekly report for expired entitlements raised by our customers with technical support. Please find the attached Excel file containing the full details.
       </body>
     </html>
     """

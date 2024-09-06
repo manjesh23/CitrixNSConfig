@@ -11,6 +11,10 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dateutil import tz
 from dateutil.parser import parse
+import ssl
+
+# Disable SSL certificate validation globally
+ssl._create_default_https_context = ssl._create_unverified_context
 
 # About Author
 scriptauthor = '''
@@ -32,7 +36,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/warranty_check'
 headers = {'Content-Type': 'application/json'}
-version = "3.1"
+version = "3.5"
 
 # Tooltrack send data function (embeded with fail proof)
 def send_request(version, username, fate_message, result):
@@ -103,6 +107,7 @@ class EmailSender:
             # Connect to the SMTP server
             with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
                 server.starttls()
+                #server.set_debuglevel(1) # Debug message for SSL
                 to_addresses = [self.receiver] + self.cc
                 server.sendmail(self.sender, to_addresses, message.as_string())
             print("Email sent successfully! --> " + actual_data)
