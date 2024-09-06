@@ -55,7 +55,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "7.60"
+version = "7.76"
 
 # About script
 showscriptabout = '''
@@ -135,11 +135,11 @@ parser.add_argument('-ha', action="store_true", help="HA Analysis (Potential RCA
 parser.add_argument('-pt', metavar="", action="append", help="Check if the given problem time present in the bundle (\"Aug 02 13:40:00\")")
 parser.add_argument('-z', action="append", metavar="", help="Generate HTML Graph for all newnslog(s) at once per user-input counter\n--divide <integer> --> value used to divide 'totalcount-val' in nsconmsg output")
 parser.add_argument('--divide', action="append", metavar="divide column 3 by", help=argparse.SUPPRESS)
-parser.add_argument('-T', action="append", choices={"ha"}, help="Generate PNG file for specific feature")
+#parser.add_argument('-T', action="append", choices={"ha"}, help="Generate PNG file for specific feature")
 parser.add_argument('--cpu', action="store_true", help="Analyse High Mgmt CPU and its potential cause")
 parser.add_argument('--nic', action="store_true", help="NIC Specific details")
 parser.add_argument('--case', action="store_true", help="Salesforce Case Details"+ style.YELLOW)
-parser.add_argument('--adm', action="append", choices={"info", "md", "imall", "gz", "apps", "crash"}, help="ADM Bundles Only\ninfo --> ADM Basic Information\nmd --> ADM Managed Devices\nimall --> Indexing timestamp of all logs\ngz --> Extract all gz files within ADM Support bundle\napps --> List all the vServer and Instance details\ncrash --> List Crash files if availableC" + style.RESET)
+parser.add_argument('--adm', action="append", choices={"info", "md", "imall", "gz", "apps", "crash"}, help="ADM Bundles Only\ninfo --> ADM Basic Information\nmd --> ADM Managed Devices\nimall --> Indexing timestamp of all logs\ngz --> Extract all gz files within ADM Support bundle\napps --> List all the vServer and Instance details\ncrash --> List Crash files if available" + style.RESET)
 parser.add_argument('md', action="store_true", help=argparse.SUPPRESS)
 parser.add_argument('--about', action="store_true", help="About Show Script")
 args = parser.parse_args()
@@ -211,19 +211,31 @@ unix_to_human = lambda unix_time: datetime.fromtimestamp(int(unix_time)).strftim
 if args.adm:
     try:
         pwd_output = os.popen("pwd").read().strip()
-        if "NetScalerADM" in pwd_output:
-            match = re.search(r'.*/.*/NetScalerADM', pwd_output)
+        if "Citrix_ADM" in pwd_output:
+            match = re.search(r'.*Citrix_ADM_.*mps', pwd_output)
             if match:
                 os.chdir(match.group(0))
             else:
-                raise ValueError("Pattern not found for 'NetScalerADM'")
-        elif "NetScaler_ADM" in pwd_output:
-            match = re.search(r'.*/.*/NetScaler_ADM', pwd_output)
+                print(style.RED + "Pattern not found for 'Citrix_ADM'" + style.RESET)
+                quit()
+        elif "NetScaler_ADM_" in pwd_output:
+            match = re.search(r'.*NetScaler_ADM_.*mps', pwd_output)
             if match:
                 os.chdir(match.group(0))
             else:
-                raise ValueError("Pattern not found for 'NetScaler_ADM'")
-        if "i" in args.adm:
+                print(style.RED + "Pattern not found for 'NetScaler_ADM'" + style.RESET)
+                quit
+        else:
+            print("\n")
+            current_dir = os.getcwd()
+            pattern = re.compile(r'.*(NetScaler_ADM|Citrix_ADM).*mps')
+            for entry in os.listdir(current_dir):
+                entry_path = os.path.join(current_dir, entry)
+                if os.path.isdir(entry_path) and pattern.match(entry):
+                    print(style.CYAN + entry + style.RESET)
+            print(style.RED + "\nPlease make sure to navigate to ADM MPS Directory" + style.RESET)
+            quit()
+        if "info" in args.adm:
             try:
                 mps_svm_file = str(sp.run("find ./ -name 'svm.conf' | grep '/mps/'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
                 mps_dmesg_file = str(sp.run("find ./ -name 'dmesg-a.out' | grep '/shell/'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
@@ -255,7 +267,7 @@ if args.adm:
                 print("var Size: " + admvarsize)
                 # Tooltrack
                 try:
-                    fate_message = "show --adm i"; send_request(version, username, url, fate_message, "Success")
+                    fate_message = "show --adm info"; send_request(version, username, url, fate_message, "Success")
                 finally:
                     quit()
         elif "md" in args.adm:
@@ -411,6 +423,11 @@ if args.adm:
                     print(style.YELLOW + '{:-^87}\n'.format('NetScaler mps_service.log timestamp IndexMessages') + style.RESET + mps_service_timestamp.stdout)
                 else:
                     print(style.RED + '{:-^87}\n'.format('Unable to read mps_service.log') + style.RESET)
+                try:
+                    fate_message = "show --adm imall"
+                    send_request(version, username, url, fate_message, "Success")
+                finally:
+                    quit()
         elif "crash" in args.adm:
             try:
                 process_crash = sp.run("find ./ -type d -name 'core' -exec ls -lRht {} \; | awk '!/bound/&&/-rw-/{printf \"[%s-%s/%s --> %s --> %s]\\n\", $6, $7, $8, $NF, $5}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
@@ -1615,7 +1632,7 @@ elif args.G:
         path = "conFetch"
         isExist = os.path.exists(path)
         if not isExist:
-            os.popen("fixperms ../").read()
+            os.popen("fixperms $PWD").read()
             os.makedirs(path)
         else:
             pass
@@ -1892,7 +1909,7 @@ elif args.g:
         path = "conFetch"
         isExist = os.path.exists(path)
         if not isExist:
-            os.popen("fixperms ../").read()
+            os.popen("fixperms $PWD").read()
             os.makedirs(path)
         else:
             pass
@@ -2028,7 +2045,7 @@ elif args.z:
         path = "conFetch"
         isExist = os.path.exists(path)
         if not isExist:
-            os.popen("fixperms ../").read()
+            os.popen("fixperms $PWD").read()
             os.makedirs(path)
         else:
             pass
@@ -2115,7 +2132,7 @@ elif args.T:
         path = "conFetch"
         isExist = os.path.exists(path)
         if not isExist:
-            os.popen("fixperms ../").read()
+            os.popen("fixperms $PWD").read()
             os.makedirs(path)
         else:
             pass
@@ -2182,7 +2199,7 @@ elif args.T:
                         file.write(dot_data)
                 sp.run("dot -Tpng ha.dot -o ha.png", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                 os.popen("dot -Tpng conFetch/ha.dot -o conFetch/ha.png").read()
-                os.popen("fixperms ../").read()
+                os.popen("fixperms $PWD").read()
                 os.popen("rm -rf conFetch/ha.dot").read()
     finally:
         fate_message = "show -T " + ''.join(args.T); send_request(version, username, url, fate_message, "Success")
