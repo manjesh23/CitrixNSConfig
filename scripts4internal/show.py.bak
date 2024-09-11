@@ -55,7 +55,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "7.76"
+version = "7.81"
 
 # About script
 showscriptabout = '''
@@ -135,7 +135,7 @@ parser.add_argument('-ha', action="store_true", help="HA Analysis (Potential RCA
 parser.add_argument('-pt', metavar="", action="append", help="Check if the given problem time present in the bundle (\"Aug 02 13:40:00\")")
 parser.add_argument('-z', action="append", metavar="", help="Generate HTML Graph for all newnslog(s) at once per user-input counter\n--divide <integer> --> value used to divide 'totalcount-val' in nsconmsg output")
 parser.add_argument('--divide', action="append", metavar="divide column 3 by", help=argparse.SUPPRESS)
-#parser.add_argument('-T', action="append", choices={"ha"}, help="Generate PNG file for specific feature")
+parser.add_argument('-T', action="append", choices={"ha"}, help="Generate PNG file for specific feature")
 parser.add_argument('--cpu', action="store_true", help="Analyse High Mgmt CPU and its potential cause")
 parser.add_argument('--nic', action="store_true", help="NIC Specific details")
 parser.add_argument('--case', action="store_true", help="Salesforce Case Details"+ style.YELLOW)
@@ -247,6 +247,10 @@ if args.adm:
                 admip = sp.run("awk '/ifconfig/{print $(NF-2), $(NF-1), $NF, \"on iface\", $2}' " + mps_svm_file, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 admcpu = sp.run("awk '/hw.model/ { $1=\"\"; sub(/^ /, \"\"); print }' " + shell_sysctl_file, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 admfirmware = sp.run("awk -F/ '/kern.bootfile/{print $NF}' " + shell_sysctl_file, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                adm_nameserver = sp.run('''awk '/nameserver/{print $NF}' ./etc/resolv.conf''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                adm_ha_peer_ip = sp.run('''awk '/update_HA_state/{gsub(/'\\''|;/, "", $NF); print $NF; exit}' var/mps/log/mas_hb_monit.py.lo*''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                adm_ha_peer_version_ready_failover = sp.run('''awk '/readyForFailover/&&/receiveHeartbeat/{ match($0, /"Ver": "[^"]+"/); ver=substr($0, RSTART, RLENGTH); match($0, /"readyForFailover": "[^"]+"/); rff=substr($0, RSTART, RLENGTH); printf "%s and %s", ver, rff; exit}' var/mps/log/mas_hb_monit.py.lo* | sed \'s/"//g\' | sed \'s/ T/ True/g\'''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                adm_ha_floating_ip = sp.run("awk '/VIP Running ifconfig/{print $(NF-3); exit}' ./var/mps/log/mas_hb_monit.py.lo* | grep . || awk '/Changing vip address/{print $NF; exit}' ./var/mps/log/masha_vip.py.lo*", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 admhostid = sp.run("awk '/this_host/{print $(NF-1); exit}' " + mps_lic_file, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 admrealmem = sp.run("awk '/real memory/{print $(NF-1), $NF; exit}' " + mps_dmesg_file, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 admavailmem = sp.run("awk '/avail memory/{print $(NF-1), $NF; exit}' " + mps_dmesg_file, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
@@ -258,6 +262,18 @@ if args.adm:
                 print("Support file location: " + os.popen("pwd").read().strip())
                 print("\nConsole Hostname: " + admhostname)
                 print("Console IP Address: " + admip)
+                print("Console HA Peer IP: " + adm_ha_peer_ip)
+                print("Console HA Floating IP: " + (adm_ha_floating_ip if adm_ha_floating_ip else "N/A"))
+                if len(adm_ha_peer_version_ready_failover) > 23:
+                    if len(adm_ha_peer_version_ready_failover.split("and")[0]) > 10:
+                        if "True" in adm_ha_peer_version_ready_failover.split("and")[1]:
+                            print("Console HA Peer Firmware: " + adm_ha_peer_version_ready_failover.split("and")[0] + "and" + style.GREEN + adm_ha_peer_version_ready_failover.split("and")[1] + style.RESET)
+                    else:
+                        if 'True' in adm_ha_peer_version_ready_failover.split("and")[1]:
+                            print("Console HA Peer Firmware: NA" + style.GREEN + adm_ha_peer_version_ready_failover.split("and")[1] + "and" + style.RESET)
+                        else:
+                            print("Console HA Peer Firmware: NA" + style.RED + adm_ha_peer_version_ready_failover.split("and")[1] + "and" + style.RESET)
+                print("Console DNS IP: " + adm_nameserver)
                 print("Console Firmware: " + admfirmware)
                 print("Console HostID: " + admhostid)
                 print("Console Hosted Hypervisor: " + admplatform)
@@ -267,7 +283,7 @@ if args.adm:
                 print("var Size: " + admvarsize)
                 # Tooltrack
                 try:
-                    fate_message = "show --adm i"; send_request(version, username, url, fate_message, "Success")
+                    fate_message = "show --adm info"; send_request(version, username, url, fate_message, "Success")
                 finally:
                     quit()
         elif "md" in args.adm:
@@ -423,6 +439,11 @@ if args.adm:
                     print(style.YELLOW + '{:-^87}\n'.format('NetScaler mps_service.log timestamp IndexMessages') + style.RESET + mps_service_timestamp.stdout)
                 else:
                     print(style.RED + '{:-^87}\n'.format('Unable to read mps_service.log') + style.RESET)
+                try:
+                    fate_message = "show --adm imall"
+                    send_request(version, username, url, fate_message, "Success")
+                finally:
+                    quit()
         elif "crash" in args.adm:
             try:
                 process_crash = sp.run("find ./ -type d -name 'core' -exec ls -lRht {} \; | awk '!/bound/&&/-rw-/{printf \"[%s-%s/%s --> %s --> %s]\\n\", $6, $7, $8, $NF, $5}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
@@ -589,7 +610,7 @@ if args.i:
         print("var Size: " + varsize.stdout.strip())
         print("SSL Cards: " + sslcards.stdout.strip())
         print("NSPPE Count: " + nsppe.stdout.strip() + "\n")
-        print("\n\n" + style.LIGHTGREEN + "Check out the new features! Use show --help to learn more" + style.RESET)
+        print("\n\n" + "Check out the new features related to "+ style.LIGHTGREEN + "ADM support bundle!" + style.RESET + " Use show --help to learn more")
         # Tooltrack
         try:
             fate_message = "show -i"; send_request(version, username, url, fate_message, "Success")
