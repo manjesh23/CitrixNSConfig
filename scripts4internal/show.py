@@ -13,13 +13,12 @@ import time
 from datetime import datetime, timedelta
 import ssl
 import csv
+from itertools import zip_longest
 
 # Disable SSL certificate validation globally
 ssl._create_default_https_context = ssl._create_unverified_context
 
 # Preparing Required color codes
-
-
 class style():
     BLACK = '\033[30m'
     RED = '\033[31m'
@@ -34,6 +33,7 @@ class style():
     UNDERLINE = '\033[4m'
     RESET = '\033[0m'
 
+print("\n\n" + "Check out the new features related to "+ style.LIGHTGREEN + "ADM support bundle!" + style.RESET + " Use show --help to learn more\n")
 
 # About Author
 showscriptauthor = '''
@@ -55,7 +55,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "7.81"
+version = "8.07"
 
 # About script
 showscriptabout = '''
@@ -123,6 +123,7 @@ parser.add_argument('-error', metavar="", help="Highlights known errors")
 parser.add_argument('-show', metavar="", help="Selected Show Commands")
 parser.add_argument('-stat', metavar="", help="Selected Stat Commands")
 parser.add_argument('-vip', action="store_true", help="Get VIP Basic Details")
+parser.add_argument('--lbvip', metavar="", help="Get VIP Bindings for a specific VIP name")
 parser.add_argument('-v', action="store_true", help="ns.conf Version and Last Saved")
 parser.add_argument('-bt', action="store_true", help="Auto bt for both NSPPE and Process core files")
 parser.add_argument('-bt1', action="store_true", help="Specify NSPPE Core file absolute path to run a bt")
@@ -138,6 +139,8 @@ parser.add_argument('--divide', action="append", metavar="divide column 3 by", h
 parser.add_argument('-T', action="append", choices={"ha"}, help="Generate PNG file for specific feature")
 parser.add_argument('--cpu', action="store_true", help="Analyse High Mgmt CPU and its potential cause")
 parser.add_argument('--nic', action="store_true", help="NIC Specific details")
+parser.add_argument('-j', metavar="", nargs="+", help="Search for Jira with Keyword match")
+parser.add_argument('-J', metavar="", help="Get Jira Details")
 parser.add_argument('--case', action="store_true", help="Salesforce Case Details"+ style.YELLOW)
 parser.add_argument('--adm', action="append", choices={"info", "md", "imall", "gz", "apps", "crash"}, help="ADM Bundles Only\ninfo --> ADM Basic Information\nmd --> ADM Managed Devices\nimall --> Indexing timestamp of all logs\ngz --> Extract all gz files within ADM Support bundle\napps --> List all the vServer and Instance details\ncrash --> List Crash files if available" + style.RESET)
 parser.add_argument('md', action="store_true", help=argparse.SUPPRESS)
@@ -204,6 +207,14 @@ def find_min_max_dates(data):
     max_date = max(end_times)
     return f"{min_date} --> {max_date}"
 
+# Date age calc
+def calculate_age(release_date):
+    delta = datetime.now() - release_date
+    years = delta.days // 365
+    months = (delta.days % 365) // 30
+    days = (delta.days % 365) % 30
+    return years, months, days
+
 # Unix time to Human time
 unix_to_human = lambda unix_time: datetime.fromtimestamp(int(unix_time)).strftime('%b-%d-%Y %H:%M:%S')
 
@@ -247,7 +258,7 @@ if args.adm:
                 admip = sp.run("awk '/ifconfig/{print $(NF-2), $(NF-1), $NF, \"on iface\", $2}' " + mps_svm_file, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 admcpu = sp.run("awk '/hw.model/ { $1=\"\"; sub(/^ /, \"\"); print }' " + shell_sysctl_file, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 admfirmware = sp.run("awk -F/ '/kern.bootfile/{print $NF}' " + shell_sysctl_file, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
-                adm_nameserver = sp.run('''awk '/nameserver/{print $NF}' ./etc/resolv.conf''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                adm_nameserver = sp.run('''awk '/nameserver/{if (c++) {printf \", %s\", $NF} else {printf \"%s\", $NF}}' ./etc/resolv.conf''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 adm_ha_peer_ip = sp.run('''awk '/update_HA_state/{gsub(/'\\''|;/, "", $NF); print $NF; exit}' var/mps/log/mas_hb_monit.py.lo*''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 adm_ha_peer_version_ready_failover = sp.run('''awk '/readyForFailover/&&/receiveHeartbeat/{ match($0, /"Ver": "[^"]+"/); ver=substr($0, RSTART, RLENGTH); match($0, /"readyForFailover": "[^"]+"/); rff=substr($0, RSTART, RLENGTH); printf "%s and %s", ver, rff; exit}' var/mps/log/mas_hb_monit.py.lo* | sed \'s/"//g\' | sed \'s/ T/ True/g\'''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 adm_ha_floating_ip = sp.run("awk '/VIP Running ifconfig/{print $(NF-3); exit}' ./var/mps/log/mas_hb_monit.py.lo* | grep . || awk '/Changing vip address/{print $NF; exit}' ./var/mps/log/masha_vip.py.lo*", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
@@ -536,6 +547,21 @@ if args.i:
             memfreepercent = round(memfreepercent, 2)
         else:
             pass
+        adcfirmwareRTM = sp.run("curl -s 'https://www.citrix.com/downloads/citrix-adc/' | egrep -C2 \"<a href=\\\"\/downloads\/citrix-adc.*\" | awk '/citrix-adc|\/p/{print}' | paste - - | sed -E 's/<\/.|<a href=|\\\"|NEW/ /g' | awk -F'>' '{printf \"%s|%s\\n\", $3, $2}' | awk '{$1=$1};1' | sed -E 's-\| \|- \|-g' | column -t -s'|' | sort -k4n -k2M -k3n", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip().replace('\n\n', '\n')
+        releasedate = ""
+        for line in adcfirmwareRTM.splitlines():
+            if str(adcfirmware.stdout.strip().split()[-1]) in line:
+                date_match = re.search(r"(\w{3} \d{1,2}, \d{4})", line)
+                if date_match:
+                    release_date = datetime.strptime(date_match.group(1), "%b %d, %Y")
+                    age_days = (datetime.now() - release_date).days
+                    years, months, days = calculate_age(release_date)
+                    releasedate = f" and released on {release_date.strftime('%b %d, %Y')} ({age_days} days ago or {years} year{'' if years == 1 else 's'}, {months} month{'' if months == 1 else 's'} {days} day{'' if days == 1 else 's'} old)"
+                else:
+                    releasedate = ""
+                break
+            else:
+                pass
         virtual_physical = sp.run('''awk '/VPXEnvironment/{if ($0 ~ /VPX/) {print "VPX"; exit}}' shell/showcmds.txt''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
         total_core = sp.run('''awk '/System Detected/{print $(NF-1);exit}' var/nslog/dmesg.boot''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
         required_mem = sp.run('''awk '/System Detected/{print $(NF-1)*4000;exit}' var/nslog/dmesg.boot''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
@@ -558,6 +584,8 @@ if args.i:
                     pass
             else:
                 pass
+            if float(major_version) < 13.1:
+                print(style.RED + f"Error: NetScaler firmware is EOL\n" + style.RESET)
     except IOError as io:
         print(io)
     finally:
@@ -571,7 +599,7 @@ if args.i:
         print("NetScaler Hostname: " + adchostname.stdout.strip())
         print("NetScaler HA State: " + adcha.stdout.strip())
         print(f"ADM Connected: {admconnected if admconnected else 'No'}")
-        print("NetScaler Firmware version: " + adcfirmware.stdout.strip())
+        print("NetScaler Firmware version: " + adcfirmware.stdout.strip() + releasedate)
         print("Firmware history: " + firmwarehistory.stdout.strip())
         print("Last Upgrade Stats: " + nsinstall.stdout.strip())
         print(f"Partition Name: {adcpartitionName if adcpartitionName else 'default'}")
@@ -610,7 +638,6 @@ if args.i:
         print("var Size: " + varsize.stdout.strip())
         print("SSL Cards: " + sslcards.stdout.strip())
         print("NSPPE Count: " + nsppe.stdout.strip() + "\n")
-        print("\n\n" + "Check out the new features related to "+ style.LIGHTGREEN + "ADM support bundle!" + style.RESET + " Use show --help to learn more\n")
         # Tooltrack
         try:
             fate_message = "show -i"; send_request(version, username, url, fate_message, "Success")
@@ -625,8 +652,19 @@ elif args.P:
     finally:
         print(style.YELLOW + '{:-^87}'.format('NetScaler Admin Partition Details') + "\n" + style.RESET)
         if len(partition_basic_data) >= 2:
-            mapping = {row[-2]: row for row in partition_basic_data}
-            mapped_result = [[row[1]] + mapping[row[0]] for row in partition_vlan_data]
+            mapping = {row[4]: row for row in partition_basic_data}
+            mapped_result = []
+            added_partitions = set()
+            for vlan_row in partition_vlan_data:
+                partition_name = vlan_row[0] 
+                vlan_id = vlan_row[1]
+                if partition_name in mapping:
+                    mapped_result.append([vlan_id] + mapping[partition_name])
+                    added_partitions.add(partition_name)
+            for partition_row in partition_basic_data:
+                partition_name = partition_row[4]
+                if partition_name not in added_partitions:
+                    mapped_result.append([" "] + partition_row)
             header = ["vlan | ", "partitionid | ", "maxBandwidth Mbps | ", "maxConn | ", "maxMemLimit MB | ", "partitionName | ", "partitionMAC |"]
             column_widths = [len(header[i]) for i in range(len(header))]
             for row in mapped_result:
@@ -1154,6 +1192,55 @@ elif args.vip:
         finally:
             quit()
 
+elif args.lbvip:
+    try:
+        vipname = str(args.lbvip)
+        vip_service_bindings = sp.run('''awk '!/policy/&&/''' + vipname + '''([^a-zA-Z0-9]|$)/&&/bind lb vserver/{print $5}' shell/ns_running_config.conf''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        vip_service_bindings_list = vip_service_bindings.stdout.splitlines()
+        server_bindings = {}
+        serverGroup_bindings = {}
+        serverGroup_members = {}
+        for service in vip_service_bindings_list:
+            vip_server_bindings = sp.run('''awk '/add service ''' + service + '''([^a-zA-Z0-9]|$)/{print $4, $5, $6}' shell/ns_running_config.conf''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+            if vip_server_bindings.stdout.strip():
+                server_bindings[service] = vip_server_bindings.stdout.strip()
+        for service in vip_service_bindings_list:
+            vip_serverGroup_bindings = sp.run('''awk '!/monitor/&&/bind serviceGroup ''' + service + '''([^a-zA-Z0-9]|$)/{print $4, $5}' shell/ns_running_config.conf''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+            if vip_serverGroup_bindings.stdout.strip():
+                serverGroup_bindings[service] = []
+                for line in vip_serverGroup_bindings.stdout.strip().splitlines():
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        serverGroup_bindings[service].append(f"{parts[0]} {parts[1]}")
+                        vip_add_server_bindings = sp.run('''awk '/add server ''' + parts[0] + '''([^a-zA-Z0-9]|$)/{print $4}' shell/ns_running_config.conf''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                        if parts[0] not in serverGroup_members:
+                            serverGroup_members[parts[0]] = []
+                        serverGroup_members[parts[0]].extend(vip_add_server_bindings.stdout.strip().splitlines())
+    finally:
+        print(style.YELLOW + '{:-^87}'.format('LB VIP Bindings') + style.RESET)
+        print(f"VIP Name: {style.GREEN + vipname + style.RESET}")
+        if server_bindings:
+            print(f"\n{style.YELLOW + 'Service':<20} {'Server' :<30}" + style.RESET)
+            print(f"{style.YELLOW + '-'*87}" + style.RESET)
+            for service, server in server_bindings.items():
+                print(f"{service:<20} {server:<30}")
+        if serverGroup_bindings:
+            print(f"\n{style.YELLOW + 'Service_Group':<20} {'ServiceGroup_Members':<30}" + style.RESET)
+            print(f"{style.YELLOW + '-'*87}" + style.RESET)
+            for serviceGroup, servers in serverGroup_bindings.items():
+                for server in servers:
+                    print(f"{serviceGroup:<20} {server:<30}")
+        if serverGroup_members:
+            print(f"\n{style.YELLOW + 'ServiceGroup_Member':<20} {'Server':<30}" + style.RESET)
+            print(f"{'-'*87}")
+            for member, details in serverGroup_members.items():
+                for detail in details:
+                    print(f"{member:<20} {detail:<30}")
+        try:
+            fate_message = "show --lbvip"; send_request(version, username, url, fate_message, "Success")
+        finally:
+            quit()
+
 elif args.v:
     try:
         # ns.conf name list and last saved timestamp
@@ -1432,6 +1519,54 @@ elif args.case:
             fate_message = "show --case"; send_request(version, username, url, fate_message, "Success")
         finally:
             quit()
+
+elif args.j:
+    try:
+        keywords = [""] * 10
+        print(style.YELLOW + '{:-^87}'.format('Jira Match for keyword') + style.RESET)
+        if args.j:
+            args_list = args.j if args.j else []
+            keywords[:10] = list(zip_longest(args_list, keywords, fillvalue=""))[:10]
+            search_string = " and ".join([kw[0] for kw in keywords if kw[0]])
+            print(style.YELLOW + f'Searching for: {search_string} + "\n"' + style.RESET)
+            JiraNumber = sp.run(f"curl -s -H 'Content-type: application/json' -d '{{\"feature\":\"search\", \"parameters\": [{{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\"}},{{\"name\":\"searchstring\",\"value\":\"{search_string}\"}}]}}' -X POST http://10.14.18.46/SFaaS/api/jira | perl -wnE'say /\"[A-Z]+-[0-9]{{3,9}}/g' | sed 's/\"/ /g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        else:
+            JiraNumber = ""
+    finally:
+        print(style.YELLOW + JiraNumber + style.RESET)
+        if JiraNumber and JiraNumber.strip():
+            for i in JiraNumber.split():
+                detailedJira = sp.run("curl -s -H 'Content-type: application/json' -d '{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\",\"feature\":\"fetchfields\",\"parameters\":[{\"name\":\"id\",\"value\":\""+i+"\",\"isbase64\":false},{\"name\":\"fields\",\"value\":\"summary,versions,status,resolution,fixVersions,created\",\"isbase64\":false}]}' -X POST http://10.14.18.46/SFaaS/api/jira | jq '.options | .[] | .values | .[]' | sed 's/\\\\//g' | awk '{print substr($0, 2, length($0) - 2)}' | jq -r  '\"\\(.key) \\(\"-->\") \\(.fields.summary) \\(\"-->\") \\(.fields.resolution.name) \\(\"-->\") \\(.fields.created[0:10]) \\(\"Found In:\") \\([.fields.versions[].name]) \\(\"--> Fixed In:\") \\([.fields.fixVersions[].name]) \\(\"\")\"'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                print(detailedJira)
+            try:
+                fate_message = "show -j"; send_request(version, username, url, fate_message, "Success")
+            finally:
+                quit()
+        else:
+            print("no match")
+            try:
+                fate_message = "show -j"; send_request(version, username, url, fate_message, "Failed")
+            finally:
+                quit()
+
+elif args.J:
+    try:
+        print(style.YELLOW + '{:-^87}'.format('Jira Summary') + style.RESET)
+        JiraNumber = str(args.J)
+        detailedJira = sp.run("curl -s -H 'Content-type: application/json' -d '{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\",\"feature\":\"fetchfields\",\"parameters\":[{\"name\":\"id\",\"value\":\""+JiraNumber+"\",\"isbase64\":false},{\"name\":\"fields\",\"value\":\"summary,versions,status,resolution,fixVersions,created,customfield_19731,assignee,creator\",\"isbase64\":false}]}' -X POST http://10.14.18.46/SFaaS/api/jira | jq '.options | .[] | .values | .[]' | sed 's/\\\\//g' | awk '{print substr($0, 2, length($0) - 2)}' | jq -r  '\"\\(.key) \\(\"\\nSummary:\") \\(.fields.summary) \\(\"\\nResolution:\") \\(.fields.resolution.name) \\(\"\\nCreated on:\") \\(.fields.created[0:10]) \\(\"\\nFound In:\") \\([.fields.versions[].name]) \\(\"\\nFStatus:\") \\([.fields.status.name]) \\(\"\\nFixed In:\") \\([.fields.fixVersions[].name]) \\(\"\\nJustification:\") \\(.fields.customfield_19731) \\(\"\\nAssignee:\") \\(.fields.assignee.name) \\(\"\\nReporter:\") \\(.fields.creator.name) \\(\"\\n\")\"'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+    finally:
+        if detailedJira:
+            print(detailedJira)
+            try:
+                fate_message = "show -J"; send_request(version, username, url, fate_message, "Success")
+            finally:
+                quit()
+        else:
+            try:
+                fate_message = "show -J"; send_request(version, username, url, fate_message, "Failed")
+            finally:
+                quit()
+
 
 elif args.bt:
     try:
