@@ -55,7 +55,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "8.07"
+version = "10.06"
 
 # About script
 showscriptabout = '''
@@ -125,6 +125,7 @@ parser.add_argument('-stat', metavar="", help="Selected Stat Commands")
 parser.add_argument('-vip', action="store_true", help="Get VIP Basic Details")
 parser.add_argument('--lbvip', metavar="", help="Get VIP Bindings for a specific VIP name")
 parser.add_argument('-v', action="store_true", help="ns.conf Version and Last Saved")
+parser.add_argument('-u', action="store_true", help="NetScaler Update Build Related Details")
 parser.add_argument('-bt', action="store_true", help="Auto bt for both NSPPE and Process core files")
 parser.add_argument('-bt1', action="store_true", help="Specify NSPPE Core file absolute path to run a bt")
 parser.add_argument('-G', action="append", choices={"cpu", "mem", "ha", "nic"}, help="Generate HTML Graph for all newnslog(s)")
@@ -138,11 +139,12 @@ parser.add_argument('-z', action="append", metavar="", help="Generate HTML Graph
 parser.add_argument('--divide', action="append", metavar="divide column 3 by", help=argparse.SUPPRESS)
 parser.add_argument('-T', action="append", choices={"ha"}, help="Generate PNG file for specific feature")
 parser.add_argument('--cpu', action="store_true", help="Analyse High Mgmt CPU and its potential cause")
+parser.add_argument('--mem', action="store_true", help="Analyse High Memory and its potential cause")
 parser.add_argument('--nic', action="store_true", help="NIC Specific details")
 parser.add_argument('-j', metavar="", nargs="+", help="Search for Jira with Keyword match")
 parser.add_argument('-J', metavar="", help="Get Jira Details")
 parser.add_argument('--case', action="store_true", help="Salesforce Case Details"+ style.YELLOW)
-parser.add_argument('--adm', action="append", choices={"info", "md", "imall", "gz", "apps", "crash"}, help="ADM Bundles Only\ninfo --> ADM Basic Information\nmd --> ADM Managed Devices\nimall --> Indexing timestamp of all logs\ngz --> Extract all gz files within ADM Support bundle\napps --> List all the vServer and Instance details\ncrash --> List Crash files if available" + style.RESET)
+parser.add_argument('--adm', action="append", choices={"info", "md", "imall", "gz", "apps", "crash", "graph"}, help="ADM Bundles Only\ninfo --> ADM Basic Information\nmd --> ADM Managed Devices\nimall --> Indexing timestamp of all logs\ngz --> Extract all gz files within ADM Support bundle\napps --> List all the vServer and Instance details\ncrash --> List Crash files if available\ngraph --> Plot Cosnole CPU and Memory Graph" + style.RESET)
 parser.add_argument('md', action="store_true", help=argparse.SUPPRESS)
 parser.add_argument('--about', action="store_true", help="About Show Script")
 args = parser.parse_args()
@@ -218,19 +220,33 @@ def calculate_age(release_date):
 # Unix time to Human time
 unix_to_human = lambda unix_time: datetime.fromtimestamp(int(unix_time)).strftime('%b-%d-%Y %H:%M:%S')
 
+# Create conFetch dir
+try:
+    base_path = "conFetch"
+    subdirs = ["nsconmsg", "Graph", "show_output"]
+    if not os.path.exists(base_path):
+        os.popen("fixperms $PWD").read()
+        os.makedirs(base_path)
+    for subdir in subdirs:
+        full_path = os.path.join(base_path, subdir)
+        if not os.path.exists(full_path):
+            os.makedirs(full_path)
+except Exception as e:
+    print(f"An error occurred while creading conFetch base path: {e}")
+
 # ADM section of the script
 if args.adm:
     try:
         pwd_output = os.popen("pwd").read().strip()
         if "Citrix_ADM" in pwd_output:
-            match = re.search(r'.*Citrix_ADM_.*mps', pwd_output)
+            match = re.search(r'.*Citrix_ADM_.*?\.mps', pwd_output)
             if match:
                 os.chdir(match.group(0))
             else:
                 print(style.RED + "Pattern not found for 'Citrix_ADM'" + style.RESET)
                 quit()
-        elif "NetScaler_ADM_" in pwd_output:
-            match = re.search(r'.*NetScaler_ADM_.*mps', pwd_output)
+        elif "NetScaler_ADM_" or "NetScaler_MAS_" in pwd_output:
+            match = re.search(r'.*NetScaler_(ADM|MAS)_.*?\.mps', pwd_output)
             if match:
                 os.chdir(match.group(0))
             else:
@@ -248,26 +264,24 @@ if args.adm:
             quit()
         if "info" in args.adm:
             try:
-                mps_svm_file = str(sp.run("find ./ -name 'svm.conf' | grep '/mps/'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
-                mps_dmesg_file = str(sp.run("find ./ -name 'dmesg-a.out' | grep '/shell/'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
-                shell_sysctl_file = str(sp.run("find ./ -name 'sysctl-a.out' | grep '/shell/'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
-                mps_lic_file = str(sp.run("find ./ -name '*.lic' | grep 'mpsconfig/license'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
-                shell_df_file = str(sp.run("find ./ -name 'df-akin.out' | grep /shell/", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
-                # Math and extract work below
-                admhostname = sp.run("awk '/kern.hostname/{print $NF; exit}' " + shell_sysctl_file, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
-                admip = sp.run("awk '/ifconfig/{print $(NF-2), $(NF-1), $NF, \"on iface\", $2}' " + mps_svm_file, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
-                admcpu = sp.run("awk '/hw.model/ { $1=\"\"; sub(/^ /, \"\"); print }' " + shell_sysctl_file, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
-                admfirmware = sp.run("awk -F/ '/kern.bootfile/{print $NF}' " + shell_sysctl_file, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                admhostname = sp.run("awk '/kern.hostname/{print $NF; exit}' ./shell/sysctl-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                admip = sp.run("awk '/ifconfig/{print $(NF-2), $(NF-1), $NF, \"on iface\", $2}' ./var/mps/svm.conf", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                if not admip:
+                    admip = sp.run('''awk '/inet/&&/netmask/{print $2; exit}' shell/ifconfig-a.out''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                    if not admip:
+                        admip = "NA"
+                admcpu = sp.run("awk '/hw.model/ { $1=\"\"; sub(/^ /, \"\"); print }' ./shell/sysctl-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                admfirmware = sp.run("awk -F/ '/kern.bootfile/{print $NF}' ./shell/sysctl-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 adm_nameserver = sp.run('''awk '/nameserver/{if (c++) {printf \", %s\", $NF} else {printf \"%s\", $NF}}' ./etc/resolv.conf''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 adm_ha_peer_ip = sp.run('''awk '/update_HA_state/{gsub(/'\\''|;/, "", $NF); print $NF; exit}' var/mps/log/mas_hb_monit.py.lo*''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 adm_ha_peer_version_ready_failover = sp.run('''awk '/readyForFailover/&&/receiveHeartbeat/{ match($0, /"Ver": "[^"]+"/); ver=substr($0, RSTART, RLENGTH); match($0, /"readyForFailover": "[^"]+"/); rff=substr($0, RSTART, RLENGTH); printf "%s and %s", ver, rff; exit}' var/mps/log/mas_hb_monit.py.lo* | sed \'s/"//g\' | sed \'s/ T/ True/g\'''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
-                adm_ha_floating_ip = sp.run("awk '/VIP Running ifconfig/{print $(NF-3); exit}' ./var/mps/log/mas_hb_monit.py.lo* | grep . || awk '/Changing vip address/{print $NF; exit}' ./var/mps/log/masha_vip.py.lo*", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
-                admhostid = sp.run("awk '/this_host/{print $(NF-1); exit}' " + mps_lic_file, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
-                admrealmem = sp.run("awk '/real memory/{print $(NF-1), $NF; exit}' " + mps_dmesg_file, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
-                admavailmem = sp.run("awk '/avail memory/{print $(NF-1), $NF; exit}' " + mps_dmesg_file, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
-                admplatform = sp.run('''awk '/netscaler.sysid:/ {sysid=$2} END {if (sysid ~ /450000|450001/) print "Citrix Hypervisor"; else if (sysid ~ /450010|450011/) print "ESX"; else if (sysid ~ /450020|450021/ && !/vpx_on_cloud = 0/) print "Hyper-V"; else if (sysid ~ /450070|450071/ && !/vpx_on_cloud = 0/) print "KVM"; else print "Unknown"}' ''' + shell_sysctl_file, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
-                admvarsize = sp.run("awk '/\/var$/{printf \"%s -> %s | %s | %s | %s\", $1,\"Total: \"$2,\"Used: \"$3, \"Free: \"$4, \"Capacity Used: \"substr($5, 1, length($5)-1)}' " + shell_df_file + " | awk '{if ($NF > 75){printf \"%s\", substr($0, 1, length($0)-2)\"\033[0;31m\"$NF\"%\033[0m\"}else{printf \"%s\", substr($0, 1, length($0)-2)\"\033\[0;32m\"$NF\"%\033[0m\"}}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
-                admboottime = sp.run("awk -F} '/kern.boottime/{print $2}' " + shell_sysctl_file, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                adm_ha_floating_ip = sp.run("awk '/VIP Running ifconfig/{print $(NF-3); exit}' ./var/mps/log/mas_hb_monit.py.lo* | grep . || awk '/Changing vip address/{print $NF; exit}' ./var/mps/log/masha_vip.py.lo* || echo 'NA'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                admhostid = sp.run("awk '/this_host/{print $(NF-1); exit}' mpsconfig/license/FID*", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                admrealmem = sp.run("awk '/real memory/{print $(NF-1), $NF; exit}' ./var/nslog/dmesg.boot", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                admavailmem = sp.run("awk '/avail memory/{print $(NF-1), $NF; exit}' ./var/nslog/dmesg.boot", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                admplatform = sp.run('''awk '/netscaler.sysid:/ {sysid=$2} END {if (sysid ~ /450000|450001/) print "Citrix Hypervisor"; else if (sysid ~ /450010|450011/) print "ESX"; else if (sysid ~ /450020|450021/ && !/vpx_on_cloud = 0/) print "Hyper-V"; else if (sysid ~ /450070|450071/ && !/vpx_on_cloud = 0/) print "KVM"; else print "Unknown"}' ./shell/sysctl-a.out''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                admvarsize = sp.run("awk '/\/var$/{printf \"%s -> %s | %s | %s | %s\", $1,\"Total: \"$2,\"Used: \"$3, \"Free: \"$4, \"Capacity Used: \"substr($5, 1, length($5)-1)}' ./shell/df-akin.out" + " | awk '{if ($NF > 75){printf \"%s\", substr($0, 1, length($0)-2)\"\033[0;31m\"$NF\"%\033[0m\"}else{printf \"%s\", substr($0, 1, length($0)-2)\"\033\[0;32m\"$NF\"%\033[0m\"}}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                admboottime = sp.run("awk -F} '/kern.boottime/{print $2}' ./shell/sysctl-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
             finally:
                 print(style.YELLOW + '{:-^87}'.format('NetScaler Console Show Configuration') + "\n" + style.RESET)
                 print("Support file location: " + os.popen("pwd").read().strip())
@@ -470,6 +484,44 @@ if args.adm:
                     send_request(version, username, url, fate_message, "Success")
                 finally:
                     quit()
+        elif "graph" in args.adm:
+            try:
+                path = "conFetch"
+                isExist = os.path.exists(path)
+                if not isExist:
+                    os.popen("fixperms $PWD").read()
+                    os.makedirs(path)
+                else:
+                    pass
+                custom_counter = ""
+                admhostname = sp.run("awk '/kern.hostname/{print $NF; exit}' ./shell/sysctl-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                collector_bundle_name = sp.run("pwd", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.split("/")[5]
+                cpu_mem_raw_data = sp.run("for i in $(ls -lah ./var/mps/log/ | awk '/mps_invent/{print \"./var/mps/log/\"$NF}' | sort -rV); do awk '/Health Check/&&/Usage/{print $2\"-\"$1\",20\"$3\"-\"$4, $NF, $(NF-2)}' $i | sed 's/\\.[0-9][0-9][0-9]//g'; done | awk 'BEGIN {;OFS = \", \";};!seen[$1]++ {;times[++numTimes] = $1;};!seen[$3]++ {;cpus[++numCpus] = $3;};{;vals[$1,$3] = $2;};END {;printf \"data.addColumn(\\047%s\\047%s\\047Manjesh\\047);\\n\", \"date\", OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];printf \"data.addColumn(\\047number\\047,\\047%s\\047%s);\\n\", cpu, (cpuNr<numCpus ? OFS : \"\");};for ( timeNr=1; timeNr<=numTimes; timeNr++ ) {;time = times[timeNr];printf \"%sdata.addRow([new Date(\\047%s\\047)%s\", ORS, time, OFS;for ( cpuNr=1; cpuNr<=numCpus; cpuNr++ ) {;cpu = cpus[cpuNr];val = ( (time,cpu) in vals ? vals[time,cpu] : prev_vals[cpu] );printf \"%s%s\", val, (cpuNr<numCpus ? OFS : \"]);\");prev_vals[cpu] = val;};};print \"\";}'| sed 's/-/ /g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                end_time = sp.run("awk '/Health Check/{print $1, $2, $3, $4; exit}' $(for i in $(ls -lah ./var/mps/log/ | awk '/mps_invent/{print \"./var/mps/log/\"$NF}' | sort -V); do echo $i; done | head -n1)", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                start_time = sp.run("awk '/Health Check/{print $1, $2, $3, $4; exit}' $(for i in $(ls -lah ./var/mps/log/ | awk '/mps_invent/{print \"./var/mps/log/\"$NF}' | sort -V); do echo $i; done | tail -n1)", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                start_end = f'{start_time} to {end_time}'
+                if len(cpu_mem_raw_data) < 52:
+                        cpu_mem_raw_data = "data.addColumn('date', 'Manjesh');data.addColumn('Manjesh', 'Manjesh');,['', ]"
+                else:
+                    pass
+                cpu_mem_raw_data = re.sub('.*,\s\].*', '', cpu_mem_raw_data)
+                with open(f"{path}/CPU_Mem_Graph.html", "w") as file:
+                    file.write('''<html><head> <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script> <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.js"></script> <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.css"> <script type="text/javascript">google.charts.load('current',{'packages': ['annotationchart']}); google.charts.setOnLoadCallback(allnic_tot_rx_tx_mbits); function allnic_tot_rx_tx_mbits(){var data=new google.visualization.DataTable(); ''' + cpu_mem_raw_data +
+                                ''' var chart=new google.visualization.AnnotationChart(document.getElementById('allnic_tot_rx_tx_mbits')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}</script></head><body> <h1 class="txt-primary">CPU and Mem</h1> <hr> <p class="txt-title">Collector_Bundle_Name: '''+collector_bundle_name+'''<br>Device_Name: '''+admhostname+'''<br>Log_file: All mps_inventory<br>Log_Timestamp: '''+start_end+'''</p><hr> <div style="width: 100%"><p class="txt-primary">CPU and Mem Graph</p><div id="allnic_tot_rx_tx_mbits" style="height:450px"></div></div><div class="footer">Project conFetch</div></body></html>''')
+                single_line_out = sp.run("perl -p -e 's/(?<!>)\n//g' conFetch/CPU_Mem_Graph.html > temp_file.html && mv temp_file.html conFetch/CPU_Mem_Graph.html", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                os.popen("fixperms ./conFetch/").read()
+                print(style.GREEN + f'Processed CPU_Mem_Graph.html Graph for all newnslogs' + style.RESET)
+                try:
+                    fate_message = "show --adm graph"; send_request(version, username, url, fate_message, "Success")
+                finally:
+                    quit()
+            except Exception as e:
+                print(e)
+                print(style.RED + "Unable to plot Graph for NetScaler Console" + style.RESET)
+                try:
+                    fate_message = "show --adm graph"; send_request(version, username, url, fate_message, "Failed")
+                finally:
+                    quit()
     except Exception as e:
         print(f"An error occurred: {e}")
     finally:
@@ -482,7 +534,7 @@ if args.i:
         # Printing system essential details
         print(style.YELLOW + '{:-^87}'.format('NetScaler Show Configuration') + "\n" + style.RESET)
         adchostname = sp.run("awk '{print $2}' shell/uname-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        adcpartitionName = sp.run("find shell/partitions/ -maxdepth 1 -mindepth 1 | awk -F'/' '{print $NF}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+        #adcpartitionName = sp.run("find shell/partitions/ -maxdepth 1 -mindepth 1 | awk -F'/' '{print $NF}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
         totalpartition = sp.run('''awk '/add ns partition/{partitions = partitions $4 " | "} END {sub(/ \| $/, "", partitions); print partitions}' shell/ns_running_config.conf''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
         partition_count = sp.run('''awk '/add ns partition/{count++} END{print count}' shell/ns_running_config.conf''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
         rcnetscaler = sp.run("[ -f nsconfig/rc.netscaler ] && awk '/nsapim/{count++} END{print count+0}' nsconfig/rc.netscaler", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
@@ -570,7 +622,7 @@ if args.i:
         try:
             mem_decision_output = int(required_mem) < int(configured_mem)
         finally:
-            if mem_decision_output is False:
+            if mem_decision_output is False and not re.search("MPX", platformmodel.stdout):
                 configured_mem_val = int(configured_mem) / 1000
                 required_mem_val = int(required_mem) / 1000
                 print(style.YELLOW + f"Warning: For optimal performance, please allocate {required_mem_val} GB RAM for {total_core} vCPU vs currently configured {configured_mem_val} GB (Refer VPX Datasheet)\n" + style.RESET)
@@ -602,7 +654,7 @@ if args.i:
         print("NetScaler Firmware version: " + adcfirmware.stdout.strip() + releasedate)
         print("Firmware history: " + firmwarehistory.stdout.strip())
         print("Last Upgrade Stats: " + nsinstall.stdout.strip())
-        print(f"Partition Name: {adcpartitionName if adcpartitionName else 'default'}")
+        # print(f"Partition Name: {adcpartitionName if adcpartitionName else 'default'}")
         print(f"Admin Partition's: {totalpartition if totalpartition else 'default'}")
         print(f"Number of admin partition's: {partition_count if partition_count else '0'}")
         if rcnetscaler.isdigit() and int(rcnetscaler) > 0:
@@ -689,6 +741,46 @@ elif args.P:
                 fate_message = "show -P"; send_request(version, username, url, fate_message, "Failed")
             finally:
                 quit()
+
+elif args.u:
+    try:
+        adcfirmwareRTM = sp.run("curl -s 'https://www.citrix.com/downloads/citrix-adc/' | egrep -C2 \"<a href=\\\"\/downloads\/citrix-adc.*\" | awk '/citrix-adc|\/p/{print}' | paste - - | sed -E 's/<\/.|<a href=|\\\"|NEW/ /g' | awk -F'>' '{printf \"%s|%s\\n\", $3, $2}' | awk '{$1=$1};1' | sed -E 's-\| \|- \|-g' | column -t -s'|' | sort -k4n -k2M -k3n", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip().replace('\n\n', '\n')
+        fullversion = sp.run('''awk '/#NS/&&/Build/' shell/ns_running_config.conf''',  shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip().split()
+        current_major_version = fullversion[0][3:]
+        current_minor_version = fullversion[2]
+        build_pattern = re.compile(r"([A-Za-z]+\s+\d{1,2},\s+\d{4})\s+Citrix ADC Release .* (13\.1|14\.1) Build (\d+\.\d+)(?:/\d+\.\d+)?")
+        builds_with_dates = build_pattern.findall(adcfirmwareRTM)
+        current_minor_version_float = float(current_minor_version)
+        new_builds_with_dates = [
+            (date, major, float(minor)) 
+            for date, major, minor in builds_with_dates 
+            if major == current_major_version and float(minor) > current_minor_version_float
+        ]
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        try:
+            fate_message = "show -u"; send_request(version, username, url, fate_message, "Failed")
+        finally:
+            quit()
+    finally:
+        print(style.YELLOW + '{:-^87}'.format('NetScaler Build Update Details') + style.RESET)
+        print(style.YELLOW + f"Current Firmware Version: " + style.RESET + f"{current_major_version} Build {current_minor_version}" + "\n")
+        print(style.YELLOW + f"Number of new firmware versions greater than " + style.RESET + f"{current_major_version}_{current_minor_version}: {len(new_builds_with_dates)} builds\n")
+        if new_builds_with_dates:
+            print(style.YELLOW + "New firmware builds:" + style.RESET)
+            for date, major, minor in new_builds_with_dates:
+                print(f"{major}_{minor:.2f} (Released on {date})")
+            try:
+                fate_message = "show -u"; send_request(version, username, url, fate_message, "Success")
+            finally:
+                quit()
+        else:
+            print(style.GREEN + "No new firmware builds found." + style.RESET)
+            try:
+                fate_message = "show -u"; send_request(version, username, url, fate_message, "Success")
+            finally:
+                quit()
+
 elif args.r:
     try:
         nsrestart = sp.run("awk '/nsrestart.sh/{print $3, $4, $5, $6, $7}' var/nslog/ns.log", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
@@ -1774,8 +1866,7 @@ elif args.about:
         pass
 elif args.G:
     try:
-        adchostname = sp.run("awk '{printf $2}' shell/uname-a.out",
-                             shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        adchostname = sp.run("awk '{printf $2}' shell/uname-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
         collector_bundle_name = re.findall('collector.*[0-9]{1,2}', sp.run("pwd", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout)[0]
     finally:
         pass
@@ -2193,13 +2284,7 @@ elif args.g:
         pass
 elif args.z:
     try:
-        path = "conFetch"
-        isExist = os.path.exists(path)
-        if not isExist:
-            os.popen("fixperms $PWD").read()
-            os.makedirs(path)
-        else:
-            pass
+        path = './conFetch/Graph'
         if args.divide:
             try:
                 divide = int(''.join(args.divide))
@@ -2371,6 +2456,68 @@ elif args.cpu:
         else:
             print(style.YELLOW + '{:-^87}'.format('NetScaler Mgmt CPU at 100% and its breakup') + "\n" + style.RESET)
             print(style.RED + "NetScaler has not hit 100% mgmt CPU")
+
+elif args.mem:
+    try:
+        print(style.YELLOW + '{:-^87}'.format('NetScaler Mem Pool more than 20% and its breakup') + "\n" + style.RESET)
+        out_dir = 'conFetch/nsconmsg/'
+        matching_newnslog_files = glob(os.path.join('./var/nslog/', 'newnslog*'))  
+        if matching_newnslog_files:
+            mem_stats_table = []
+            keys_to_extract = ['netscaler_netaddress', 'sys_cur_nsbs', 'sys_cur_freensbs', 'mem_system_page_size', 'mem_tot_recovery_done', 'mem_tot_pages_recovered', 'mem_err_recovery_timeout']
+            for newnslog in matching_newnslog_files:
+                newnslog_out_file = os.path.join(out_dir, f"{newnslog}_memstats.txt")
+                memstats_output = sp.run(f"nsconmsg -K {newnslog} -d memstats", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                finalstats_output = sp.run(f"nsconmsg -K {newnslog} -d finalstats -g netscaler_netaddress -g sys_cur_nsbs -g sys_cur_freensbs -g mem_system_page_size -g mem_tot_recovery_done -g mem_tot_pages_recovered -g mem_err_recovery_timeout | awk '/netscaler/||/mem_/||/sys_/{{print $NF, $(NF-1)}}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                finalstats_dict = dict(line.split() for line in finalstats_output.splitlines() if line.strip())
+                row = [newnslog]
+                for key in keys_to_extract:
+                    row.append(finalstats_dict.get(key, "Not found"))
+                mem_stats_table.append(row)
+                start_time = sp.run(f"nsconmsg -K {newnslog} -d setime | awk '/start time/{{print $4, $5, $6, $7}}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                end_time = sp.run(f"nsconmsg -K {newnslog} -d setime | awk '/end   time/{{print $4, $5, $6, $7}}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                start_end = f'{start_time.strip()} to {end_time.strip()}'
+                if memstats_output.returncode == 0:
+                    print(style.YELLOW + "----------" + newnslog + "----------\n" + style.RESET)
+                    print("Timestamp: " + style.GREEN + start_end + "\n" + style.RESET)
+                    current_alloc = sp.run(f"echo '{memstats_output.stdout}' | awk '/MEM_/' | sed 's/[()%]/ /g' | awk '{{if ($5 > 10) printf \"%s \\033[31m%s\\033[0m\\n\", $1, $5}}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                    memstats_ErrLmtFailed = sp.run(f"echo '{memstats_output.stdout}' | awk '/MEM_/{{if ($(NF-2) > 1) printf \"%s \\033[31m%s\\033[0m\\n\", $1, $(NF-2)}}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                    memstats_ErrAllocFailed = sp.run(f"echo '{memstats_output.stdout}' | awk '/MEM_/{{if ($(NF-1) > 1) printf \"%s \\033[31m%s\\033[0m\\n\", $1, $(NF-1)}}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                    memstats_ErrFreeFailed = sp.run(f"echo '{memstats_output.stdout}' | awk '/MEM_/{{if ($NF > 1) printf \"%s \\033[31m%s\\033[0m\\n\", $1, $NF}}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                    if len(memstats_ErrLmtFailed):
+                        print(style.YELLOW + "Memeory Error Limit Failed Pools:" + style.RESET)
+                        print(memstats_ErrLmtFailed)
+                    elif len(memstats_ErrAllocFailed):
+                        print(style.YELLOW + "Memeory Error Alloc Failed Pools:" + style.RESET)
+                        print(memstats_ErrAllocFailed)
+                    elif len(memstats_ErrFreeFailed):
+                        print(style.YELLOW + "Memeory Error Free Failed Pools:" + style.RESET)
+                        print(memstats_ErrFreeFailed)
+                    if "MEM_TBUF" in current_alloc:
+                        print(style.YELLOW + "MEM_TBUF is greater than 10%" + style.RESET)
+                        print(current_alloc)
+                        bm_members = sp.run(f"echo '{memstats_output.stdout}' | awk '/TBUF_POOL_MEMBERS/,/BM16384/' | sed 's/[()%]/ /g' | awk '!/Name/{{if ($5 > 5) printf \"%s \\033[31m%s\\033[0m\\n\", $1, $5}}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                        if "BM" in bm_members:
+                            print(style.YELLOW + "\nMEM_TBUF Pool Members greater than 5%:" + style.RESET)
+                            print(bm_members + "\n")
+                        else:
+                            print("No BM members greater than 5% found.\n")                    
+                else:
+                    print(style.RED + f"Failed to retrieve memstats from {newnslog}. Error: {memstats_output.stderr}" + style.RESET)
+        else:
+            print("No newnslog files found.")
+    finally:
+        if mem_stats_table:
+            fate_message = "show --mem"; send_request(version, username, url, fate_message, "Success")
+            print(f"{'Newnslog File':<30} {'netscaler_netaddress':<20} {'sys_cur_nsbs':<15} {'sys_cur_freensbs':<18} {'mem_system_page_size':<20} {'mem_tot_recovery_done':<20} {'mem_tot_pages_recovered':<20} {'mem_err_recovery_timeout':<25}")
+            print("-" * 160)
+            for row in mem_stats_table:
+                print(f"{row[0]:<30} {row[1]:<20} {row[2]:<15} {row[3]:<18} {row[4]:<20} {row[5]:<20} {row[6]:<20} {row[7]:<25}")
+        else:
+            print(style.RED + "No finalstats data to display." + style.RESET)
+            fate_message = "show --mem"; send_request(version, username, url, fate_message, "Failed")
+            quit()
+
 elif args.nic:
     try:
         lic_throughput = sp.run("nsconmsg -K var/nslog/newnslog -d stats -f sys_licensed_throughput | awk '/sys_licensed_throughput/{printf $3}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
