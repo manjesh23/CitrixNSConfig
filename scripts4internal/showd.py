@@ -55,7 +55,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "10.06"
+version = "10.12"
 
 # About script
 showscriptabout = '''
@@ -144,8 +144,9 @@ parser.add_argument('--nic', action="store_true", help="NIC Specific details")
 parser.add_argument('-j', metavar="", nargs="+", help="Search for Jira with Keyword match")
 parser.add_argument('-J', metavar="", help="Get Jira Details")
 parser.add_argument('--case', action="store_true", help="Salesforce Case Details"+ style.YELLOW)
-parser.add_argument('--adm', action="append", choices={"info", "md", "imall", "gz", "apps", "crash", "graph"}, help="ADM Bundles Only\ninfo --> ADM Basic Information\nmd --> ADM Managed Devices\nimall --> Indexing timestamp of all logs\ngz --> Extract all gz files within ADM Support bundle\napps --> List all the vServer and Instance details\ncrash --> List Crash files if available\ngraph --> Plot Cosnole CPU and Memory Graph" + style.RESET)
+parser.add_argument('--adm', action="append", choices={"info", "md", "imall", "gz", "apps", "crash", "graph", "cve"}, help="ADM Bundles Only\ninfo --> ADM Basic Information\nmd --> ADM Managed Devices\nimall --> Indexing timestamp of all logs\ngz --> Extract all gz files within ADM Support bundle\napps --> List all the vServer and Instance details\ncrash --> List Crash files if available\ngraph --> Plot Cosnole CPU and Memory Graph\ncve --> List the affected NSIP against CVE" + style.RESET)
 parser.add_argument('md', action="store_true", help=argparse.SUPPRESS)
+parser.add_argument('cve', action="store_true", help=argparse.SUPPRESS)
 parser.add_argument('--about', action="store_true", help="About Show Script")
 args = parser.parse_args()
 
@@ -522,6 +523,23 @@ if args.adm:
                     fate_message = "show --adm graph"; send_request(version, username, url, fate_message, "Failed")
                 finally:
                     quit()
+        elif "cve" in args.adm:
+            try:
+                cve_nsip = r"""awk '/ns with IP/ && /is vulnerable with CVE:/{print $(NF-5), $NF}' ./var/mps/log/mps_config.lo* | sort | uniq -c | awk '{ip[$2] = ip[$2] ? ip[$2] FS $3 : $3; count[$2]++} END {printf "\033[1;33m%-15s %-20s\033[0m\n\n", "IP Address", "CVE"; for (i in ip) {printf "%-15s ", i; split(ip[i], cve, FS); for (j = 1; j <= count[i]; j++) {printf "%-20s", cve[j]} print ""}}'"""
+                cve_nsip_out = sp.run(cve_nsip, shell=True, text=True, capture_output=True).stdout.strip()
+            finally:
+                if len(cve_nsip) > 5:
+                    print(style.YELLOW + '{:-^87}\n'.format('NetScaler Console CVE Tagged NSIP') + style.RESET)
+                    print(cve_nsip_out)
+                    try:
+                        fate_message = "show --adm cve"; send_request(version, username, url, fate_message, "Success")
+                    finally:
+                        quit()
+                else:
+                    try:
+                        fate_message = "show --adm cve"; send_request(version, username, url, fate_message, "Failed")
+                    finally:
+                        quit() 
     except Exception as e:
         print(f"An error occurred: {e}")
     finally:
@@ -1544,6 +1562,15 @@ elif args.case:
                         Cxdissatisfaction_count += 1
                     else:
                         pass
+        # Account Logic
+        account_json = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": sfdctoken, "isbase64": "false"}, {"name": "selectfields", "value": "GEO_Segmentation__c,Owner_Name__c", "isbase64": "false"}, {"name": "tablename", "value": "Account", "isbase64": "false"}, {"name": "selectcondition", "value": f"Vantive_Customer_ID__c = '{Account_Org_ID__c}'", "isbase64": "false"}]}
+        account_data = json.dumps(account_json)
+        jsondataasbytes = account_data.encode('utf-8')
+        response = request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore")
+        finaldata = json.loads(response)['options'][0]['values'][0]
+        finaldata = json.loads(finaldata)
+        GEO_Segmentation__c = str(finaldata["GEO_Segmentation__c"])
+        Named_Owner_Name__c = str(finaldata["Owner_Name__c"])
     finally:
         print(style.YELLOW + '{:-^87}'.format('SalesForce Case details') + style.RESET)
         print(style.YELLOW + '{:-^87}'.format('Case Related') + style.RESET)
@@ -1569,6 +1596,8 @@ elif args.case:
             print(appliance_org_check)
         print("Account Name: " + Account_Name__c)
         print("Org Id: " + Account_Org_ID__c)
+        print("Geo Segmentation: " + GEO_Segmentation__c)
+        print("Named Account Owner: " + Named_Owner_Name__c)
         print("Customer Email: " + ContactEmail)
         print("Customer Mobile: " + ContactMobile)
         print("Customer Phone: " + ContactPhone)
@@ -2350,7 +2379,7 @@ elif args.z:
                 file.close()
                 single_line_out = sp.run("perl -p -e 's/(?<!>)\n//g' conFetch/"+counter_name+"_Graph.html > temp_file.html && mv temp_file.html conFetch/"+counter_name+"_Graph.html", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                 os.popen("fixperms ./conFetch/").read()
-                print(style.GREEN + f'Processed {counter_name} Graph for all newnslogs' + style.RESET)
+                print(style.GREEN + f'Processed the {counter_name} graph for all newnslogs, and the file is located in the support bundle under the conFetch/Graph directory.' + style.RESET)
                 try:
                     fate_message = "show -z " + ''.join(args.z); send_request(version, username, url, fate_message, "Success")
                 finally:
