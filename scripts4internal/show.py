@@ -33,8 +33,6 @@ class style():
     UNDERLINE = '\033[4m'
     RESET = '\033[0m'
 
-print("\n\n" + "Check out the new features related to "+ style.LIGHTGREEN + "ADM support bundle!" + style.RESET + " Use show --help to learn more\n")
-
 # About Author
 showscriptauthor = '''
 ___  ___            _           _       _____      _   _
@@ -55,7 +53,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "10.12"
+version = "3.2.10"
 
 # About script
 showscriptabout = '''
@@ -144,14 +142,15 @@ parser.add_argument('--nic', action="store_true", help="NIC Specific details")
 parser.add_argument('-j', metavar="", nargs="+", help="Search for Jira with Keyword match")
 parser.add_argument('-J', metavar="", help="Get Jira Details")
 parser.add_argument('--case', action="store_true", help="Salesforce Case Details"+ style.YELLOW)
-parser.add_argument('--adm', action="append", choices={"info", "md", "imall", "gz", "apps", "crash", "graph", "cve"}, help="ADM Bundles Only\ninfo --> ADM Basic Information\nmd --> ADM Managed Devices\nimall --> Indexing timestamp of all logs\ngz --> Extract all gz files within ADM Support bundle\napps --> List all the vServer and Instance details\ncrash --> List Crash files if available\ngraph --> Plot Cosnole CPU and Memory Graph\ncve --> List the affected NSIP against CVE" + style.RESET)
+parser.add_argument('--adm', action="append", choices={"info", "md", "imall", "gz", "apps", "crash", "graph", "cve"}, help="ADM Bundles Only\ninfo --> ADM Basic Information\nmd --> ADM Managed Devices\nimall --> Indexing timestamp of all logs\ngz --> Extract all gz files within ADM Support bundle\napps --> List all the vServer and Instance details\ncrash --> List Crash files if available\ngraph --> Plot Cosnole CPU and Memory Graph\ncve --> List the affected NSIP against CVE" + style.CYAN)
+parser.add_argument('--sdx', action="append", choices={"info", "md"}, help="SDX Bundles Only\ninfo --> SDX Basic Information\nmd --> SDX Managed Devices" + style.RESET)
 parser.add_argument('md', action="store_true", help=argparse.SUPPRESS)
 parser.add_argument('cve', action="store_true", help=argparse.SUPPRESS)
 parser.add_argument('--about', action="store_true", help="About Show Script")
 args = parser.parse_args()
 
 # Set correct support bundle path
-if not (args.fw or args.case or args.adm):
+if not (args.fw or args.case or args.adm or args.sdx):
     try:
         if (os.popen("pwd").read().index("collector") >= 0):
             os.chdir(re.search('.*\/collecto.*_[0-9]{2}', os.popen("pwd").read()).group(0))
@@ -170,7 +169,7 @@ if not (args.fw or args.case or args.adm):
             quit()
 
 # Assign correct files and its path to variables
-if not (args.fw or args.case or args.adm):
+if not (args.fw or args.case or args.adm or args.sdx):
     try:
         nsconf = "nsconfig/ns.conf"
         showcmd = "shell/showcmds.txt"
@@ -247,7 +246,7 @@ if args.adm:
                 print(style.RED + "Pattern not found for 'Citrix_ADM'" + style.RESET)
                 quit()
         elif "NetScaler_ADM_" or "NetScaler_MAS_" in pwd_output:
-            match = re.search(r'.*NetScaler_(ADM|MAS)_.*?\.mps', pwd_output)
+            match = re.search(r'.*NetScaler_(ADM|MAS)(?:_Agent)?_.*?(?:\.mps)?.*', pwd_output)
             if match:
                 os.chdir(match.group(0))
             else:
@@ -487,7 +486,7 @@ if args.adm:
                     quit()
         elif "graph" in args.adm:
             try:
-                path = "conFetch"
+                path = "conFetch/Graph"
                 isExist = os.path.exists(path)
                 if not isExist:
                     os.popen("fixperms $PWD").read()
@@ -509,9 +508,12 @@ if args.adm:
                 with open(f"{path}/CPU_Mem_Graph.html", "w") as file:
                     file.write('''<html><head> <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script> <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.js"></script> <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.css"> <script type="text/javascript">google.charts.load('current',{'packages': ['annotationchart']}); google.charts.setOnLoadCallback(allnic_tot_rx_tx_mbits); function allnic_tot_rx_tx_mbits(){var data=new google.visualization.DataTable(); ''' + cpu_mem_raw_data +
                                 ''' var chart=new google.visualization.AnnotationChart(document.getElementById('allnic_tot_rx_tx_mbits')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}</script></head><body> <h1 class="txt-primary">CPU and Mem</h1> <hr> <p class="txt-title">Collector_Bundle_Name: '''+collector_bundle_name+'''<br>Device_Name: '''+admhostname+'''<br>Log_file: All mps_inventory<br>Log_Timestamp: '''+start_end+'''</p><hr> <div style="width: 100%"><p class="txt-primary">CPU and Mem Graph</p><div id="allnic_tot_rx_tx_mbits" style="height:450px"></div></div><div class="footer">Project conFetch</div></body></html>''')
-                single_line_out = sp.run("perl -p -e 's/(?<!>)\n//g' conFetch/CPU_Mem_Graph.html > temp_file.html && mv temp_file.html conFetch/CPU_Mem_Graph.html", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
-                os.popen("fixperms ./conFetch/").read()
-                print(style.GREEN + f'Processed CPU_Mem_Graph.html Graph for all newnslogs' + style.RESET)
+                single_line_out = sp.run("perl -p -e 's/(?<!>)\n//g' conFetch/Graph/CPU_Mem_Graph.html > temp_file.html && mv temp_file.html conFetch/Graph/CPU_Mem_Graph.html", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                os.popen("fixperms ./conFetch/Graph/").read()
+                if "_Agent" in pwd_output:
+                    print(style.RED + "Agent Bundle Graph is not working as expected" + style.RESET)
+                else:
+                    print(style.GREEN + f'Processed CPU_Mem_Graph.html Graph' + style.RESET)
                 try:
                     fate_message = "show --adm graph"; send_request(version, username, url, fate_message, "Success")
                 finally:
@@ -545,6 +547,136 @@ if args.adm:
     finally:
         quit()
 # End of ADM section
+
+# Start of SDX bundle analysis
+if args.sdx:
+    try:
+        current_dir = os.getcwd()
+        if "Management_Service_" in current_dir:
+            match = re.search(r"(.*Management_Service_.*?)(/|$)", current_dir)
+            if match:
+                target_dir = match.group(1)
+                os.chdir(target_dir)
+            else:
+                print(style.RED + "Pattern not found for 'Management_Service'" + style.RESET)
+                quit()
+        elif "bug-report-" in current_dir:
+            match = re.search(r"(.*bug-report-.*?)(/|$)", current_dir)
+            if match:
+                target_dir = match.group(1)
+                os.chdir(target_dir)
+            else:
+                print(style.RED + "Pattern not found for 'bug-report-'" + style.RESET)
+                quit()
+        else:
+            pattern = re.compile(r'.*(bug-report-.*|Management_Service_).*')
+            for entry in os.listdir(current_dir):
+                entry_path = os.path.join(current_dir, entry)
+                if os.path.isdir(entry_path) and pattern.match(entry):
+                    print(style.CYAN + entry + style.RESET)
+            print(style.RED + "\nPlease make sure to navigate to SDX MPS or bug-report Directory" + style.RESET)
+            quit()
+        if "info" in args.sdx:
+            try:
+                bundle_location = os.popen("pwd").read().strip()
+                sdx_hostname = sp.run("awk '/kern.hostname/{print $NF; exit}' ./shell/sysctl-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                iface_up = sp.run("awk '!/down|delete/&&/ifconfig/{printf \"%s \" ,$2}' ./var/mps/svm.conf", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                cur_date_time = sp.run("cat shell/date.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                var_space = sp.run("awk '/\/var$/{printf \"%s -> %s | %s | %s | %s\", $1,\"Total: \"$2,\"Used: \"$3, \"Free: \"$4, \"Capacity Used: \"substr($5, 1, length($5)-1)}' shell/df-akin.out | awk '{if ($NF > 75){printf \"%s\", substr($0, 1, length($0)-2)\"\033[0;31m\"$NF\"%\033[0m\"}else{printf \"%s\", substr($0, 1, length($0)-2)\"\033\[0;32m\"$NF\"%\033[0m\"}}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                sdx_serial = sp.run("awk '/netscaler.serial/{print $NF}' shell/sysctl-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                hostID = sp.run("awk '/HostID/&&/ense/{print $NF; exit}' var/log/license.log", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                if len(hostID) < 5:
+                    hostID = sp.run("awk '/HostID/{print $NF; exit}' ./var/mps/log/mps_config.log", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                loadaverage = sp.run("awk '/load average/{printf \"%s %s %s\", \"1 min: \"$6, \"5 min: \"$7, \"15 min: \"$8}' shell/top-b.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                xen_ip = sp.run("awk '/XenServer/{print $NF}' var/mps/svm.conf", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                svm_IP = sp.run("echo $(pwd) | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -n 1", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                sdx_matched_bug_report = sp.run(f'find "$(echo $(pwd) | awk -F\'/\' \'{{print \"/\"$2\"/\"$3\"/\"$4}}\')" -name "bug-report*" | grep $(echo $(pwd) | grep -oE \'([0-9]{{1,3}}\\.){{3}}[0-9]{{1,3}}\' | head -n 1)', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                svm_firmware = sp.run("awk '/netscaler.version/&&/Build/{print $3, $5}' shell/sysctl-a.out | sed 's/[:,]//g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                xen_upgrade_success = sp.run("awk '/MPSControl::/&&/will reboot the xenserver now/{print $1, $2, $3, $4}' ./var/mps/log/mps_control.lo* | tail -n 1", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                sdx_upgrade_success = sp.run("awk '/MPSControl::/&&/completed successfully/&&/SDX single reboot upgrade/{print $1, $2, $3, $4}' ./var/mps/log/mps_control.lo* | tail -n 1", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+
+            finally:
+                print(style.YELLOW + '{:-^87}'.format('NetScaler SDX Show Configuration') + "\n" + style.RESET)
+                print("Support file location: " + bundle_location)
+                if len(sdx_matched_bug_report) > 5:
+                    print("Corresponding Xen Bundle: " + sdx_matched_bug_report + "\n")
+                else:
+                    print("Corresponding Xen Bundle: " + style.RED + "Unable to find the right Xen Bundle" + style.RESET + "\n")
+                print("SDX Hostname: " + sdx_hostname)
+                print("SVM Firmware: " + svm_firmware)
+                print("Current DateTime: " + cur_date_time)
+                print("SVM Last Upgrade: " + sdx_upgrade_success)
+                print("Xen Last Upgrade: " + xen_upgrade_success)
+                print("Interface Up: " + iface_up)
+                print("SVM IP: " + svm_IP)
+                print("Xen IP: " + xen_ip + "\n")
+                print("SDX Serial: " + sdx_serial)
+                print("Host ID: " + hostID + "\n")
+                print("SVM CPU Load Average: " + loadaverage)
+                print("SVM var Size: " + var_space)
+                try:
+                    fate_message = "show --sdx info"; send_request(version, username, url, fate_message, "Success")
+                finally:
+                    quit()
+        elif "md" in args.sdx:
+            try:
+                managed_devices_file = str(sp.run("find ./ -name managed_device.csv", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
+                columns_to_display = ['ip_address', 'type', 'name', 'version', 'ha_master_state', 'ipv4_address', 'ha_ip_address', 'upsince', 'uptime', 'if_internal_ip_enabled', 'is_pooled_license', 'instance_state']
+                def get_max_column_widths(csv_reader, columns):
+                    max_widths = {column: len(column) for column in columns}
+                    for row in csv_reader:
+                        for column in columns:
+                            value = row[column]
+                            if column == "version":
+                                match = re.search(r"(NS\d+\.\d+)\s*:\s*Build\s*(\S+c)", value)
+                                if match:
+                                    value = f"{match.group(1)} {match.group(2)}"
+                            max_widths[column] = max(max_widths[column], len(value))
+                    return max_widths
+                with open(managed_devices_file, mode='r') as file:
+                    csv_reader = csv.DictReader(file)
+                    max_widths = get_max_column_widths(csv_reader, columns_to_display)
+                    file.seek(0)
+                    csv_reader = csv.DictReader(file)
+                    header = [f"{style.YELLOW}{column:<{max_widths[column]}}{style.RESET}" for column in columns_to_display]
+                    print('  '.join(header))
+                    print('  '.join(['-' * max_widths[column] for column in columns_to_display]))
+                    for row in csv_reader:
+                        selected_data = []
+                        for column in columns_to_display:
+                            value = row[column]
+                            if value == "t":
+                                value = "Yes"
+                            elif value == "f":
+                                value = "No"
+                            elif value == "-1":
+                                value = " "
+                            if column == "version":
+                                match = re.search(r"(NS\d+\.\d+)\s*:\s*Build\s*(\S+c)", value)
+                                if match:
+                                    value = f"{match.group(1)} {match.group(2)}"
+                            if column == "instance_state":
+                                if value == "Up":
+                                    value = f"{style.GREEN}{value}{style.RESET}"
+                                elif value == "Down" or value == "OOS":
+                                    value = f"{style.RED}{value}{style.RESET}"
+                            formatted_value = f"{value:<{max_widths[column]}}"
+                            selected_data.append(formatted_value)
+                        print('  '.join(selected_data))
+            finally:
+                # Tooltrack
+                try:
+                    fate_message = "show --sdx md"; send_request(version, username, url, fate_message, "Success")
+                finally:
+                    quit()
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    finally:
+        quit()
+
+# End of SDX section
+
+print("\n\n" + "Check out the new features related to "+ style.LIGHTGREEN + "ADM and SDX support bundle!" + style.RESET + " Use show --help to learn more\n")
 
 if args.i:
     try:
@@ -934,8 +1066,9 @@ elif args.p:
         vcpu = sp.run("awk '/System Detected/{print $(NF-1), $NF;exit}' var/nslog/dmesg.boot", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         nsppenum = sp.run("awk '/NSPPE/{print}' shell/nsp.out | wc -l | sed \"s/^[ \t]*//\"", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         nsppepid = sp.run("awk '/NSPPE/{print}' shell/nsp.out | sed \"s/^[ \t]*//\"", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        core = sp.run("awk '/NSPPE-/&&!/bound|log/{printf \"[%s-%s/%s --> %s --> %s]\\n\",  $6, $7, $8, $NF, $5}' shell/ls_lRtrp_var.out | sed \"s/^[ \t]*//\"", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        processcore = sp.run("awk '/bgpd-[0-9]|httpd-[0-9]|iked-[0-9]|imi-[0-9]|imish-[0-9]|iprep-[0-9]|iprep_tool-[0-9]|isisd-[0-9]|metricscollector-[0-9]|nsaaad-[0-9]|nscopo-[0-9]|nskrb_debug-[0-9]|nsm-[0-9]|ospf6d-[0-9]|ospfd-[0-9]|ripd-[0-9]|ripngd-[0-9]|snmpd-[0-9]|nsaggregatord-[0-9]|nscfsyncd-[0-9]|nscollect-[0-9]|nsconfigd-[0-9]|nsconmsg-[0-9]|nslped-[0-9]|nsnetsvc-[0-9]|nsnewstat-[0-9]|nssetup-[0-9]|nstraceaggregator-[0-9]|syshealthd-[0-9]|pitboss-[0-9]|sshd-[0-9]/&&/-rw-------/{printf \"[%s-%s/%s --> %s --> %s]\\n\",  $6, $7, $8, $NF, $5}' shell/ls_lRtrp.out | sed \"s/^[ \t]*//\"", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        core = sp.run("awk '/^\/var/ {dir=$1} /NSPPE-/ {printf \"[%s-%s/%s --> %s/%s --> %s]\\n\", $6, $7, $8, dir, $NF, $5}' shell/ls_lRtrp_var.out | sed 's/://g' | sed \"s/^[ \t]*//\"", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        vmcore = sp.run("awk '/vmcore/||/vm.core/{printf \"[%s-%s/%s --> %s --> %s]\\n\",  $6, $7, $8, $NF, $5}' shell/ls_lRtrp_var.out | sed \"s/^[ \t]*//\"", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        processcore = sp.run("awk '/^\\/var/ {dir=$1} /bgpd-[0-9]|httpd-[0-9]|iked-[0-9]|imi-[0-9]|imish-[0-9]|iprep-[0-9]|iprep_tool-[0-9]|isisd-[0-9]|metricscollector-[0-9]|nsaaad-[0-9]|nscopo-[0-9]|nskrb_debug-[0-9]|nsm-[0-9]|ospf6d-[0-9]|ospfd-[0-9]|ripd-[0-9]|ripngd-[0-9]|snmpd-[0-9]|nsaggregatord-[0-9]|nscfsyncd-[0-9]|nscollect-[0-9]|nsconfigd-[0-9]|nsconmsg-[0-9]|nslped-[0-9]|nsnetsvc-[0-9]|nsnewstat-[0-9]|nssetup-[0-9]|nstraceaggregator-[0-9]|syshealthd-[0-9]|pitboss-[0-9]|sshd-[0-9]/ && /-rw-------/ {printf \"[%s-%s/%s --> %s/%s --> %s]\\n\", $6, $7, $8, dir, $NF, $5}' shell/ls_lRtrp.out | sed 's/://g' | sed \"s/^[ \t]*//\"", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
     finally:
         print(style.YELLOW + '{:-^87}'.format('NetScaler Process Information'))
         print(style.RESET)
@@ -947,7 +1080,9 @@ elif args.p:
         if len(processcore.stdout) > 10:
             print(style.LIGHTRED + "Process Core files: " + "\n" + style.RESET + processcore.stdout.strip())
             print("")
-        print("")
+        if len(vmcore.stdout) > 10:
+            print(style.LIGHTRED + "vm.core files: " + "\n" + style.RESET + vmcore.stdout.strip())
+            print("")
     try:
         fate_message = "show -p"; send_request(version, username, url, fate_message, "Success")
     finally:
@@ -1563,7 +1698,7 @@ elif args.case:
                     else:
                         pass
         # Account Logic
-        account_json = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": sfdctoken, "isbase64": "false"}, {"name": "selectfields", "value": "GEO_Segmentation__c,Owner_Name__c", "isbase64": "false"}, {"name": "tablename", "value": "Account", "isbase64": "false"}, {"name": "selectcondition", "value": f"Vantive_Customer_ID__c = '{Account_Org_ID__c}'", "isbase64": "false"}]}
+        account_json = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": sfdctoken, "isbase64": "false"}, {"name": "selectfields", "value": "GEO_Segmentation__c,Owner_Name__c", "isbase64": "false"}, {"name": "tablename", "value": "Account", "isbase64": "false"}, {"name": "selectcondition", "value": f"Org_ID__c = '{Account_Org_ID__c}'", "isbase64": "false"}]}
         account_data = json.dumps(account_json)
         jsondataasbytes = account_data.encode('utf-8')
         response = request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore")
@@ -2487,6 +2622,8 @@ elif args.cpu:
             print(style.RED + "NetScaler has not hit 100% mgmt CPU")
 
 elif args.mem:
+    box_time = str(sp.run("awk -F'GMT' '/Timezone:/&&/GMT/{print substr($2,1,6)}' shell/showcmds.txt | awk 'BEGIN { found = 0 } { output = $0; found = 1 } END { if (found) print output; else print \"00:00\" }'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
+    box_time_mins = (int(re.match(r"([-+]?)(\d+):(\d+)", box_time).group(2)) * 60) + int(re.match(r"([-+]?)(\d+):(\d+)", box_time).group(3)); box_time_mins *= -1 if re.match(r"([-+]?)(\d+):(\d+)", box_time).group(1) == "-" else 1
     try:
         print(style.YELLOW + '{:-^87}'.format('NetScaler Mem Pool more than 20% and its breakup') + "\n" + style.RESET)
         out_dir = 'conFetch/nsconmsg/'
@@ -2503,12 +2640,23 @@ elif args.mem:
                 for key in keys_to_extract:
                     row.append(finalstats_dict.get(key, "Not found"))
                 mem_stats_table.append(row)
-                start_time = sp.run(f"nsconmsg -K {newnslog} -d setime | awk '/start time/{{print $4, $5, $6, $7}}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
-                end_time = sp.run(f"nsconmsg -K {newnslog} -d setime | awk '/end   time/{{print $4, $5, $6, $7}}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                start_time = sp.run(f"nsconmsg -K {newnslog} -d setime | awk '/start time/{{print $4, $5, $6, $7}}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                end_time = sp.run(f"nsconmsg -K {newnslog} -d setime | awk '/end   time/{{print $4, $5, $6, $7}}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 start_end = f'{start_time.strip()} to {end_time.strip()}'
+                if start_time and end_time:
+                    start_time_obj = datetime.strptime(start_time, "%b %d %H:%M:%S %Y")
+                    end_time_obj = datetime.strptime(end_time, "%b %d %H:%M:%S %Y")
+                else:
+                    print("Error: One of the time values is missing.")
+                updated_start_time_obj = start_time_obj + timedelta(minutes=box_time_mins)
+                updated_end_time_obj = end_time_obj + timedelta(minutes=box_time_mins)
+                updated_start_time = updated_start_time_obj.strftime("%b %d %H:%M:%S %Y")
+                updated_end_time = updated_end_time_obj.strftime("%b %d %H:%M:%S %Y")
+                updated_start_end = f'{updated_start_time.strip()} to {updated_end_time.strip()}'
                 if memstats_output.returncode == 0:
                     print(style.YELLOW + "----------" + newnslog + "----------\n" + style.RESET)
-                    print("Timestamp: " + style.GREEN + start_end + "\n" + style.RESET)
+                    print("Timestamp in +00:00 GMT: " + style.GREEN + start_end + style.RESET)
+                    print("Timestamp in " + box_time + " GMT: " + style.GREEN + updated_start_end + "\n" + style.RESET)
                     current_alloc = sp.run(f"echo '{memstats_output.stdout}' | awk '/MEM_/' | sed 's/[()%]/ /g' | awk '{{if ($5 > 10) printf \"%s \\033[31m%s\\033[0m\\n\", $1, $5}}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                     memstats_ErrLmtFailed = sp.run(f"echo '{memstats_output.stdout}' | awk '/MEM_/{{if ($(NF-2) > 1) printf \"%s \\033[31m%s\\033[0m\\n\", $1, $(NF-2)}}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                     memstats_ErrAllocFailed = sp.run(f"echo '{memstats_output.stdout}' | awk '/MEM_/{{if ($(NF-1) > 1) printf \"%s \\033[31m%s\\033[0m\\n\", $1, $(NF-1)}}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout

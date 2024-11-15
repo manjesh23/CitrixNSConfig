@@ -57,24 +57,19 @@ def execute_query_and_write_to_xlsx(connection):
         # Rename columns
         df.rename(columns={'Timestamp': 'Email_Sent_Date (GMT)', 'Result': 'Expired_On'}, inplace=True)
         # Reorder columns
-        #df = df[['Email_Sent_Date (GMT)', 'Account_Name', 'SR_Number', 'Case_Age', 'Date_Time_Opened (GMT)', 'Case_Owner', 'Manager_Email', 'Bundle_Path', 'SerialNumber', 'Expired_On']].drop_duplicates(subset='SR_Number', keep='first')
         df = df[['SR_Number', 'Account_Name', 'Offering_Level', 'Case_Age', 'Date_Time_Opened (GMT)', 'Case_Owner', 'Manager_Email', 'SerialNumber', 'Expired_On']].drop_duplicates(subset='SR_Number', keep='first')
         # Write DataFrame to Excel file
         excel_filename = f"{today}_warranty_check.xlsx"
-        # create a pandas.ExcelWriter object
         writer = pd.ExcelWriter(excel_filename, engine='xlsxwriter')
-        # write the data frame to Excel
         df.to_excel(writer, index=False, sheet_name='Details')
-        # get the XlsxWriter workbook and worksheet objects
         workbook = writer.book
         worksheet = writer.sheets['Details']
         # adjust the column widths based on the content
         for i, col in enumerate(df.columns):
             width = max(df[col].apply(lambda x: len(str(x))).max(), len(col))
             worksheet.set_column(i, i, width)
-        # close the Pandas Excel writer
         writer.close()
-        return excel_filename  # Return the filename of the Excel file
+        return excel_filename
     except (Exception, psycopg2.Error) as error:
         print("Error while executing query:", error)
         return None
@@ -82,12 +77,11 @@ def execute_query_and_write_to_xlsx(connection):
 # Function to send email with attached Excel file
 def send_email_with_attachment(filename):
     # Email configurations
-    from_email = "warranty_check@citrix.com"
+    from_email = "manjesh.n@cloud.com"
     to_email = "pradeep.bhambi@cloud.com, manjesh.n@cloud.com"
     cc_email = "bhagyaraj.isaiahm@cloud.com, anand.sathya@cloud.com, manjesh.n@cloud.com"
-    #to_email = "manjesh.n@cloud.com"
-    #cc_email = "manjesh.n@cloud.com"
     subject = f"Consolidated Weekly Report for Project warranty_check for the Week {today}"
+    
     # HTML version of the email body
     body = """
     <html>
@@ -104,28 +98,27 @@ def send_email_with_attachment(filename):
     message["To"] = to_email
     message["Cc"] = cc_email
     message["Subject"] = subject
-    # Attach HTML body to email
     message.attach(MIMEText(body, "html"))
-    # Open Excel file in binary mode
+
+    # Open Excel file in binary mode and attach
     with open(filename, "rb") as attachment:
-        # Add file as application/octet-stream
         part = MIMEBase("application", "octet-stream")
         part.set_payload(attachment.read())
-    # Encode file in ASCII characters to send by email
-    encoders.encode_base64(part)
-    # Add header as key/value pair to attachment part
-    part.add_header(
-        "Content-Disposition",
-        f"attachment; filename= {filename}",
-    )
-    # Add attachment to message and convert message to string
-    message.attach(part)
-    text = message.as_string()
-    # Send email
-    with smtplib.SMTP("mail.citrix.com", 25) as server:
-        server.starttls()
-        server.sendmail(from_email, to_email.split(", ") + cc_email.split(", "), text)
-    print("Email sent successfully!")
+        encoders.encode_base64(part)
+        part.add_header("Content-Disposition", f"attachment; filename= {filename}")
+        message.attach(part)
+
+    # Compile all recipients for sending
+    all_recipients = to_email.split(", ") + cc_email.split(", ")
+
+    # Send email using Gmail's SMTP server with SSL
+    try:
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp_server:
+            smtp_server.login(from_email, "wqtk rnvq rpby hqhv")  # Use app password here
+            smtp_server.sendmail(from_email, all_recipients, message.as_string())
+        print("Email sent successfully!")
+    except Exception as e:
+        print(f"Failed to send email: {e}")
 
 def main():
     connection = connect_to_database()
