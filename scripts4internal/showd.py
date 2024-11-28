@@ -53,7 +53,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "3.4.01"
+version = "3.4.06"
 
 # About script
 showscriptabout = '''
@@ -158,10 +158,10 @@ if not (args.fw or args.case or args.adm or args.sdx):
             os.chdir(re.search('.*\/collecto.*_[0-9]{2}', os.popen("pwd").read()).group(0))
     except AttributeError as e:
         print(style.RED + "Collector Bundle not in Correct Naming Convention" + style.RESET)
-        os.chdir(re.search('.*\/collecto.*_[0-9|_|\-|a-zA-Z|\.]{1,30}', os.popen("pwd").read()).group(0))
+        os.chdir(re.search('.*\/collecto.*_[0-9|_|\-|a-zA-Z0-9|\.]{1,30}', os.popen("pwd").read()).group(0))
     except FileNotFoundError as e:
         print(style.RED + "Collector Bundle not in Correct Naming Convention" + style.RESET)
-        os.chdir(re.search('.*\/collecto.*_[0-9|_|\-|a-z|\.]{1,30}', os.popen("pwd").read()).group(0))
+        os.chdir(re.search('.*\/collecto.*_[0-9|_|\-|a-zA-Z0-9|\.]{1,30}', os.popen("pwd").read()).group(0))
     except ValueError:
         print("\nPlease navigate to correct support bundle path")
         print("Available directories with support bundle names: \n\n" + style.CYAN + "\n".join(re.findall("collect.*", "\n".join(next(os.walk('.'))[1]))) + style.RESET)
@@ -248,7 +248,7 @@ if args.adm:
                 print(style.RED + "Pattern not found for 'Citrix_ADM'" + style.RESET)
                 quit()
         elif "NetScaler_ADM_" or "NetScaler_MAS_" in pwd_output:
-            match = re.search(r'.*NetScaler_(ADM|MAS)(?:_Agent)?_.*?(?:\.mps)?.*', pwd_output)
+            match = re.search(r'.*NetScaler_(ADM|MAS|)_.*?\.mps', pwd_output)
             if match:
                 os.chdir(match.group(0))
             else:
@@ -587,6 +587,7 @@ if args.sdx:
                 var_space = sp.run("awk '/\/var$/{printf \"%s -> %s | %s | %s | %s\", $1,\"Total: \"$2,\"Used: \"$3, \"Free: \"$4, \"Capacity Used: \"substr($5, 1, length($5)-1)}' shell/df-akin.out | awk '{if ($NF > 75){printf \"%s\", substr($0, 1, length($0)-2)\"\033[0;31m\"$NF\"%\033[0m\"}else{printf \"%s\", substr($0, 1, length($0)-2)\"\033\[0;32m\"$NF\"%\033[0m\"}}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 sdx_serial = sp.run("awk '/netscaler.serial/{print $NF}' shell/sysctl-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 hostID = sp.run("awk '/HostID/&&/ense/{print $NF; exit}' var/log/license.log", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                productmodel = sp.run('''awk '/Product Name/&&/SDX/{$1=$2=""; print $0;exit}' $(find "$(echo $(pwd) | awk -F'/' '{print "/"$2"/"$3"/"$4}')" -name "bug-report*" -exec echo {}/dmidecode.out \;)''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 if len(hostID) < 5:
                     hostID = sp.run("awk '/HostID/{print $NF; exit}' ./var/mps/log/mps_config.log", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 loadaverage = sp.run("awk '/load average/{printf \"%s %s %s\", \"1 min: \"$6, \"5 min: \"$7, \"15 min: \"$8}' shell/top-b.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
@@ -605,6 +606,7 @@ if args.sdx:
                 else:
                     print("Corresponding Xen Bundle: " + style.RED + "Unable to find the right Xen Bundle" + style.RESET + "\n")
                 print("SDX Hostname: " + sdx_hostname)
+                print("SDX Model: " + productmodel)
                 print("SVM Firmware: " + svm_firmware)
                 print("Current DateTime: " + cur_date_time)
                 print("SVM Last Upgrade: " + sdx_upgrade_success)

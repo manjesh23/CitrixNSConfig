@@ -19,7 +19,7 @@ def connect_to_database():
     try:
         connection = psycopg2.connect(
             user="manjeshn",
-            password="manjeshhere123",
+            password="ThisisManjeshN",
             host="10.14.18.27",
             port="5432",
             database="tooltrack"

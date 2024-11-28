@@ -53,7 +53,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "3.2.10"
+version = "3.4.06"
 
 # About script
 showscriptabout = '''
@@ -143,8 +143,10 @@ parser.add_argument('-j', metavar="", nargs="+", help="Search for Jira with Keyw
 parser.add_argument('-J', metavar="", help="Get Jira Details")
 parser.add_argument('--case', action="store_true", help="Salesforce Case Details"+ style.YELLOW)
 parser.add_argument('--adm', action="append", choices={"info", "md", "imall", "gz", "apps", "crash", "graph", "cve"}, help="ADM Bundles Only\ninfo --> ADM Basic Information\nmd --> ADM Managed Devices\nimall --> Indexing timestamp of all logs\ngz --> Extract all gz files within ADM Support bundle\napps --> List all the vServer and Instance details\ncrash --> List Crash files if available\ngraph --> Plot Cosnole CPU and Memory Graph\ncve --> List the affected NSIP against CVE" + style.CYAN)
-parser.add_argument('--sdx', action="append", choices={"info", "md"}, help="SDX Bundles Only\ninfo --> SDX Basic Information\nmd --> SDX Managed Devices" + style.RESET)
+parser.add_argument('--sdx', action="append", choices={"info", "md", "xenhealth", "xenport"}, help="SDX Bundles Only\ninfo --> SDX Basic Information\nmd --> SDX Managed Devices\nxenport --> SVM - Xen Port Mappings\nxenhealth --> SVM - Xen Health" + style.RESET)
 parser.add_argument('md', action="store_true", help=argparse.SUPPRESS)
+parser.add_argument('xenport', action="store_true", help=argparse.SUPPRESS)
+parser.add_argument('xenhealth', action="store_true", help=argparse.SUPPRESS)
 parser.add_argument('cve', action="store_true", help=argparse.SUPPRESS)
 parser.add_argument('--about', action="store_true", help="About Show Script")
 args = parser.parse_args()
@@ -156,10 +158,10 @@ if not (args.fw or args.case or args.adm or args.sdx):
             os.chdir(re.search('.*\/collecto.*_[0-9]{2}', os.popen("pwd").read()).group(0))
     except AttributeError as e:
         print(style.RED + "Collector Bundle not in Correct Naming Convention" + style.RESET)
-        os.chdir(re.search('.*\/collecto.*_[0-9|_|\-|a-zA-Z|\.]{1,30}', os.popen("pwd").read()).group(0))
+        os.chdir(re.search('.*\/collecto.*_[0-9|_|\-|a-zA-Z0-9|\.]{1,30}', os.popen("pwd").read()).group(0))
     except FileNotFoundError as e:
         print(style.RED + "Collector Bundle not in Correct Naming Convention" + style.RESET)
-        os.chdir(re.search('.*\/collecto.*_[0-9|_|\-|a-z|\.]{1,30}', os.popen("pwd").read()).group(0))
+        os.chdir(re.search('.*\/collecto.*_[0-9|_|\-|a-zA-Z0-9|\.]{1,30}', os.popen("pwd").read()).group(0))
     except ValueError:
         print("\nPlease navigate to correct support bundle path")
         print("Available directories with support bundle names: \n\n" + style.CYAN + "\n".join(re.findall("collect.*", "\n".join(next(os.walk('.'))[1]))) + style.RESET)
@@ -246,7 +248,7 @@ if args.adm:
                 print(style.RED + "Pattern not found for 'Citrix_ADM'" + style.RESET)
                 quit()
         elif "NetScaler_ADM_" or "NetScaler_MAS_" in pwd_output:
-            match = re.search(r'.*NetScaler_(ADM|MAS)(?:_Agent)?_.*?(?:\.mps)?.*', pwd_output)
+            match = re.search(r'.*NetScaler_(ADM|MAS|)_.*?\.mps', pwd_output)
             if match:
                 os.chdir(match.group(0))
             else:
@@ -585,6 +587,7 @@ if args.sdx:
                 var_space = sp.run("awk '/\/var$/{printf \"%s -> %s | %s | %s | %s\", $1,\"Total: \"$2,\"Used: \"$3, \"Free: \"$4, \"Capacity Used: \"substr($5, 1, length($5)-1)}' shell/df-akin.out | awk '{if ($NF > 75){printf \"%s\", substr($0, 1, length($0)-2)\"\033[0;31m\"$NF\"%\033[0m\"}else{printf \"%s\", substr($0, 1, length($0)-2)\"\033\[0;32m\"$NF\"%\033[0m\"}}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 sdx_serial = sp.run("awk '/netscaler.serial/{print $NF}' shell/sysctl-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 hostID = sp.run("awk '/HostID/&&/ense/{print $NF; exit}' var/log/license.log", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                productmodel = sp.run('''awk '/Product Name/&&/SDX/{$1=$2=""; print $0;exit}' $(find "$(echo $(pwd) | awk -F'/' '{print "/"$2"/"$3"/"$4}')" -name "bug-report*" -exec echo {}/dmidecode.out \;)''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 if len(hostID) < 5:
                     hostID = sp.run("awk '/HostID/{print $NF; exit}' ./var/mps/log/mps_config.log", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 loadaverage = sp.run("awk '/load average/{printf \"%s %s %s\", \"1 min: \"$6, \"5 min: \"$7, \"15 min: \"$8}' shell/top-b.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
@@ -594,7 +597,7 @@ if args.sdx:
                 svm_firmware = sp.run("awk '/netscaler.version/&&/Build/{print $3, $5}' shell/sysctl-a.out | sed 's/[:,]//g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 xen_upgrade_success = sp.run("awk '/MPSControl::/&&/will reboot the xenserver now/{print $1, $2, $3, $4}' ./var/mps/log/mps_control.lo* | tail -n 1", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 sdx_upgrade_success = sp.run("awk '/MPSControl::/&&/completed successfully/&&/SDX single reboot upgrade/{print $1, $2, $3, $4}' ./var/mps/log/mps_control.lo* | tail -n 1", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
-
+                lic_server = sp.run("awk -F, '/--/&&/,/{print $2, \"on Port\", $3}' ./var/mps/mpsdb/license_server.csv", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
             finally:
                 print(style.YELLOW + '{:-^87}'.format('NetScaler SDX Show Configuration') + "\n" + style.RESET)
                 print("Support file location: " + bundle_location)
@@ -603,6 +606,7 @@ if args.sdx:
                 else:
                     print("Corresponding Xen Bundle: " + style.RED + "Unable to find the right Xen Bundle" + style.RESET + "\n")
                 print("SDX Hostname: " + sdx_hostname)
+                print("SDX Model: " + productmodel)
                 print("SVM Firmware: " + svm_firmware)
                 print("Current DateTime: " + cur_date_time)
                 print("SVM Last Upgrade: " + sdx_upgrade_success)
@@ -611,6 +615,7 @@ if args.sdx:
                 print("SVM IP: " + svm_IP)
                 print("Xen IP: " + xen_ip + "\n")
                 print("SDX Serial: " + sdx_serial)
+                print("License Server: " + (lic_server if lic_server else "NA"))
                 print("Host ID: " + hostID + "\n")
                 print("SVM CPU Load Average: " + loadaverage)
                 print("SVM var Size: " + var_space)
@@ -627,6 +632,10 @@ if args.sdx:
                     for row in csv_reader:
                         for column in columns:
                             value = row[column]
+                            if value == "Instance not reachable":
+                                value = "Failed"
+                            elif value == "Out of Service":
+                                value = "OOS"
                             if column == "version":
                                 match = re.search(r"(NS\d+\.\d+)\s*:\s*Build\s*(\S+c)", value)
                                 if match:
@@ -651,6 +660,10 @@ if args.sdx:
                                 value = "No"
                             elif value == "-1":
                                 value = " "
+                            elif value == "Instance not reachable":
+                                value = "Failed"
+                            elif value == "Out of Service":
+                                value = "OOS"
                             if column == "version":
                                 match = re.search(r"(NS\d+\.\d+)\s*:\s*Build\s*(\S+c)", value)
                                 if match:
@@ -669,6 +682,33 @@ if args.sdx:
                     fate_message = "show --sdx md"; send_request(version, username, url, fate_message, "Success")
                 finally:
                     quit()
+        elif "xenport" in args.sdx:
+            try:
+                svm_xen_ports = sp.run("awk -F, '{print $1, $3, $2, $5, $6, $9, $10, $4}' ./var/mps/mpsdb/xen_health_interface.csv | column -t", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+            finally:
+                if svm_xen_ports:
+                    print(svm_xen_ports)
+                    try:
+                        fate_message = "show --sdx xenport"; send_request(version, username, url, fate_message, "Success")
+                    finally:
+                        quit()
+                else:
+                    print(style.RED + "Unable to Read Xen Ports File" + style.RESET)
+                    try:
+                        fate_message = "show --sdx xenport"; send_request(version, username, url, fate_message, "Failed")
+                    finally:
+                        quit()
+        elif "xenhealth" in args.sdx:
+            try:
+                svm_xen_health = sp.run("awk '!/na/||/current_value/' ./var/mps/mpsdb/xen_health_monitor.csv | awk -F, '{$2=\"\"; $4=\"\"; ; $7=\"\"; print $0}' OFS=, | column -s, -t", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+            finally:
+                if svm_xen_health:
+                    print(svm_xen_health)
+                    fate_message = "show --sdx xenhealth"; send_request(version, username, url, fate_message, "Success")
+                else:
+                    print(f"{style.RED}Unable to Read Xen Health{style.RESET}")
+                    fate_message = "show --sdx xenhealth"; send_request(version, username, url, fate_message, "Failed")
+                quit()
     except Exception as e:
         print(f"An error occurred: {e}")
     finally:

@@ -1,7 +1,7 @@
 #!/usr/local/bin/bash
 caseformat="^[0-9]{8}"
 url="https://tooltrack.deva.citrite.net/use/conFetch"
-ver="3.1"
+ver="3.4"
 datad="datad--$1--$(date +%s)"
 s="Success"
 f="Failed"
@@ -19,6 +19,7 @@ if [[ $1 =~ $caseformat ]]; then
         [ "$(find ./ -type d -name 'bug-report-*')" ] && find ./ -type d -name "bug-report-*" -exec ls -ld {} + | cut -d: -f2- | cut -c 6- | sed 's/ /\\ /g' | sed 's/(/\\(/g' | sed 's/)/\\)/g' | awk 'BEGIN{printf "\n\t%s\n\n", "\033[1;97mSDX_Bug_Report_Bundles\033[0m"}!/tar|gz/{printf "%s%s\n", "\033[36m","./"$0"\033[0m"}'
         [ "$(find ./ -type d -name 'NetScaler_ADM_*mps')" ] && find ./ -type d -name "NetScaler_ADM_*mps" -exec ls -ld {} + | cut -d: -f2- | cut -c 6- | sed 's/ /\\ /g' | sed 's/(/\\(/g' | sed 's/)/\\)/g' | awk 'BEGIN{printf "\n\t%s\n\n", "\033[1;97mNetScaler_ADM_Bundles\033[0m"}!/tar|gz/{printf "%s%s\n", "\033[36m","./"$0"\033[0m"}'
         [ "$(find ./ -type d -name 'Citrix_ADM_*mps')" ] && find ./ -type d -name "Citrix_ADM_*mps" -exec ls -ld {} + | cut -d: -f2- | cut -c 6- | sed 's/ /\\ /g' | sed 's/(/\\(/g' | sed 's/)/\\)/g' | awk 'BEGIN{printf "\n\t%s\n\n", "\033[1;97mCitrix_ADM_Bundles\033[0m"}!/tar|gz/{printf "%s%s\n", "\033[36m","./"$0"\033[0m"}'
+        [ "$(find ./ -type d -name 'NetScaler_ADM_Agent_cloud*')" ] && find ./ -type d -name "NetScaler_ADM_Agent_cloud*" -exec ls -ld {} + | cut -d: -f2- | cut -c 6- | sed 's/ /\\ /g' | sed 's/(/\\(/g' | sed 's/)/\\)/g' | awk 'BEGIN{printf "\n\t%s\n\n", "\033[1;97mNetScaler_ADM_Agent_Bundles\033[0m"}!/tar|gz/{printf "%s%s\n", "\033[36m","./"$0"\033[0m"}'
         echo -e "\033[5;33m\nCheck out the new features! Use \`show --help\` to learn more.\033[0m"
         # Write the datad usage to tooltrack
         screen -dmS "tooltrack" curl -k --silent --data $successq $url >/dev/null 2>&1
