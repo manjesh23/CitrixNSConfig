@@ -36,7 +36,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/warranty_check'
 headers = {'Content-Type': 'application/json'}
-version = "3.5"
+version = "3.6"
 
 # Tooltrack send data function (embeded with fail proof)
 def send_request(version, username, fate_message, result):
@@ -138,10 +138,10 @@ try:
         os.chdir(re.search('.*\/collecto.*_[0-9]{2}', sbpath).group(0))
 except AttributeError as e:
     print(style.RED + "Collector Bundle not in Correct Naming Convention" + style.RESET)
-    os.chdir(re.search('.*\/collecto.*_[0-9|_|\-|a-zA-Z|\.]{1,30}', sbpath).group(0))
+    os.chdir(re.search('.*\/collecto.*_[0-9|_|\-|a-zA-Z0-9|\.]{1,30}', sbpath).group(0))
 except FileNotFoundError as e:
     print(style.RED + "Collector Bundle not in Correct Naming Convention" + style.RESET)
-    os.chdir(re.search('.*\/collecto.*_[0-9|_|\-|a-z|\.]{1,30}', sbpath).group(0))
+    os.chdir(re.search('.*\/collecto.*_[0-9|_|\-|a-zA-Z0-9|\.]{1,30}', sbpath).group(0))
 except ValueError:
     print("\nPlease navigate to correct support bundle path")
     quit()

@@ -53,7 +53,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "3.4.06"
+version = "3.6.07"
 
 # About script
 showscriptabout = '''
@@ -143,7 +143,7 @@ parser.add_argument('-j', metavar="", nargs="+", help="Search for Jira with Keyw
 parser.add_argument('-J', metavar="", help="Get Jira Details")
 parser.add_argument('--case', action="store_true", help="Salesforce Case Details"+ style.YELLOW)
 parser.add_argument('--adm', action="append", choices={"info", "md", "imall", "gz", "apps", "crash", "graph", "cve"}, help="ADM Bundles Only\ninfo --> ADM Basic Information\nmd --> ADM Managed Devices\nimall --> Indexing timestamp of all logs\ngz --> Extract all gz files within ADM Support bundle\napps --> List all the vServer and Instance details\ncrash --> List Crash files if available\ngraph --> Plot Cosnole CPU and Memory Graph\ncve --> List the affected NSIP against CVE" + style.CYAN)
-parser.add_argument('--sdx', action="append", choices={"info", "md", "xenhealth", "xenport"}, help="SDX Bundles Only\ninfo --> SDX Basic Information\nmd --> SDX Managed Devices\nxenport --> SVM - Xen Port Mappings\nxenhealth --> SVM - Xen Health" + style.RESET)
+parser.add_argument('--sdx', action="append", choices={"info", "md", "graph", "xenhealth", "xenport"}, help="SDX Bundles Only\ninfo --> SDX Basic Information\nmd --> SDX Managed Devices\ngraph --> Plot Cosnole CPU and Memory Graph\nxenport --> SVM - Xen Port Mappings\nxenhealth --> SVM - Xen Health" + style.RESET)
 parser.add_argument('md', action="store_true", help=argparse.SUPPRESS)
 parser.add_argument('xenport', action="store_true", help=argparse.SUPPRESS)
 parser.add_argument('xenhealth', action="store_true", help=argparse.SUPPRESS)
@@ -241,11 +241,21 @@ if args.adm:
     try:
         pwd_output = os.popen("pwd").read().strip()
         if "Citrix_ADM" in pwd_output:
-            match = re.search(r'.*Citrix_ADM_.*?\.mps', pwd_output)
+            match = re.search(r'(.*Citrix_ADM_.*?\.mps|.*Citrix_ADM_Agent.*)', pwd_output)
             if match:
                 os.chdir(match.group(0))
             else:
                 print(style.RED + "Pattern not found for 'Citrix_ADM'" + style.RESET)
+                print("Available directories with support bundle names: \n\n" + style.CYAN + "\n".join(re.findall("Citrix_ADM_.*.mps", "\n".join(next(os.walk('.'))[1]))) + style.RESET)
+                quit()
+        elif "NetScaler_ADM_Agent_" in pwd_output:
+            matchagent = re.search(r'.*NetScaler_ADM_Agent.*_[0-9]{2}', pwd_output)
+            if matchagent:
+                os.chdir(matchagent.group(0))
+                print(style.YELLOW + "NetScaler Console Agent has limited support" + style.RESET)
+            else:
+                print(style.RED + "Pattern not found for 'NetScaler_ADM'" + style.RESET)
+                print("Available directories with support bundle names: \n\n" + style.CYAN + "\n".join(re.findall("NetScaler_ADM_Agent.*_[0-9]{2}", "\n".join(next(os.walk('.'))[1]))) + style.RESET)
                 quit()
         elif "NetScaler_ADM_" or "NetScaler_MAS_" in pwd_output:
             match = re.search(r'.*NetScaler_(ADM|MAS|)_.*?\.mps', pwd_output)
@@ -253,7 +263,8 @@ if args.adm:
                 os.chdir(match.group(0))
             else:
                 print(style.RED + "Pattern not found for 'NetScaler_ADM'" + style.RESET)
-                quit
+                print("Available directories with support bundle names: \n\n" + style.CYAN + "\n".join(re.findall("NetScaler_ADM_.*.mps", "\n".join(next(os.walk('.'))[1]))) + style.RESET)
+                quit()
         else:
             print("\n")
             current_dir = os.getcwd()
@@ -282,7 +293,7 @@ if args.adm:
                 admrealmem = sp.run("awk '/real memory/{print $(NF-1), $NF; exit}' ./var/nslog/dmesg.boot", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 admavailmem = sp.run("awk '/avail memory/{print $(NF-1), $NF; exit}' ./var/nslog/dmesg.boot", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 admplatform = sp.run('''awk '/netscaler.sysid:/ {sysid=$2} END {if (sysid ~ /450000|450001/) print "Citrix Hypervisor"; else if (sysid ~ /450010|450011/) print "ESX"; else if (sysid ~ /450020|450021/ && !/vpx_on_cloud = 0/) print "Hyper-V"; else if (sysid ~ /450070|450071/ && !/vpx_on_cloud = 0/) print "KVM"; else print "Unknown"}' ./shell/sysctl-a.out''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
-                admvarsize = sp.run("awk '/\/var$/{printf \"%s -> %s | %s | %s | %s\", $1,\"Total: \"$2,\"Used: \"$3, \"Free: \"$4, \"Capacity Used: \"substr($5, 1, length($5)-1)}' ./shell/df-akin.out" + " | awk '{if ($NF > 75){printf \"%s\", substr($0, 1, length($0)-2)\"\033[0;31m\"$NF\"%\033[0m\"}else{printf \"%s\", substr($0, 1, length($0)-2)\"\033\[0;32m\"$NF\"%\033[0m\"}}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                admvarsize = sp.run("awk '/\/var$/{capacity=substr($5,1,length($5)-1); printf \"%s -> Total: %s | Used: %s | Free: %s | Capacity Used: \\033[%sm%s%%\\033[0m\\n\", $1, $2, $3, $4, (capacity+0>75?\"0;31\":\"0;32\"), capacity}' ./shell/df-akin.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 admboottime = sp.run("awk -F} '/kern.boottime/{print $2}' ./shell/sysctl-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
             finally:
                 print(style.YELLOW + '{:-^87}'.format('NetScaler Console Show Configuration') + "\n" + style.RESET)
@@ -316,59 +327,73 @@ if args.adm:
         elif "md" in args.adm:
             try:
                 managed_devices_file = str(sp.run("find ./ -name managed_device.csv", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
-                columns_to_display = ['ip_address', 'type', 'hostname', 'model_id', 'license_edition', 'instance_mode', 'upsince', 'host_id', 'is_local_license', 'is_licensed', 'license_grace_time', 'status', 'instance_state']
+                if not managed_devices_file:
+                    print(style.RED + "Unable to find managed_device.csv file" + style.RESET)
+                    try:
+                        fate_message = "show --adm md"; send_request(version, username, url, fate_message, "Failed")
+                    finally:
+                        quit()
+                columns_to_display = ['ip_address', 'type', 'hostname', 'model_id', 'license_edition', 'instance_mode', 'upsince', 'host_id', 'is_licensed', 'is_local_license', 'license_grace_time', 'status', 'instance_state']
                 def get_max_column_widths(csv_reader, columns):
                     max_widths = {column: len(column) for column in columns}
                     for row in csv_reader:
                         for column in columns:
-                            value = row[column]
-                            if value == "Instance not reachable":
-                                value = "Failed"
-                            elif value == "Out of Service":
-                                value = "OOS"
-                            max_widths[column] = max(max_widths[column], len(value))
+                            if column in row:
+                                value = row[column]
+                                if value == "Instance not reachable":
+                                    value = "Failed"
+                                elif value == "Out of Service":
+                                    value = "OOS"
+                                max_widths[column] = max(max_widths[column], len(value))
                     return max_widths
+                print(style.YELLOW + '{:-^87}'.format('NetScaler Console Managed Devices') + "\n" + style.RESET)
                 with open(managed_devices_file, mode='r') as file:
                     csv_reader = csv.DictReader(file)
-                    max_widths = get_max_column_widths(csv_reader, columns_to_display)
+                    existing_columns = [column for column in columns_to_display if column in csv_reader.fieldnames]
+                    max_widths = get_max_column_widths(csv_reader, existing_columns)
                     file.seek(0)
                     csv_reader = csv.DictReader(file)
-                    header = [f"{style.YELLOW}{column:<{max_widths[column]}}{style.RESET}" for column in columns_to_display]
+                    header = [f"{style.YELLOW}{column:<{max_widths[column]}}{style.RESET}" for column in existing_columns]
                     print('  '.join(header))
-                    print('  '.join(['-' * max_widths[column] for column in columns_to_display]))
+                    print('  '.join(['-' * max_widths[column] for column in existing_columns]))
                     for row in csv_reader:
                         selected_data = []
-                        for column in columns_to_display:
-                            value = row[column]
-                            if value == "t":
-                                value = "Yes"
-                            elif value == "f":
-                                value = "No"
-                            elif value == "-1":
-                                value = " "
-                            if value == "Instance not reachable":
-                                value = "Failed"
-                            elif value == "Out of Service":
-                                value = "OOS"
-                            if column == "instance_state":
-                                if value == "Up":
-                                    value = f"{style.GREEN}{value}{style.RESET}"
-                                elif value == "Down" or value == "OOS":
-                                    value = f"{style.RED}{value}{style.RESET}"
-                            else:
-                                if value == "Success":
-                                    value = f"{style.GREEN}{value}{style.RESET}"
-                                elif value == "Failed":
-                                    value = f"{style.RED}{value}{style.RESET}"
-                            formatted_value = f"{value:<{max_widths[column]}}"
-                            selected_data.append(formatted_value)
+                        for column in existing_columns:
+                            if column in row:
+                                value = row[column]
+                                if value == "t":
+                                    value = "Yes"
+                                elif value == "f":
+                                    value = "No"
+                                elif value == "-1":
+                                    value = " "
+                                if value == "Instance not reachable":
+                                    value = "Failed"
+                                elif value == "Out of Service":
+                                    value = "OOS"
+                                if column == "instance_state":
+                                    if value == "Up":
+                                        value = f"{style.GREEN}{value}{style.RESET}"
+                                    elif value == "Down" or value == "OOS":
+                                        value = f"{style.RED}{value}{style.RESET}"
+                                else:
+                                    if value == "Success":
+                                        value = f"{style.GREEN}{value}{style.RESET}"
+                                    elif value == "Failed":
+                                        value = f"{style.RED}{value}{style.RESET}"
+                                formatted_value = f"{value:<{max_widths[column]}}"
+                                selected_data.append(formatted_value)
                         print('  '.join(selected_data))
             finally:
                 # Tooltrack
-                try:
-                    fate_message = "show --adm md"; send_request(version, username, url, fate_message, "Success")
-                finally:
+                if selected_data:
+                    try:
+                        fate_message = "show --adm md"; send_request(version, username, url, fate_message, "Success")
+                    finally:
+                        quit()
+                else:
                     quit()
+                    
         elif "apps" in args.adm:
             try:
                 print(style.YELLOW + '{:-^87}\n'.format('NetScaler Console Applications') + style.RESET)
@@ -594,6 +619,8 @@ if args.sdx:
                 xen_ip = sp.run("awk '/XenServer/{print $NF}' var/mps/svm.conf", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 svm_IP = sp.run("echo $(pwd) | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -n 1", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 sdx_matched_bug_report = sp.run(f'find "$(echo $(pwd) | awk -F\'/\' \'{{print \"/\"$2\"/\"$3\"/\"$4}}\')" -name "bug-report*" | grep $(echo $(pwd) | grep -oE \'([0-9]{{1,3}}\\.){{3}}[0-9]{{1,3}}\' | head -n 1)', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                if len(sdx_matched_bug_report) is 0:
+                    sdx_matched_bug_report = sp.run("find \"$(echo $(pwd) | awk -F'/' '{print \"/\"$2\"/\"$3\"/\"$4}')\" -name \"bug-report*\" -exec grep -H \"172.22.0.154\" {}/xenstore-ls-f.out \; | head -n 1 | sed -n 's|\\(.*bug-report[^/]*\).*|\\1|p'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 svm_firmware = sp.run("awk '/netscaler.version/&&/Build/{print $3, $5}' shell/sysctl-a.out | sed 's/[:,]//g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 xen_upgrade_success = sp.run("awk '/MPSControl::/&&/will reboot the xenserver now/{print $1, $2, $3, $4}' ./var/mps/log/mps_control.lo* | tail -n 1", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 sdx_upgrade_success = sp.run("awk '/MPSControl::/&&/completed successfully/&&/SDX single reboot upgrade/{print $1, $2, $3, $4}' ./var/mps/log/mps_control.lo* | tail -n 1", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
@@ -709,6 +736,44 @@ if args.sdx:
                     print(f"{style.RED}Unable to Read Xen Health{style.RESET}")
                     fate_message = "show --sdx xenhealth"; send_request(version, username, url, fate_message, "Failed")
                 quit()
+        elif "graph" in args.sdx:
+            try:
+                path = "conFetch/Graph"
+                isExist = os.path.exists(path)
+                if not isExist:
+                    os.popen("fixperms $PWD").read()
+                    os.makedirs(path)
+                else:
+                    pass
+                custom_counter = ""
+                sdxhostname = sp.run("awk '/kern.hostname/{print $NF; exit}' ./shell/sysctl-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                collector_bundle_name = re.search(r'Management_Service_\S+', sp.run("pwd", shell=True, text=True, stdout=sp.PIPE).stdout.strip()).group(0)
+                cpu_mem_raw_data = sp.run("for i in $(ls -lah ./var/mps/log | awk '/mps_invent/{print \"./var/mps/log/\"$NF}' | sort -rV); do zgrep 'Health Check' $i | awk '/Usage:/{print $3\"-\"$2\",20\"$4\"-\"$5, $NF, $(NF-2)}' | sed 's/\.[0-9][0-9][0-9]//g'; done | awk 'BEGIN {OFS=\", \";} !seen[$1]++ {times[++numTimes]=$1;} !seen[$3]++ {cpus[++numCpus]=$3;} {vals[$1,$3]=$2;} END {printf \"data.addColumn(\\047%s\\047,\\047Manjesh\\047);\\n\", \"date\"; for (cpuNr=1; cpuNr<=numCpus; cpuNr++) {printf \"data.addColumn(\\047number\\047,\\047%s\\047);\\n\", cpus[cpuNr];} for (timeNr=1; timeNr<=numTimes; timeNr++) {printf \"data.addRow([new Date(\\047%s\\047)\", times[timeNr]; for (cpuNr=1; cpuNr<=numCpus; cpuNr++) {val=((times[timeNr],cpus[cpuNr]) in vals ? vals[times[timeNr],cpus[cpuNr]] : prev_vals[cpus[cpuNr]]); printf \", %s\", val; prev_vals[cpus[cpuNr]]=val;} print \"]);\";}}' | sed 's/-/ /g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                end_time = sp.run("awk '/Health Check/{print $1, $2, $3, $4; exit}' $(for i in $(ls -lah ./var/mps/log/ | awk '/mps_invent/{print \"./var/mps/log/\"$NF}' | sort -V); do echo $i; done | head -n1)", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                start_time = sp.run("awk '/Health Check/{print $1, $2, $3, $4; exit}' $(for i in $(ls -lah ./var/mps/log/ | awk '/mps_invent/{print \"./var/mps/log/\"$NF}' | sort -V); do echo $i; done | tail -n1)", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                start_end = f'{start_time} to {end_time}'
+                if len(cpu_mem_raw_data) < 52:
+                        cpu_mem_raw_data = "data.addColumn('date', 'Manjesh');data.addColumn('Manjesh', 'Manjesh');,['', ]"
+                else:
+                    pass
+                cpu_mem_raw_data = re.sub('.*,\s\].*', '', cpu_mem_raw_data)
+                with open(f"{path}/CPU_Mem_Graph.html", "w") as file:
+                    file.write('''<html><head> <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script> <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.js"></script> <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.css"> <script type="text/javascript">google.charts.load('current',{'packages': ['annotationchart']}); google.charts.setOnLoadCallback(allnic_tot_rx_tx_mbits); function allnic_tot_rx_tx_mbits(){var data=new google.visualization.DataTable(); ''' + cpu_mem_raw_data +
+                                ''' var chart=new google.visualization.AnnotationChart(document.getElementById('allnic_tot_rx_tx_mbits')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}</script></head><body> <h1 class="txt-primary">CPU and Mem</h1> <hr> <p class="txt-title">Collector_Bundle_Name: '''+collector_bundle_name+'''<br>Device_Name: '''+sdxhostname+'''<br>Log_file: All mps_inventory<br>Log_Timestamp: '''+start_end+'''</p><hr> <div style="width: 100%"><p class="txt-primary">CPU and Mem Graph</p><div id="allnic_tot_rx_tx_mbits" style="height:450px"></div></div><div class="footer">Project conFetch</div></body></html>''')
+                single_line_out = sp.run("perl -p -e 's/(?<!>)\n//g' conFetch/Graph/CPU_Mem_Graph.html > temp_file.html && mv temp_file.html conFetch/Graph/CPU_Mem_Graph.html", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                os.popen("fixperms ./conFetch/Graph/").read()
+                print(style.GREEN + f'Processed CPU_Mem_Graph.html Graph' + style.RESET)
+                try:
+                    fate_message = "show --SDX graph"; send_request(version, username, url, fate_message, "Success")
+                finally:
+                    quit()
+            except Exception as e:
+                print(e)
+                print(style.RED + "Unable to plot Graph for NetScaler SDX" + style.RESET)
+                try:
+                    fate_message = "show --SDX graph"; send_request(version, username, url, fate_message, "Failed")
+                finally:
+                    quit()
     except Exception as e:
         print(f"An error occurred: {e}")
     finally:
@@ -1106,9 +1171,9 @@ elif args.p:
         vcpu = sp.run("awk '/System Detected/{print $(NF-1), $NF;exit}' var/nslog/dmesg.boot", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         nsppenum = sp.run("awk '/NSPPE/{print}' shell/nsp.out | wc -l | sed \"s/^[ \t]*//\"", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         nsppepid = sp.run("awk '/NSPPE/{print}' shell/nsp.out | sed \"s/^[ \t]*//\"", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        core = sp.run("awk '/^\/var/ {dir=$1} /NSPPE-/ {printf \"[%s-%s/%s --> %s/%s --> %s]\\n\", $6, $7, $8, dir, $NF, $5}' shell/ls_lRtrp_var.out | sed 's/://g' | sed \"s/^[ \t]*//\"", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        core = sp.run("awk '/^\/var/ {dir=$1} /NSPPE-/ {printf \"[%s-%s/%s --> %s/%s --> %s]\\n\", $6, $7, $8, dir, $NF, $5}' shell/ls_lRtrp_var.out | sed 's|:/|/|g' | sed \"s/^[ \t]*//\"", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         vmcore = sp.run("awk '/vmcore/||/vm.core/{printf \"[%s-%s/%s --> %s --> %s]\\n\",  $6, $7, $8, $NF, $5}' shell/ls_lRtrp_var.out | sed \"s/^[ \t]*//\"", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        processcore = sp.run("awk '/^\\/var/ {dir=$1} /bgpd-[0-9]|httpd-[0-9]|iked-[0-9]|imi-[0-9]|imish-[0-9]|iprep-[0-9]|iprep_tool-[0-9]|isisd-[0-9]|metricscollector-[0-9]|nsaaad-[0-9]|nscopo-[0-9]|nskrb_debug-[0-9]|nsm-[0-9]|ospf6d-[0-9]|ospfd-[0-9]|ripd-[0-9]|ripngd-[0-9]|snmpd-[0-9]|nsaggregatord-[0-9]|nscfsyncd-[0-9]|nscollect-[0-9]|nsconfigd-[0-9]|nsconmsg-[0-9]|nslped-[0-9]|nsnetsvc-[0-9]|nsnewstat-[0-9]|nssetup-[0-9]|nstraceaggregator-[0-9]|syshealthd-[0-9]|pitboss-[0-9]|sshd-[0-9]/ && /-rw-------/ {printf \"[%s-%s/%s --> %s/%s --> %s]\\n\", $6, $7, $8, dir, $NF, $5}' shell/ls_lRtrp.out | sed 's/://g' | sed \"s/^[ \t]*//\"", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        processcore = sp.run("awk '/^\\/var/ {dir=$1} /bgpd-[0-9]|httpd-[0-9]|iked-[0-9]|imi-[0-9]|imish-[0-9]|iprep-[0-9]|iprep_tool-[0-9]|isisd-[0-9]|nsumond-[0-9]|aslearn-[0-9]|metricscollector-[0-9]|nscac64p-[0-9]|nsaaad-[0-9]|nscopo-[0-9]|nskrb_debug-[0-9]|nsm-[0-9]|ospf6d-[0-9]|ospfd-[0-9]|ripd-[0-9]|ripngd-[0-9]|snmpd-[0-9]|nsaggregatord-[0-9]|nscfsyncd-[0-9]|nscollect-[0-9]|nsconfigd-[0-9]|nsconmsg-[0-9]|nslped-[0-9]|nsnetsvc-[0-9]|nsnewstat-[0-9]|nssetup-[0-9]|nstraceaggregator-[0-9]|syshealthd-[0-9]|pitboss-[0-9]|sshd-[0-9]/ && /-rw-------/ {printf \"[%s-%s/%s --> %s/%s --> %s]\\n\", $6, $7, $8, dir, $NF, $5}' shell/ls_lRtrp.out | sed 's|:/|/|g' | sed \"s/^[ \t]*//\"", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
     finally:
         print(style.YELLOW + '{:-^87}'.format('NetScaler Process Information'))
         print(style.RESET)
@@ -1242,7 +1307,7 @@ elif args.im:
         logger.info(os.getcwd() + " - show -im")
         try:
             log_turnover = sp.run('''awk '/turned over due to size/{print}' var/log/ns.log''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
-            nslog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/ns.lo* | grep -v gz | grep -v tar); do awk 'NR == 2 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+            nslog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/ns.lo* | grep -v 'gz\|tar\|offset'| sort -t. -k3,3n); do awk 'NR == 2 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         finally:
             if nslog.returncode == 0:
                 if len(log_turnover) > 23:
@@ -1269,15 +1334,15 @@ elif args.imall:
         else:
             # Printing Index messages for ns.log, auth.log, bash.log, nitro.log, notice.log, nsvpn.log, sh.log
             try:
-                nslog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/ns.lo* | grep -v gz | grep -v tar); do awk 'NR == 2 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                authlog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/auth.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                bashlog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/bash.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                messages = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/message* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                nitrolog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/nitro.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                noticelog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/notice.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                nsvpnlog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/nsvpn.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                shlog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/sh.lo* | grep -v gz | grep -v tar); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                newnslog = sp.run("awk 'BEGIN{printf \"%s\\t\\t | %s\\t\\t    | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\\n' var/nslog/newnslo* | grep -v gz | grep -v tar); do nsconmsg -K $i -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=\"\"; printf \"%s\\t|\", $0}END{printf \"\\n\"}'; echo $i; done | sed 'N;s/\\n/ /' | awk '{$1=$1=\"\"}1' | sed 's/^ //' | sed -r '/^\\s*$/d' | awk '{printf  \"%s %s %02s %s %s %s %s %s %02s %s %s %s %s\\n\", $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                nslog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/ns.lo* | grep -v 'gz\|tar\|offset'| sort -t. -k3,3n); do awk 'NR == 2 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                authlog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/auth.lo* | grep -v 'gz\|tar\|offset'| sort -t. -k3,3n); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                bashlog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/bash.lo* | grep -v 'gz\|tar\|offset'| sort -t. -k3,3n); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                messages = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/message* | grep -v 'gz\|tar\|offset'| sort -V); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                nitrolog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/nitro.lo* | grep -v 'gz\|tar\|offset'| sort -t. -k3,3n); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                noticelog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/notice.lo* | grep -v 'gz\|tar\|offset'| sort -t. -k3,3n); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                nsvpnlog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/nsvpn.lo* | grep -v 'gz\|tar\|offset'| sort -t. -k3,3n); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                shlog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/sh.lo* | grep -v 'gz\|tar\|offset'| sort -t. -k3,3n); do awk 'NR == 1 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                newnslog = sp.run("awk 'BEGIN{printf \"%s\\t\\t | %s\\t\\t    | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\\n' var/nslog/newnslo* | grep -v 'gz\|tar\|offset'| sort -t. -k3,3n); do nsconmsg -K $i -d setime | awk '!/Displaying|NetScaler|size|duration/{$1=$2=\"\"; printf \"%s\\t|\", $0}END{printf \"\\n\"}'; echo $i; done | sed 'N;s/\\n/ /' | awk '{$1=$1=\"\"}1' | sed 's/^ //' | sed -r '/^\\s*$/d' | awk '{printf  \"%s %s %02s %s %s %s %s %s %02s %s %s %s %s\\n\", $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
             finally:
                 if nslog.returncode == 0:
                     print(style.YELLOW + '{:-^87}\n'.format('NetScaler ns.log timestamp IndexMessages') + style.RESET + nslog.stdout)
@@ -1566,9 +1631,9 @@ elif args.case:
         CxContactEmail = 'None'
         OtherCommunicationEmail__c = 'None'
         headers = {'Content-Type': 'application/json'}
-        data = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "EntitlementId,Age__c,Account_Name__c,Account_Org_ID__c,Case_Created_Date_Qual__c,Case_Owner__c,Case_Review_Flag__c,Case_Status__c,Case_Team__c,CaseReopened__c,ContactEmail,ContactCountry__c,ContactMobile,ContactPhone,Dev_Engineer__c,End_of_Support__c,Eng_Status__c,EngCase_SubmittedDate__c,Escalated_By__c,EscalatedDate__c,First_Response_Severity__c,First_Response_Time_Taken__c,Fixed_Known_Issue_ID__c,Frontline_to_Escalation_Severity__c,Frontline_to_Escalation_Violated__c,Highest_Severity__c,Initial_Severity__c,IsEscalated,IsEscalatedtoEng__c,IsPartner__c,KT_Applied__c,Last_Customer_Contact_Timestamp__c,Manager_Name__c,Number_of_Audits__c,Offering_Level__c,OtherCommunicationEmail__c,Product_Line_Name__c,Record_GEO__c,Serial_Number__c,ServiceProduct_Name__c,Target_GEO__c", "isbase64": "false"}, {"name": "tablename", "value": "Case", "isbase64": "false"}, {"name": "selectcondition", "value": "CaseNumber = '"+casenum+"'", "isbase64": "false"}]}
+        data = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "Age__c,Account_Name__c,Account_Org_ID__c,Case_Created_Date_Qual__c,Case_Owner__c,Case_Review_Flag__c,Case_Status__c,Case_Team__c,CaseReopened__c,ContactEmail,ContactCountry__c,ContactMobile,ContactPhone,Dev_Engineer__c,End_of_Support__c,Eng_Status__c,EngCase_SubmittedDate__c,EntitlementId,Escalated_By__c,EscalatedDate__c,First_Response_Severity__c,First_Response_Time_Taken__c,Fixed_Known_Issue_ID__c,Frontline_to_Escalation_Severity__c,Frontline_to_Escalation_Violated__c,Highest_Severity__c,Initial_Severity__c,IsEscalated,IsEscalatedtoEng__c,IsPartner__c,Last_Customer_Contact_Timestamp__c,Manager_Name__c,Number_of_Audits__c,Offering_Level__c,OtherCommunicationEmail__c,Product_Line_Name__c,Record_GEO__c,Serial_Number__c,ServiceProduct_Name__c,Target_GEO__c", "isbase64": "false"}, {"name": "tablename", "value": "Case", "isbase64": "false"}, {"name": "selectcondition", "value": "CaseNumber = '"+casenum+"'", "isbase64": "false"}]}
         jsondata = json.dumps(data)
-        jsondataasbytes = jsondata.encode('utf-8')
+        jsondataasbytes = jsondata.encode('utf-8')        
         finaldata = json.loads(request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore"))['options'][0]['values'][0]
         finaldata = json.loads(finaldata)
         EntitlementId = str(finaldata["EntitlementId"])

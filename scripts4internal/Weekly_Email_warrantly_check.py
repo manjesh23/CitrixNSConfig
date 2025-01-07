@@ -1,3 +1,5 @@
+#!C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Python 3.9\python.exe
+
 import psycopg2
 from datetime import datetime, timedelta
 import pandas as pd
@@ -8,6 +10,10 @@ from email.mime.base import MIMEBase
 from email import encoders
 import os
 import ssl
+
+# Gmail appkey:
+with open("C:\\Users\\manjeshn\\Documents\\GitHub\\CitrixNSConfig\\scripts4internal\\Gmail_App_Password.txt") as f:
+    app_key = f.read()
 
 # Disable SSL certificate validation globally
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -114,11 +120,13 @@ def send_email_with_attachment(filename):
     # Send email using Gmail's SMTP server with SSL
     try:
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp_server:
-            smtp_server.login(from_email, "wqtk rnvq rpby hqhv")  # Use app password here
+            smtp_server.login(from_email, app_key)  # Use app password here
             smtp_server.sendmail(from_email, all_recipients, message.as_string())
         print("Email sent successfully!")
+        input("Press Enter to continue...")
     except Exception as e:
         print(f"Failed to send email: {e}")
+        input("Press Enter to continue...")
 
 def main():
     connection = connect_to_database()

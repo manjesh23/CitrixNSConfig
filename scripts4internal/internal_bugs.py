@@ -79,6 +79,8 @@ for bug in manjeshn_reported_bugs:
         status_cell = ws.cell(row=ws.max_row, column=5)
         if status == "Done":
             status_cell.fill = PatternFill(start_color="00FF00", end_color="00FF00", fill_type="solid")  # Green
+        elif status == "Answered":
+            status_cell.fill = PatternFill(start_color="00FF00", end_color="00FF00", fill_type="solid")  # Green
         elif status == "Canceled":
             status_cell.fill = PatternFill(start_color="F83C3C", end_color="F83C3C", fill_type="solid")  # Red
         elif status == "In Progress":

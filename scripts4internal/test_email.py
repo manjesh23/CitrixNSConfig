@@ -1,43 +1,43 @@
-import smtplib
-from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import smtplib
 
-def send_team_email(teamname, email_body):
-    # Email configurations
-    sender = "manjesh.n@cloud.com"  # replace with actual sender's email
-    recipients = "manjesh.n@cloud.com"
-    cc_list = ["manjesh.n@cloud.com"]
-    subject = "Test Email"
 
-    # Create the email body as HTML
-    body = MIMEText(email_body, 'html')
-    msg = MIMEMultipart()
-    msg.attach(body)
-    msg['Subject'] = subject
-    msg['From'] = sender
-    msg['To'] = recipients
-    msg['Cc'] = ', '.join(cc_list)
-    
-    # Compile all recipients for sending
-    all_recipients = [recipients] + cc_list
+class EmailSender:
+    def __init__(self, cc, receiver):
+        self.sender = 'vignesh.kumar@citrix.com'
+        self.receiver = receiver
+        self.cc = cc
+        self.user = 'tejesh.doddikoppad@citrix.com'
+        self.tasktype = 'Task'
+        self.smtp_server = 'mail.citrix.com'
+        self.smtp_port = 25
 
-    # Send email using Gmail's SMTP server
-    try:
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp_server:
-            smtp_server.login(sender, "wqtk rnvq rpby hqhv")  # use an app password for Gmail if possible
-            smtp_server.sendmail(sender, all_recipients, msg.as_string())
-        print(f"Team {teamname} untouched cases email sent - Success")
-    except Exception as e:
-        print(f"Failed to send email: {e}")
+    def send_email(self, subject, body, actual_data):
+        try:
+            # Create the MIME object
+            message = MIMEMultipart()
+            message['From'] = self.sender
+            message['To'] = self.receiver
+            message['Cc'] = ', '.join(self.cc)
+            message['Subject'] = subject
+            message.attach(MIMEText(body, 'html'))
+            # Connect to the SMTP server
+            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+                server.starttls()
+                #server.set_debuglevel(1) # Debug message for SSL
+                to_addresses = [self.receiver] + self.cc
+                server.sendmail(self.sender, to_addresses, message.as_string())
+            print("Email sent successfully! --> " + actual_data)
+        except Exception as e:
+            print("Error: Unable to send email.")
+            print(e)
 
-# Example usage
-email_body = """
-<html>
-  <body>
-    <p>Hello Team,</p>
-    <p>This is a test email.</p>
-  </body>
-</html>
-"""
+cc=[]
+receiver = "tejesh.doddikoppad@citrix.com"
 
-send_team_email("Support Team", email_body)
+email_subject = "Hi"
+email_body = "Hello"
+actual_data = "Hello again"
+
+EmailSender(cc, receiver).send_email(email_subject, email_body, actual_data)
