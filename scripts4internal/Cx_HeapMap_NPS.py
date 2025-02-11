@@ -1,51 +1,88 @@
-#!/usr/local/bin/python3.9
-
-from urllib import request
+import pyodbc
 import json
-import os
+from datetime import datetime
 
-class style():
-    BLACK = '\033[30m'
-    RED = '\033[31m'
-    LIGHTRED = '\033[0;91m'
-    GREEN = '\033[32m'
-    LIGHTGREEN = '\033[0;92m'
-    YELLOW = '\033[33m'
-    BLUE = '\033[34m'
-    MAGENTA = '\033[35m'
-    CYAN = '\033[36m'
-    WHITE = '\033[37m'
-    UNDERLINE = '\033[4m'
-    RESET = '\033[0m'
+# Define connection parameters
+server = '10.164.64.28'
+database = 'Salesforce'
 
+# Initialize conn to None
+conn = None
 
-# Get SFDC API Keys
+# Create a connection string for Windows Authentication
+conn_str = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={server};DATABASE={database};Trusted_Connection=yes'
+
+# Function to convert datetime to string
+def datetime_converter(o):
+    if isinstance(o, datetime):
+        return o.strftime('%b-%d/%Y %H:%M:%S')  # Example: 'Aug-12/2023 12:54:04'
+    raise TypeError(f"Type {type(o)} not serializable")
+
+# Establish the connection
 try:
-    sfdcurl = "https://ftltoolswebapi.deva.citrite.net/sfaas/api/salesforce"
-    tokenpayload = {"feature": "login", "parameters": [{"name": "tokenuri", "value": "https://login.salesforce.com/services/oauth2/token", "isbase64": "false"}] }
-    sfdcreq = request.Request(sfdcurl)
-    sfdcreq.add_header('Content-Type', 'application/json; charset=utf-8')
-    jsondata = json.dumps(tokenpayload)
-    jsondataasbytes = jsondata.encode('utf-8')
-    sfdcreq.add_header('Content-Length', len(jsondataasbytes))
-    sfdctoken = json.loads(request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore"))['options'][0]['values'][0]
-except:
-    print(style.RED + "Unable to get SFDC Token" + style.RESET)
+    conn = pyodbc.connect(conn_str)
+    print("Connected to the SQL Server successfully!")
+    
+    # Create a cursor from the connection
+    cursor = conn.cursor()
 
-# Get case number from path
-try:
-    casenum = os.popen("pwd").read().split("/")[3]
-except IndexError:
-    print(style.RED + "Unable to get case number from your current working directory" + style.RESET)
-# Get CaseAge and Entitlement Details
-try:
-    headers = {'Content-Type': 'application/json'}
-    data = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "EntitlementId,Age__c,Account_Name__c,Account_Org_ID__c,Case_Created_Date_Qual__c,Case_Owner__c,Case_Review_Flag__c,Case_Status__c,Case_Team__c,CaseReopened__c,Contact_Email__c,ContactCountry__c,ContactMobile,ContactPhone,Dev_Engineer__c,End_of_Support__c,Eng_Status__c,EngCase_SubmittedDate__c,Escalated_By__c,EscalatedDate__c,First_Response_Severity__c,First_Response_Time_Taken__c,Fixed_Known_Issue_ID__c,Frontline_to_Escalation_Severity__c,Frontline_to_Escalation_Violated__c,Highest_Severity__c,Initial_Severity__c,IsEscalated,IsEscalatedtoEng__c,IsPartner__c,KT_Applied__c,Last_Customer_Contact_Timestamp__c,Manager_Name__c,Number_of_Audits__c,Offering_Level__c,Product_Line_Name__c,Record_GEO__c,Serial_Number__c,ServiceProduct_Name__c,Target_GEO__c", "isbase64": "false"}, {"name": "tablename", "value": "Case", "isbase64": "false"}, {"name": "selectcondition", "value": "CaseNumber = '"+casenum+"'", "isbase64": "false"}]}
-    jsondata = json.dumps(data)
-    jsondataasbytes = jsondata.encode('utf-8')
-    finaldata = json.loads(request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore"))['options'][0]['values'][0]
-    finaldata = json.loads(finaldata)
-    EntitlementId = str(finaldata["EntitlementId"])
-    Age__c = str(finaldata["Age__c"])
-    Account_Name__c = str(finaldata["Account_Name__c"])
-    Account_Org_ID__c = str(finaldata["Account_Org_ID__c"])
+    # Corrected query with table name "Case" enclosed in square brackets
+    cursor.execute("""
+        SELECT 
+            c.CaseNumber,
+            c.Age__c,
+            c.Account_Name__c,
+            c.Case_Owner__c,
+            c.Subject,
+            c.Description,
+            c.Survey_Count__c,
+            c.Case_Created_Date_Qual__c,
+            c.First_Response_Time_Taken__c,
+            c.Time_to_Close__c,
+            c.Time_to_Escalate__c,
+            c.Last_Comment_Date_and_Time__c,
+            c.TS_Survey_Time__c,
+            s.CS_Survey_Satisfaction__c,
+            s.Survey_Comment__c
+        FROM 
+            [Salesforce].[dbo].[Case] c  -- Table name enclosed in brackets
+        JOIN 
+            [Salesforce].[dbo].[Survey__c] s
+        ON 
+            c.Id = s.Case__c
+        WHERE 
+            c.Product_Line_Name__c IN ('Citrix ADC', 'Citrix Networking feature service')
+            AND c.ClosedDate >= DATEADD(month, -60, GETDATE());
+    """)
+
+    # Fetch all rows
+    rows = cursor.fetchall()
+
+    # Column names
+    columns = [column[0] for column in cursor.description]
+
+    # Convert the rows into a list of dictionaries
+    results = []
+    for row in rows:
+        row_dict = dict(zip(columns, row))
+        
+        # Convert datetime fields to string if necessary
+        for key, value in row_dict.items():
+            if isinstance(value, datetime):
+                row_dict[key] = value.strftime('%b-%d/%Y %H:%M:%S')
+        
+        results.append(row_dict)
+
+    # Convert the list of dictionaries to JSON format
+    json_data = json.dumps(results, default=datetime_converter, indent=4)
+
+    # Print the JSON data
+    print(json_data)
+
+except Exception as e:
+    print(f"Error: {e}")
+
+finally:
+    # Close the connection
+    if conn:
+        conn.close()

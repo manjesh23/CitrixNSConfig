@@ -53,7 +53,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "3.6.07"
+version = "3.8.12"
 
 # About script
 showscriptabout = '''
@@ -136,18 +136,20 @@ parser.add_argument('-pt', metavar="", action="append", help="Check if the given
 parser.add_argument('-z', action="append", metavar="", help="Generate HTML Graph for all newnslog(s) at once per user-input counter\n--divide <integer> --> value used to divide 'totalcount-val' in nsconmsg output")
 parser.add_argument('--divide', action="append", metavar="divide column 3 by", help=argparse.SUPPRESS)
 parser.add_argument('-T', action="append", choices={"ha"}, help="Generate PNG file for specific feature")
+parser.add_argument('--st', action="append", choices={"newnslog"}, help="Story Telling")
 parser.add_argument('--cpu', action="store_true", help="Analyse High Mgmt CPU and its potential cause")
 parser.add_argument('--mem', action="store_true", help="Analyse High Memory and its potential cause")
 parser.add_argument('--nic', action="store_true", help="NIC Specific details")
 parser.add_argument('-j', metavar="", nargs="+", help="Search for Jira with Keyword match")
 parser.add_argument('-J', metavar="", help="Get Jira Details")
 parser.add_argument('--case', action="store_true", help="Salesforce Case Details"+ style.YELLOW)
-parser.add_argument('--adm', action="append", choices={"info", "md", "imall", "gz", "apps", "crash", "graph", "cve"}, help="ADM Bundles Only\ninfo --> ADM Basic Information\nmd --> ADM Managed Devices\nimall --> Indexing timestamp of all logs\ngz --> Extract all gz files within ADM Support bundle\napps --> List all the vServer and Instance details\ncrash --> List Crash files if available\ngraph --> Plot Cosnole CPU and Memory Graph\ncve --> List the affected NSIP against CVE" + style.CYAN)
+parser.add_argument('--adm', action="append", choices={"info", "md", "imall", "gz", "apps", "crash", "graph", "cve", "lic"}, help="ADM Bundles Only\ninfo --> ADM Basic Information\nmd --> ADM Managed Devices\nimall --> Indexing timestamp of all logs\ngz --> Extract all gz files within ADM Support bundle\napps --> List all the vServer and Instance details\ncrash --> List Crash files if available\ngraph --> Plot Cosnole CPU and Memory Graph\ncve --> List the affected NSIP against CVE\nlic --> Console License Details" + style.CYAN)
 parser.add_argument('--sdx', action="append", choices={"info", "md", "graph", "xenhealth", "xenport"}, help="SDX Bundles Only\ninfo --> SDX Basic Information\nmd --> SDX Managed Devices\ngraph --> Plot Cosnole CPU and Memory Graph\nxenport --> SVM - Xen Port Mappings\nxenhealth --> SVM - Xen Health" + style.RESET)
 parser.add_argument('md', action="store_true", help=argparse.SUPPRESS)
 parser.add_argument('xenport', action="store_true", help=argparse.SUPPRESS)
 parser.add_argument('xenhealth', action="store_true", help=argparse.SUPPRESS)
 parser.add_argument('cve', action="store_true", help=argparse.SUPPRESS)
+parser.add_argument('lic', action="store_true", help=argparse.SUPPRESS)
 parser.add_argument('--about', action="store_true", help="About Show Script")
 args = parser.parse_args()
 
@@ -568,7 +570,46 @@ if args.adm:
                     try:
                         fate_message = "show --adm cve"; send_request(version, username, url, fate_message, "Failed")
                     finally:
-                        quit() 
+                        quit()
+        elif "lic" in args.adm:
+            try:
+                lic_usage_data = []
+                issued_to = sp.run("awk -F'NOTICE=\"' '/NOTICE/ { split($2, arr, \"\\\"\"); print arr[1] }' ./mpsconfig/license/* | sed 's/\\\\/ /g' | sort | uniq", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                this_host_data = sp.run('''awk 'BEGIN {printf "Filename\\tHost_id\\tPort_Number\\n"} /SERVER this_host/{print FILENAME , $3, $4}' ./mpsconfig/license/*.lic | column -t''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                lic_expiry_data = sp.run('''sed 's/ /_/g' ./var/mps/mpsdb/license_expiry_info.csv | awk -F, 'BEGIN {printf "Type\\tDays_Left\\tCount\\n"} !/expirydays/{print $2, $3, ($2 ~ /Bandwidth/ ? $4 / 1000 " MB" : $4)}' | column -t''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                #lic_usage_data = sp.run("sed 's/ /_/g' ./var/mps/mpsdb/license_user_detail.csv | awk -F, '{print $5, $6, $7, $8}' | while read -r node display no_of_license time; do [[ \"$time\" =~ ^[0-9]+$ ]] && printf \"%s\\t%s\\t%s\\t%s\\n\" \"$node\" \"$display\" \"$no_of_license\" \"$(date -r \"$time\" +\"%b-%d/%Y::%H:%M:%S\")\" || printf \"%s\\t%s\\t%s\\treg_time\\n\" \"$node\" \"$display\" \"$no_of_license\"; done | column -t", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                with open('./var/mps/mpsdb/license_user_detail.csv', 'r') as f:
+                    reader = csv.reader(f)
+                    next(reader)
+                    for row in reader:
+                        if not row:
+                            continue
+                        try:
+                            row[-1] = unix_to_human(row[-1])
+                        except IndexError:
+                            pass
+                        lic_usage_data.append(row[3:])
+                header = ["name", "node", "display", "no_of_license", "reg_timestamp"]
+                col_widths = [max(len(str(item)) for item in [header[i]] + [row[i] for row in lic_usage_data]) 
+                            for i in range(len(header))]
+            finally:
+                print(style.YELLOW + '{:-^87}\n'.format('NetScaler Console License Details') + style.RESET)
+                print(style.YELLOW + "All the License files here belongs to: \n\n" + style.GREEN + issued_to + style.RESET + "\n")
+                if this_host_data:
+                    print(style.YELLOW + '{:-^87}\n'.format('NetScaler Console Lic File Details') + style.RESET)
+                    print(this_host_data + "\n")
+                if lic_expiry_data:
+                    print(style.YELLOW + '{:-^87}\n'.format('NetScaler Console Lic Expiry Details') + style.RESET)
+                    print(lic_expiry_data + "\n")
+                if lic_usage_data:
+                    print(style.YELLOW + '{:-^87}\n'.format('NetScaler Console Lic Usage Details') + style.RESET)
+                    print("  ".join(f"{style.YELLOW}{header[i]:<{col_widths[i]}}{style.RESET}" for i in range(len(header))))
+                    for row in lic_usage_data:
+                        print("  ".join(f"{row[i]:<{col_widths[i]}}" for i in range(len(row))))
+                try:
+                    fate_message = "show --adm lic"; send_request(version, username, url, fate_message, "Success")
+                finally:
+                    quit()                    
     except Exception as e:
         print(f"An error occurred: {e}")
     finally:
@@ -612,16 +653,25 @@ if args.sdx:
                 var_space = sp.run("awk '/\/var$/{printf \"%s -> %s | %s | %s | %s\", $1,\"Total: \"$2,\"Used: \"$3, \"Free: \"$4, \"Capacity Used: \"substr($5, 1, length($5)-1)}' shell/df-akin.out | awk '{if ($NF > 75){printf \"%s\", substr($0, 1, length($0)-2)\"\033[0;31m\"$NF\"%\033[0m\"}else{printf \"%s\", substr($0, 1, length($0)-2)\"\033\[0;32m\"$NF\"%\033[0m\"}}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 sdx_serial = sp.run("awk '/netscaler.serial/{print $NF}' shell/sysctl-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 hostID = sp.run("awk '/HostID/&&/ense/{print $NF; exit}' var/log/license.log", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
-                productmodel = sp.run('''awk '/Product Name/&&/SDX/{$1=$2=""; print $0;exit}' $(find "$(echo $(pwd) | awk -F'/' '{print "/"$2"/"$3"/"$4}')" -name "bug-report*" -exec echo {}/dmidecode.out \;)''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                productmodel = sp.run('''timeout 5s awk '/Product Name/&&/SDX/{$1=$2=""; print $0;exit}' $(find "$(echo $(pwd) | awk -F'/' '{print "/"$2"/"$3"/"$4}')" -name "bug-report*" -exec echo {}/dmidecode.out \;)''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                if len(productmodel) < 3:
+                    productmodel = sp.run("awk '/platform/&&/sysid/{print $NF; exit}' ./shell/dmesg-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                    if len(productmodel) < 3:
+                        productmodel = sp.run("awk '/platform/&&/manufactured/{print $2; exit}' ./shell/dmesg-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 if len(hostID) < 5:
                     hostID = sp.run("awk '/HostID/{print $NF; exit}' ./var/mps/log/mps_config.log", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                    if len(hostID) < 5:
+                        hostID = sp.run("awk '/MPSDeployment::getHostId/{print $NF;exit}' ./var/mps/log/mps_cli.log", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                        if len(hostID) < 5:
+                            hostID = sp.run("awk '/HostID of the License Server/{print $NF; exit}' ./var/log/license.log", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 loadaverage = sp.run("awk '/load average/{printf \"%s %s %s\", \"1 min: \"$6, \"5 min: \"$7, \"15 min: \"$8}' shell/top-b.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 xen_ip = sp.run("awk '/XenServer/{print $NF}' var/mps/svm.conf", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 svm_IP = sp.run("echo $(pwd) | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -n 1", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
-                sdx_matched_bug_report = sp.run(f'find "$(echo $(pwd) | awk -F\'/\' \'{{print \"/\"$2\"/\"$3\"/\"$4}}\')" -name "bug-report*" | grep $(echo $(pwd) | grep -oE \'([0-9]{{1,3}}\\.){{3}}[0-9]{{1,3}}\' | head -n 1)', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                sdx_matched_bug_report = sp.run(f'find "$(echo $(pwd) | awk -F\'/\' \'{{print \"/\"$2\"/$3\"/$4}}\')" -name "bug-report*" | grep $(echo $(pwd) | grep -oE \'([0-9]{{1,3}}\\.){{3}}[0-9]{{1,3}}\' | head -n 1) | paste -sd\', \' -', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 if len(sdx_matched_bug_report) is 0:
-                    sdx_matched_bug_report = sp.run("find \"$(echo $(pwd) | awk -F'/' '{print \"/\"$2\"/\"$3\"/\"$4}')\" -name \"bug-report*\" -exec grep -H \"172.22.0.154\" {}/xenstore-ls-f.out \; | head -n 1 | sed -n 's|\\(.*bug-report[^/]*\).*|\\1|p'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                    sdx_matched_bug_report = sp.run("find \"$(echo $(pwd) | awk -F'/' '{print \"/\"$2\"/\"$3\"/\"$4}')\" -name \"bug-report*\" -exec grep -H "+svm_IP+" {}/xenstore-ls-f.out \; | head -n 1 | sed -n 's|\\(.*bug-report[^/]*\).*|\\1|p'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 svm_firmware = sp.run("awk '/netscaler.version/&&/Build/{print $3, $5}' shell/sysctl-a.out | sed 's/[:,]//g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                xen_firmware = sp.run("find \"$(pwd | awk -F'/' '{print \"/\"$2\"/\"$3\"/\"$4}')\" -name \"bug-report*\" -exec awk -F= '/SDX_PLATFORM_SBI/{print $NF; exit}' {}/etc/sdx-inventory \;", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 xen_upgrade_success = sp.run("awk '/MPSControl::/&&/will reboot the xenserver now/{print $1, $2, $3, $4}' ./var/mps/log/mps_control.lo* | tail -n 1", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 sdx_upgrade_success = sp.run("awk '/MPSControl::/&&/completed successfully/&&/SDX single reboot upgrade/{print $1, $2, $3, $4}' ./var/mps/log/mps_control.lo* | tail -n 1", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 lic_server = sp.run("awk -F, '/--/&&/,/{print $2, \"on Port\", $3}' ./var/mps/mpsdb/license_server.csv", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
@@ -635,6 +685,7 @@ if args.sdx:
                 print("SDX Hostname: " + sdx_hostname)
                 print("SDX Model: " + productmodel)
                 print("SVM Firmware: " + svm_firmware)
+                print("Xen Firmware: "+ xen_firmware)
                 print("Current DateTime: " + cur_date_time)
                 print("SVM Last Upgrade: " + sdx_upgrade_success)
                 print("Xen Last Upgrade: " + xen_upgrade_success)
@@ -713,8 +764,22 @@ if args.sdx:
             try:
                 svm_xen_ports = sp.run("awk -F, '{print $1, $3, $2, $5, $6, $9, $10, $4}' ./var/mps/mpsdb/xen_health_interface.csv | column -t", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
             finally:
+                print(style.YELLOW + '{:-^87}'.format('NetScaler SDX Xen Port Mapping') + "\n" + style.RESET)
                 if svm_xen_ports:
-                    print(svm_xen_ports)
+                    lines = svm_xen_ports.splitlines()
+                    header = lines[0].split()
+                    print(f"{style.YELLOW}{header[0]:<18} {header[1]:<18} {header[2]:<18} {header[3]:<18} {header[4]:<18} {header[5]:<18} {header[6]:<18} {header[7]:<18}{style.RESET}")
+                    for row in lines[1:]:
+                        row_data = row.split()
+                        state = row_data[-1]
+                        if state == "UP":
+                            colored_state = f"{style.GREEN}{state:<18}{style.RESET}"
+                        elif state == "DOWN":
+                            colored_state = f"{style.RED}{state:<18}{style.RESET}"
+                        else:
+                            colored_state = f"{state:<18}"
+                        print(f"{row_data[0]:<18} {row_data[1]:<18} {row_data[2]:<18} {row_data[3]:<18} {row_data[4]:<18} {row_data[5]:<18} {row_data[6]:<18} {colored_state}")
+                    # Send fate message
                     try:
                         fate_message = "show --sdx xenport"; send_request(version, username, url, fate_message, "Success")
                     finally:
@@ -731,11 +796,16 @@ if args.sdx:
             finally:
                 if svm_xen_health:
                     print(svm_xen_health)
-                    fate_message = "show --sdx xenhealth"; send_request(version, username, url, fate_message, "Success")
+                    try:
+                        fate_message = "show --sdx xenhealth"; send_request(version, username, url, fate_message, "Success")
+                    finally:
+                        quit()
                 else:
-                    print(f"{style.RED}Unable to Read Xen Health{style.RESET}")
-                    fate_message = "show --sdx xenhealth"; send_request(version, username, url, fate_message, "Failed")
-                quit()
+                    print(style.RED + "Unable to Read Xen Health" + style.RESET)
+                    try:
+                        fate_message = "show --sdx xenhealth"; send_request(version, username, url, fate_message, "Failed")
+                    finally:
+                        quit()
         elif "graph" in args.sdx:
             try:
                 path = "conFetch/Graph"
@@ -842,6 +912,7 @@ if args.i:
         cpuinfo = sp.run("awk '/hw.model/{$1=\"\"; print}' shell/sysctl-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         loadaverage = sp.run("awk '/load average/{printf \"%s %s %s\", \"1 min: \"$6, \"5 min: \"$7, \"15 min: \"$8}' shell/top-b.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         mgmtcpu = sp.run("awk '!/100% idle/{printf \"Management: %s User: %s | Nice: %s | System: %s | Interrupt: %s | Idle: %s\\n\", $1, $2, $4, $6, $8, $(NF-1)}' shell/mgmtcpupercent.txt | awk '{if($NF>75) print $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, \"\\033[32m\"$16\"\\033[0m\"; else print $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, \"\\033[31m\"$16\"\\033[0m\"}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        extramgmtcpu = sp.run("awk '/ConfiguredState/&&/EffectiveState/&&/ENABLED/{print length($0)}' shell/showcmds.txt", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
         memoryinfo = sp.run("awk '(/hw.usermem/ && ORS=\" ,\") || (/hw.realmem/ && ORS=RS)' shell/sysctl-a.out | head -n1 | awk '{printf \"%s | %s\", \"Total Memory: \"$4/1048576, \"Available Memory: \"$2/1048576}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         varsize = sp.run("awk '/\/var$/{printf \"%s -> %s | %s | %s | %s\", $1,\"Total: \"$2,\"Used: \"$3, \"Free: \"$4, \"Capacity Used: \"substr($5, 1, length($5)-1)}' shell/df-akin.out | awk '{if ($NF > 75){printf \"%s\", substr($0, 1, length($0)-2)\"\033[0;31m\"$NF\"%\033[0m\"}else{printf \"%s\", substr($0, 1, length($0)-2)\"\033\[0;32m\"$NF\"%\033[0m\"}}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         sslcards = sp.run("awk '/SSL cards UP/{printf \"%s%s - \",\"[UP: \" $NF,\"]\"}/SSL cards present/{printf \"%s%s\\n\", \"[Present: \"$NF,\"]\";exit}' shell/statcmds.txt", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
@@ -934,6 +1005,8 @@ if args.i:
         print("")
         print("CPU Info: " + cpuinfo.stdout.strip())
         print("Load Average: " + loadaverage.stdout.strip())
+        if extramgmtcpu:
+            print(style.YELLOW + "Extra Management CPU Enabled" + style.RESET)
         print(mgmtcpu.stdout.strip())
         try:
             if memfreepercent > 40:
@@ -1803,7 +1876,7 @@ elif args.case:
                     else:
                         pass
         # Account Logic
-        account_json = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": sfdctoken, "isbase64": "false"}, {"name": "selectfields", "value": "GEO_Segmentation__c,Owner_Name__c", "isbase64": "false"}, {"name": "tablename", "value": "Account", "isbase64": "false"}, {"name": "selectcondition", "value": f"Org_ID__c = '{Account_Org_ID__c}'", "isbase64": "false"}]}
+        account_json = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": sfdctoken, "isbase64": "false"}, {"name": "selectfields", "value": "GEO_Segmentation__c,Netscaler_Telemetry_Compliance_Status__c,Owner_Name__c", "isbase64": "false"}, {"name": "tablename", "value": "Account", "isbase64": "false"}, {"name": "selectcondition", "value": f"Org_ID__c = '{Account_Org_ID__c}'", "isbase64": "false"}]}
         account_data = json.dumps(account_json)
         jsondataasbytes = account_data.encode('utf-8')
         response = request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore")
@@ -1811,6 +1884,7 @@ elif args.case:
         finaldata = json.loads(finaldata)
         GEO_Segmentation__c = str(finaldata["GEO_Segmentation__c"])
         Named_Owner_Name__c = str(finaldata["Owner_Name__c"])
+        Netscaler_Telemetry_Compliance_Status__c = str(finaldata["Netscaler_Telemetry_Compliance_Status__c"])
     finally:
         print(style.YELLOW + '{:-^87}'.format('SalesForce Case details') + style.RESET)
         print(style.YELLOW + '{:-^87}'.format('Case Related') + style.RESET)
@@ -1835,6 +1909,7 @@ elif args.case:
         if appliance_org_check is not None:
             print(appliance_org_check)
         print("Account Name: " + Account_Name__c)
+        print("NetScaler Telemetry Compliance: " + (style.RED if 'Non-Compliant' in Netscaler_Telemetry_Compliance_Status__c else style.GREEN) + Netscaler_Telemetry_Compliance_Status__c + style.RESET)
         print("Org Id: " + Account_Org_ID__c)
         print("Geo Segmentation: " + GEO_Segmentation__c)
         print("Named Account Owner: " + Named_Owner_Name__c)
@@ -2566,8 +2641,8 @@ elif args.z:
             divide = str(1)
         custom_counter = ""
         raw_output = ""
-        adchostname = sp.run("awk '{printf $2}' shell/uname-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
-        collector_bundle_name = sp.run("pwd", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.split("/")[4]
+        adchostname = sp.run("awk '{print $2}' shell/uname-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        collector_bundle_name = re.search(r"(collector_\S+)", sp.run('pwd', shell=True, capture_output=True, text=True).stdout).group(1) if re.search(r"(collector_\S+)", sp.run('pwd', shell=True, capture_output=True, text=True).stdout) else None
         counter_name = ''.join(args.z)
         all_newnslog_names = sp.run('''ls -lah var/nslog/ | awk \'/newnslog\./&&!/gz|tar/{print $NF}END{print "newnslog"}\'''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
         num_columns = sp.run('''nsconmsg -K var/nslog/newnslog -d current -s disptime=1 -f ''' + counter_name + ''' | awk \'/''' + counter_name + '''/{print NF; exit}\'''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
@@ -2591,7 +2666,7 @@ elif args.z:
                 custom_counter = re.sub('.*,\s\].*', '', custom_counter)
                 file = open(path+"/"+counter_name+"_Graph.html", "w")
                 file.write('''<html><head> <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script> <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.js"></script> <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.css"> <script type="text/javascript">google.charts.load('current',{'packages': ['annotationchart']}); google.charts.setOnLoadCallback(allnic_tot_rx_tx_mbits); function allnic_tot_rx_tx_mbits(){var data=new google.visualization.DataTable(); ''' + custom_counter +
-                            ''' var chart=new google.visualization.AnnotationChart(document.getElementById('allnic_tot_rx_tx_mbits')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}</script></head><body> <h1 class="txt-primary">'''+counter_name+'''</h1> <hr> <p class="txt-title">Collector_Bundle_Name: '''+collector_bundle_name+'''<br>Device_Name: '''+adchostname+'''<br>Log_file: All newnslogs<br>Log_Timestamp: '''+start_end+'''</p><hr> <div style="width: 100%"><p class="txt-primary">'''+ counter_name +''' Graph</p><div id="allnic_tot_rx_tx_mbits" style="height:450px"></div></div><div class="footer">Project conFetch</div></body></html>''')
+                            ''' var chart=new google.visualization.AnnotationChart(document.getElementById('allnic_tot_rx_tx_mbits')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}</script></head><body> <h1 class="txt-primary">'''+counter_name+'''</h1> <hr> <p class="txt-title">Collector_Bundle_Name: '''+collector_bundle_name+'''<br>Device_Name: '''+adchostname.stdout+'''<br>Log_file: All newnslogs<br>Log_Timestamp: '''+start_end+'''</p><hr> <div style="width: 100%"><p class="txt-primary">'''+ counter_name +''' Graph</p><div id="allnic_tot_rx_tx_mbits" style="height:450px"></div></div><div class="footer">Project conFetch</div></body></html>''')
                 file.close()
                 single_line_out = sp.run("perl -p -e 's/(?<!>)\n//g' conFetch/"+counter_name+"_Graph.html > temp_file.html && mv temp_file.html conFetch/"+counter_name+"_Graph.html", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                 os.popen("fixperms ./conFetch/").read()
@@ -2615,7 +2690,7 @@ elif args.z:
                 custom_counter = re.sub('.*,\s\].*', '', custom_counter)
                 file = open(path+"/"+counter_name+"_Graph.html", "w")
                 file.write('''<html><head> <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script> <script type="text/javascript" src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.js"></script> <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.css"> <script type="text/javascript">google.charts.load('current',{'packages': ['annotationchart']}); google.charts.setOnLoadCallback(allnic_tot_rx_tx_mbits); function allnic_tot_rx_tx_mbits(){var data=new google.visualization.DataTable(); ''' + custom_counter +
-                            ''' var chart=new google.visualization.AnnotationChart(document.getElementById('allnic_tot_rx_tx_mbits')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}</script></head><body> <h1 class="txt-primary">'''+counter_name+'''</h1> <hr> <p class="txt-title">Collector_Bundle_Name: '''+collector_bundle_name+'''<br>Device_Name: '''+adchostname+'''<br>Log_file: All newnslogs<br>Log_Timestamp: '''+start_end+'''</p><hr> <div style="width: 100%"><p class="txt-primary">'''+ counter_name +''' Graph</p><div id="allnic_tot_rx_tx_mbits" style="height:450px"></div></div><div class="footer">Project conFetch</div></body></html>''')
+                            ''' var chart=new google.visualization.AnnotationChart(document.getElementById('allnic_tot_rx_tx_mbits')); var options={displayAnnotations: true, displayZoomButtons: false, dateFormat: 'HH:mm:ss MMMM dd, yyyy', thickness: 2,}; chart.draw(data, options);}</script></head><body> <h1 class="txt-primary">'''+counter_name+'''</h1> <hr> <p class="txt-title">Collector_Bundle_Name: '''+collector_bundle_name+'''<br>Device_Name: '''+adchostname.stdout+'''<br>Log_file: All newnslogs<br>Log_Timestamp: '''+start_end+'''</p><hr> <div style="width: 100%"><p class="txt-primary">'''+ counter_name +''' Graph</p><div id="allnic_tot_rx_tx_mbits" style="height:450px"></div></div><div class="footer">Project conFetch</div></body></html>''')
                 file.close()
                 single_line_out = sp.run("perl -p -e 's/(?<!>)\n//g' conFetch/"+counter_name+"_Graph.html > temp_file.html && mv temp_file.html conFetch/"+counter_name+"_Graph.html", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                 os.popen("fixperms ./conFetch/").read()
@@ -2708,6 +2783,35 @@ elif args.T:
                 os.popen("rm -rf conFetch/ha.dot").read()
     finally:
         fate_message = "show -T " + ''.join(args.T); send_request(version, username, url, fate_message, "Success")
+
+elif args.st:
+    try:
+        print(style.YELLOW + '{:-^87}'.format('NetScaler newnslog Story Timeline') + "\n" + style.RESET)
+        adchostname = sp.run("awk '{print $2}' shell/uname-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        collector_bundle_name = re.search(r"(collector_\S+)", sp.run('pwd', shell=True, capture_output=True, text=True).stdout).group(1) if re.search(r"(collector_\S+)", sp.run('pwd', shell=True, capture_output=True, text=True).stdout) else None
+        start_time = sp.run("nsconmsg -K \"var/nslog/$(ls -lah var/nslog/ | awk '/newnslog\./&&!/gz|tar/{print $NF;exit}')\" -d setime | awk '/start time/{print $4, $5, $6, $7}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        end_time = sp.run("nsconmsg -K \"var/nslog/newnslog\" -d setime | awk '/end   time/{print $4, $5, $6, $7}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        start_end = f'{start_time} to {end_time}'
+        print(style.LIGHTGREEN + "Digging for gold" + style.RESET)
+        events = sp.run('echo "const events = ["; for log in ./var/nslog/newnslog*; do nsconmsg -d event -K "$log" | awk \'/SAVECONFIG/||/forcibly/||/self node/||/remote node/||/CONFIG/||/interface/||/platform rate limit/{ $1=$2=""; print "{ time: \\"" $(NF-4) " " $(NF-3) " " $(NF-2) " " $(NF-1) " " $NF "\\", description: \\"" $0 "\\" }," }\' ; done; echo "]"', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        print(style.LIGHTGREEN + "Preparing Story code" + style.RESET)
+        html_code = '''<!DOCTYPE html><html lang="en"><head><link rel="stylesheet"href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.css"><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>NetScaler Timeline Store Graph</title><style>body{font-family:Arial,sans-serif;padding:20px;background-color:#f4f4f9}.timeline-container{max-width:800px;margin:0 auto}.controls{display:flex;justify-content:space-between;margin-bottom:20px;gap:10px}.controls select,.controls input,.controls label{padding:8px;font-size:14px;border:1px solid #ccc;border-radius:4px}.timeline{display:flex;flex-direction:column;align-items:flex-start;position:relative;margin:20px 0;padding-left:20px}.timeline::before{content:'';position:absolute;left:10px;top:0;bottom:0;width:2px;background:#888}.event{position:relative;margin-bottom:20px;padding-left:20px;cursor:pointer;transition:transform 0.2s ease,background-color 0.3s ease}.event:hover{background-color:#eef;transform:translateX(10px)}.event::before{content:'';position:absolute;left:-11px;top:5px;width:10px;height:10px;background:#007bff;border-radius:50%}.event .time{font-weight:bold;color:#333;margin-bottom:5px}.event .description{color:#555}</style></head><body><p class="txt-title">Collector_Bundle_Name: '''+collector_bundle_name+'''<br>Device_Name: '''+adchostname+'''<br>Log_file: All newnslogs<br>Log_Timestamp: '''+start_end+'''</p><hr><div class="timeline-container"><h1>NetScaler Timeline Store Graph</h1><div class="controls"><input type="text" id="filterInput" placeholder="Filter by keyword(s), separate with commas..."><label><input type="checkbox" id="inverseMatchCheckbox"> Inverse Match</label><select id="sortSelect"><option value="asc">Sort by Time: Ascending</option><option value="desc">Sort by Time: Descending</option></select></div><div class="timeline" id="timeline"></div></div><script>'''+events+''';const timeline=document.getElementById('timeline');const filterInput=document.getElementById('filterInput');const inverseMatchCheckbox=document.getElementById('inverseMatchCheckbox');const sortSelect=document.getElementById('sortSelect');function formatTime(date){const options={year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'};return new Date(date).toLocaleString('en-US',options)}function renderEvents(filteredEvents){timeline.innerHTML='';filteredEvents.forEach(event=>{const eventElement=document.createElement('div');eventElement.classList.add('event');const timeElement=document.createElement('div');timeElement.classList.add('time');timeElement.textContent=formatTime(event.time);const descriptionElement=document.createElement('div');descriptionElement.classList.add('description');descriptionElement.textContent=`${event.description}`;eventElement.appendChild(timeElement);eventElement.appendChild(descriptionElement);timeline.appendChild(eventElement)})}function filterEvents(){const filterText=filterInput.value.toLowerCase();const keywords=filterText.split(',').map(kw=>kw.trim());const isInverseMatch=inverseMatchCheckbox.checked;const filteredEvents=events.filter(event=>{const matches=keywords.some(keyword=>(event.time.toLowerCase().includes(keyword)||event.description.toLowerCase().includes(keyword)));return isInverseMatch?!matches:matches;});renderEvents(filteredEvents)}function sortEvents(order){const sortedEvents=[...events].sort((a,b)=>{const dateA=new Date(a.time);const dateB=new Date(b.time);return order==='asc'?dateA-dateB:dateB-dateA});renderEvents(sortedEvents)}filterInput.addEventListener('input',filterEvents);inverseMatchCheckbox.addEventListener('change',filterEvents);sortSelect.addEventListener('change',()=>{sortEvents(sortSelect.value)});renderEvents(events);</script><div class="footer">Project conFetch</div></body></html>'''
+        os.remove('./conFetch/Graph/Bundle_Story.html') if os.path.exists('./conFetch/Graph/Bundle_Story.html') else None
+        print(style.LIGHTGREEN + "Write the html code" + style.RESET)
+        path = './conFetch/Graph'
+        file = open(path+"/"+adchostname.strip()+"_Bundle_Story.html", "w")
+        file.write(html_code)
+        file.close()
+    finally:
+        out_html_file = sp.run("find . -name *Bundle_Story.html", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+        if len(out_html_file) > 5:
+            print("\n" + style.GREEN + "Story Graph "+out_html_file+" is ready under support bundle directory " + style.RESET)
+            fate_message = "show --st " + ''.join(args.st); send_request(version, username, url, fate_message, "Success")
+        else:
+            print(style.RED + "Unable to generate the Story Graph" + style.RESET)
+            fate_message = "show --st " + ''.join(args.st); send_request(version, username, url, fate_message, "Failed")
+        quit()
+
 elif args.cpu:
     try:
         mgmtcpu100 = sp.run("for i in $(ls -lah var/nslog/ | awk '/drwxrwxrwx/&&/newnslog./{print \"var/nslog/\"$NF}END{print \"var/nslog/newnslog\"}'); do printf \"newnslog name: %s\\n\" $i; nsconmsg -K $i -d current -s disptime=1 -f mgmt_cpu_use 2>&1 | awk '/mgmt_cpu_use/{if ($3/10 == 100) printf \"%s %s %s\\n\", $8, $9, $10}'; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
