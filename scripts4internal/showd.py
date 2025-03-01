@@ -53,7 +53,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "3.8.12"
+version = "3.10.01"
 
 # About script
 showscriptabout = '''
@@ -143,9 +143,10 @@ parser.add_argument('--nic', action="store_true", help="NIC Specific details")
 parser.add_argument('-j', metavar="", nargs="+", help="Search for Jira with Keyword match")
 parser.add_argument('-J', metavar="", help="Get Jira Details")
 parser.add_argument('--case', action="store_true", help="Salesforce Case Details"+ style.YELLOW)
-parser.add_argument('--adm', action="append", choices={"info", "md", "imall", "gz", "apps", "crash", "graph", "cve", "lic"}, help="ADM Bundles Only\ninfo --> ADM Basic Information\nmd --> ADM Managed Devices\nimall --> Indexing timestamp of all logs\ngz --> Extract all gz files within ADM Support bundle\napps --> List all the vServer and Instance details\ncrash --> List Crash files if available\ngraph --> Plot Cosnole CPU and Memory Graph\ncve --> List the affected NSIP against CVE\nlic --> Console License Details" + style.CYAN)
+parser.add_argument('--adm', action="append", choices={"info", "md", "imall", "gz", "apps", "crash", "graph", "cve", "lic", "agents"}, help="ADM Bundles Only\ninfo --> ADM Basic Information\nmd --> ADM Managed Devices\nimall --> Indexing timestamp of all logs\ngz --> Extract all gz files within ADM Support bundle\napps --> List all the vServer and Instance details\ncrash --> List Crash files if available\ngraph --> Plot Cosnole CPU and Memory Graph\ncve --> List the affected NSIP against CVE\nlic --> Console License Details\nagents --> Console Agent Details" + style.CYAN)
 parser.add_argument('--sdx', action="append", choices={"info", "md", "graph", "xenhealth", "xenport"}, help="SDX Bundles Only\ninfo --> SDX Basic Information\nmd --> SDX Managed Devices\ngraph --> Plot Cosnole CPU and Memory Graph\nxenport --> SVM - Xen Port Mappings\nxenhealth --> SVM - Xen Health" + style.RESET)
 parser.add_argument('md', action="store_true", help=argparse.SUPPRESS)
+parser.add_argument('agents', action="store_true", help=argparse.SUPPRESS)
 parser.add_argument('xenport', action="store_true", help=argparse.SUPPRESS)
 parser.add_argument('xenhealth', action="store_true", help=argparse.SUPPRESS)
 parser.add_argument('cve', action="store_true", help=argparse.SUPPRESS)
@@ -251,7 +252,7 @@ if args.adm:
                 print("Available directories with support bundle names: \n\n" + style.CYAN + "\n".join(re.findall("Citrix_ADM_.*.mps", "\n".join(next(os.walk('.'))[1]))) + style.RESET)
                 quit()
         elif "NetScaler_ADM_Agent_" in pwd_output:
-            matchagent = re.search(r'.*NetScaler_ADM_Agent.*_[0-9]{2}', pwd_output)
+            matchagent = re.search(r'.*NetScaler_ADM_Agent.*_[0-9]{1,2}', pwd_output)
             if matchagent:
                 os.chdir(matchagent.group(0))
                 print(style.YELLOW + "NetScaler Console Agent has limited support" + style.RESET)
@@ -297,13 +298,16 @@ if args.adm:
                 admplatform = sp.run('''awk '/netscaler.sysid:/ {sysid=$2} END {if (sysid ~ /450000|450001/) print "Citrix Hypervisor"; else if (sysid ~ /450010|450011/) print "ESX"; else if (sysid ~ /450020|450021/ && !/vpx_on_cloud = 0/) print "Hyper-V"; else if (sysid ~ /450070|450071/ && !/vpx_on_cloud = 0/) print "KVM"; else print "Unknown"}' ./shell/sysctl-a.out''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 admvarsize = sp.run("awk '/\/var$/{capacity=substr($5,1,length($5)-1); printf \"%s -> Total: %s | Used: %s | Free: %s | Capacity Used: \\033[%sm%s%%\\033[0m\\n\", $1, $2, $3, $4, (capacity+0>75?\"0;31\":\"0;32\"), capacity}' ./shell/df-akin.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 admboottime = sp.run("awk -F} '/kern.boottime/{print $2}' ./shell/sysctl-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                consoleaddr = sp.run("awk -F'url:' '/fetch_new_version/ {sub(/.*https?:\/\//, \"\", $2); sub(/\/.*/, \"\", $2); print $2; exit}' ./var/mps/log/agent_upgrade.log", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                ccid = sp.run('''awk -Furl '/fetch_new_version/ { sub(/^.*https:\/\/[^\/]+\//, "", $2); sub(/\/.*$/, "", $2); print $2; exit }' ./var/mps/log/agent_upgrade.log''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
             finally:
                 print(style.YELLOW + '{:-^87}'.format('NetScaler Console Show Configuration') + "\n" + style.RESET)
                 print("Support file location: " + os.popen("pwd").read().strip())
                 print("\nConsole Hostname: " + admhostname)
+                print("Console Address: " + consoleaddr)
+                print("CCID: " + ccid)
                 print("Console IP Address: " + admip)
-                print("Console HA Peer IP: " + adm_ha_peer_ip)
-                print("Console HA Floating IP: " + (adm_ha_floating_ip if adm_ha_floating_ip else "N/A"))
+                print("Console HA Peer IP: " + adm_ha_peer_ip + "\nConsole HA Floating IP: " + adm_ha_floating_ip if adm_ha_floating_ip else "N/A") if adm_ha_peer_ip else None
                 if len(adm_ha_peer_version_ready_failover) > 23:
                     if len(adm_ha_peer_version_ready_failover.split("and")[0]) > 10:
                         if "True" in adm_ha_peer_version_ready_failover.split("and")[1]:
@@ -609,7 +613,57 @@ if args.adm:
                 try:
                     fate_message = "show --adm lic"; send_request(version, username, url, fate_message, "Success")
                 finally:
-                    quit()                    
+                    quit()
+        elif "agents" in args.adm:
+            csv_file = "./var/mps/mpsdb/mps_agent.csv"
+            fields = ["name", "hostname", "version", "state", "down_count", "platform", "cpu_usage", "disk_usage", "memory_usage", "agent_upgrade_state", "agent_upgrade_time", "last_up_time"]
+            column_widths = {field: len(field) for field in fields}
+            rows = []
+            try:
+                    with open(csv_file, "r") as file:
+                        reader = csv.DictReader(file)
+                        for row in reader:
+                            extracted_row = {field: row.get(field, "N/A").strip() or "N/A" for field in fields}
+                            rows.append(extracted_row)
+                            for field in fields:
+                                column_widths[field] = max(column_widths[field], len(extracted_row[field]))
+            except Exception as e:
+                print(f"An unexpected error occurred: {e}")
+                try:
+                    fate_message = "show --adm agents"; send_request(version, username, url, fate_message, "Failed")
+                finally:
+                    quit()
+            finally:
+                print(style.YELLOW + '{:-^87}\n'.format('NetScaler Console Agent Details') + style.RESET)
+                print(f"\nTotal number of agents: {len(rows)}\n")
+                header = "  ".join(f"{field:<{column_widths[field]}}" for field in fields)
+                print(style.YELLOW + header + style.RESET)
+                print("-" * len(header))
+                for row in rows:
+                    row_line = []
+                    for field in fields:
+                        value = row[field]
+                        if field == "agent_upgrade_state":
+                            color = style.GREEN if value.strip().lower() == "success" else style.RED
+                            row_line.append(f"{color}{value:<{column_widths[field]}}{style.RESET}")
+                        elif field == "state":
+                            state_value = value.strip().lower()
+                            color = style.GREEN if state_value == "up" else style.RED
+                            row_line.append(f"{color}{value:<{column_widths[field]}}{style.RESET}")
+                        elif field == "down_count":
+                            try:
+                                down_count_value = int(value.strip())
+                                color = style.RED if down_count_value > 0 else style.GREEN
+                            except ValueError:
+                                color = style.RED
+                            row_line.append(f"{color}{value:<{column_widths[field]}}{style.RESET}")
+                        else:
+                            row_line.append(f"{value:<{column_widths[field]}}")
+                    print("  ".join(row_line))
+                try:
+                    fate_message = "show --adm agents"; send_request(version, username, url, fate_message, "Success")
+                finally:
+                    quit()
     except Exception as e:
         print(f"An error occurred: {e}")
     finally:
@@ -1704,7 +1758,7 @@ elif args.case:
         CxContactEmail = 'None'
         OtherCommunicationEmail__c = 'None'
         headers = {'Content-Type': 'application/json'}
-        data = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "Age__c,Account_Name__c,Account_Org_ID__c,Case_Created_Date_Qual__c,Case_Owner__c,Case_Review_Flag__c,Case_Status__c,Case_Team__c,CaseReopened__c,ContactEmail,ContactCountry__c,ContactMobile,ContactPhone,Dev_Engineer__c,End_of_Support__c,Eng_Status__c,EngCase_SubmittedDate__c,EntitlementId,Escalated_By__c,EscalatedDate__c,First_Response_Severity__c,First_Response_Time_Taken__c,Fixed_Known_Issue_ID__c,Frontline_to_Escalation_Severity__c,Frontline_to_Escalation_Violated__c,Highest_Severity__c,Initial_Severity__c,IsEscalated,IsEscalatedtoEng__c,IsPartner__c,Last_Customer_Contact_Timestamp__c,Manager_Name__c,Number_of_Audits__c,Offering_Level__c,OtherCommunicationEmail__c,Product_Line_Name__c,Record_GEO__c,Serial_Number__c,ServiceProduct_Name__c,Target_GEO__c", "isbase64": "false"}, {"name": "tablename", "value": "Case", "isbase64": "false"}, {"name": "selectcondition", "value": "CaseNumber = '"+casenum+"'", "isbase64": "false"}]}
+        data = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "Age__c,Account_Name__c,Account_Org_ID__c,Case_Created_Date_Qual__c,Case_Owner__c,Case_Review_Flag__c,Case_Status__c,Case_Team__c,CaseReopened__c,ContactEmail,ContactCountry__c,ContactMobile,ContactPhone,Dev_Engineer__c,End_of_Support__c,Eng_Status__c,EngCase_SubmittedDate__c,EntitlementId,Escalated_By__c,EscalatedDate__c,First_Response_Severity__c,First_Response_Time_Taken__c,Fixed_Known_Issue_ID__c,Frontline_to_Escalation_Severity__c,Frontline_to_Escalation_Violated__c,Highest_Severity__c,Initial_Severity__c,IsEscalated,IsEscalatedtoEng__c,IsPartner__c,Last_Customer_Contact_Timestamp__c,Manager_Name__c,Number_of_Audits__c,Offering_Level__c,OtherCommunicationEmail__c,Product_Line_Name__c,Record_GEO__c,Serial_Number__c,ServiceProduct_Name__c,Subject,Target_GEO__c", "isbase64": "false"}, {"name": "tablename", "value": "Case", "isbase64": "false"}, {"name": "selectcondition", "value": "CaseNumber = '"+casenum+"'", "isbase64": "false"}]}
         jsondata = json.dumps(data)
         jsondataasbytes = jsondata.encode('utf-8')        
         finaldata = json.loads(request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore"))['options'][0]['values'][0]
@@ -1740,6 +1794,7 @@ elif args.case:
         IsEscalatedtoEng__c = str(finaldata["IsEscalatedtoEng__c"])
         OtherCommunicationEmail__c = str(finaldata["OtherCommunicationEmail__c"])
         Serial_Number__c = str(finaldata["Serial_Number__c"])
+        Subject = str(finaldata["Subject"])
         IsPartner__c = str(finaldata["IsPartner__c"])
         # Entitlement Logic
         data = ({"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": ""+sfdctoken+"", "isbase64": "false"}, {"name": "selectfields", "value": "EndDate", "isbase64": "false"}, {"name": "tablename", "value": "Entitlement", "isbase64": "false"}, {"name": "selectcondition", "value": "Id = '"+EntitlementId+"'", "isbase64": "false"}]})
@@ -1876,7 +1931,7 @@ elif args.case:
                     else:
                         pass
         # Account Logic
-        account_json = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": sfdctoken, "isbase64": "false"}, {"name": "selectfields", "value": "GEO_Segmentation__c,Netscaler_Telemetry_Compliance_Status__c,Owner_Name__c", "isbase64": "false"}, {"name": "tablename", "value": "Account", "isbase64": "false"}, {"name": "selectcondition", "value": f"Org_ID__c = '{Account_Org_ID__c}'", "isbase64": "false"}]}
+        account_json = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": sfdctoken, "isbase64": "false"}, {"name": "selectfields", "value": "ATS_Rep__c,GEO_Segmentation__c,Netscaler_Telemetry_Compliance_Status__c,Owner_Name__c", "isbase64": "false"}, {"name": "tablename", "value": "Account", "isbase64": "false"}, {"name": "selectcondition", "value": f"Org_ID__c = '{Account_Org_ID__c}'", "isbase64": "false"}]}
         account_data = json.dumps(account_json)
         jsondataasbytes = account_data.encode('utf-8')
         response = request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore")
@@ -1884,11 +1939,25 @@ elif args.case:
         finaldata = json.loads(finaldata)
         GEO_Segmentation__c = str(finaldata["GEO_Segmentation__c"])
         Named_Owner_Name__c = str(finaldata["Owner_Name__c"])
+        ATS_Rep__c = str(finaldata["ATS_Rep__c"])
         Netscaler_Telemetry_Compliance_Status__c = str(finaldata["Netscaler_Telemetry_Compliance_Status__c"])
+
+        # id to username mappings Logic
+        if ATS_Rep__c is None:
+            userID_json = {"feature": "selectcasequery", "parameters": [{"name": "salesforcelogintoken", "value": sfdctoken, "isbase64": "false"}, {"name": "selectfields", "value": "Name", "isbase64": "false"}, {"name": "tablename", "value": "User", "isbase64": "false"}, {"name": "selectcondition", "value": f"Id = '{ATS_Rep__c}'", "isbase64": "false"}]}
+            userID_data = json.dumps(userID_json)
+            jsondataasbytes = userID_data.encode('utf-8')
+            response = request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore")
+            finaldata = json.loads(response)['options'][0]['values'][0]
+            finaldata = json.loads(finaldata)
+            ATS_Rep__c_Name = str(finaldata["Name"])
+        else:
+            ATS_Rep__c_Name = "No ATS Mapped"
     finally:
         print(style.YELLOW + '{:-^87}'.format('SalesForce Case details') + style.RESET)
         print(style.YELLOW + '{:-^87}'.format('Case Related') + style.RESET)
         print("\nSalesForce Case Number: " + casenum)
+        print("Case Subject: " + Subject)
         print("Case Age: " + Age__c + " days old")
         print("Case created Date: " + Case_Created_Date_Qual__c)
         print("Case Status: " + Case_Status__c)
@@ -1913,6 +1982,7 @@ elif args.case:
         print("Org Id: " + Account_Org_ID__c)
         print("Geo Segmentation: " + GEO_Segmentation__c)
         print("Named Account Owner: " + Named_Owner_Name__c)
+        print("ATS: " + ATS_Rep__c_Name)
         print("Customer Email: " + ContactEmail)
         print("Customer Mobile: " + ContactMobile)
         print("Customer Phone: " + ContactPhone)
