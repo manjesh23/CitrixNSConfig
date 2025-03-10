@@ -53,7 +53,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "3.10.01"
+version = "3.11.01"
 
 # About script
 showscriptabout = '''
@@ -144,7 +144,7 @@ parser.add_argument('-j', metavar="", nargs="+", help="Search for Jira with Keyw
 parser.add_argument('-J', metavar="", help="Get Jira Details")
 parser.add_argument('--case', action="store_true", help="Salesforce Case Details"+ style.YELLOW)
 parser.add_argument('--adm', action="append", choices={"info", "md", "imall", "gz", "apps", "crash", "graph", "cve", "lic", "agents"}, help="ADM Bundles Only\ninfo --> ADM Basic Information\nmd --> ADM Managed Devices\nimall --> Indexing timestamp of all logs\ngz --> Extract all gz files within ADM Support bundle\napps --> List all the vServer and Instance details\ncrash --> List Crash files if available\ngraph --> Plot Cosnole CPU and Memory Graph\ncve --> List the affected NSIP against CVE\nlic --> Console License Details\nagents --> Console Agent Details" + style.CYAN)
-parser.add_argument('--sdx', action="append", choices={"info", "md", "graph", "xenhealth", "xenport"}, help="SDX Bundles Only\ninfo --> SDX Basic Information\nmd --> SDX Managed Devices\ngraph --> Plot Cosnole CPU and Memory Graph\nxenport --> SVM - Xen Port Mappings\nxenhealth --> SVM - Xen Health" + style.RESET)
+parser.add_argument('--sdx', action="append", choices={"info", "md", "graph", "gz", "xenhealth", "xenport"}, help="SDX Bundles Only\ninfo --> SDX Basic Information\nmd --> SDX Managed Devices\ngraph --> Plot Cosnole CPU and Memory Graph\ngz --> Extract all gz files within SDX Support bundle\nxenport --> SVM - Xen Port Mappings\nxenhealth --> SVM - Xen Health" + style.RESET)
 parser.add_argument('md', action="store_true", help=argparse.SUPPRESS)
 parser.add_argument('agents', action="store_true", help=argparse.SUPPRESS)
 parser.add_argument('xenport', action="store_true", help=argparse.SUPPRESS)
@@ -298,17 +298,16 @@ if args.adm:
                 admplatform = sp.run('''awk '/netscaler.sysid:/ {sysid=$2} END {if (sysid ~ /450000|450001/) print "Citrix Hypervisor"; else if (sysid ~ /450010|450011/) print "ESX"; else if (sysid ~ /450020|450021/ && !/vpx_on_cloud = 0/) print "Hyper-V"; else if (sysid ~ /450070|450071/ && !/vpx_on_cloud = 0/) print "KVM"; else print "Unknown"}' ./shell/sysctl-a.out''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 admvarsize = sp.run("awk '/\/var$/{capacity=substr($5,1,length($5)-1); printf \"%s -> Total: %s | Used: %s | Free: %s | Capacity Used: \\033[%sm%s%%\\033[0m\\n\", $1, $2, $3, $4, (capacity+0>75?\"0;31\":\"0;32\"), capacity}' ./shell/df-akin.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 admboottime = sp.run("awk -F} '/kern.boottime/{print $2}' ./shell/sysctl-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
-                registeredto = sp.run("awk -F'url:' '/fetch_new_version/ {sub(/.*https?:\/\//, \"\", $2); sub(/\/.*/, \"\", $2); print $2; exit}' ./var/mps/log/agent_upgrade.log", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                consoleaddr = sp.run("awk -F'url:' '/fetch_new_version/ {sub(/.*https?:\/\//, \"\", $2); sub(/\/.*/, \"\", $2); print $2; exit}' ./var/mps/log/agent_upgrade.log", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 ccid = sp.run('''awk -Furl '/fetch_new_version/ { sub(/^.*https:\/\/[^\/]+\//, "", $2); sub(/\/.*$/, "", $2); print $2; exit }' ./var/mps/log/agent_upgrade.log''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
             finally:
                 print(style.YELLOW + '{:-^87}'.format('NetScaler Console Show Configuration') + "\n" + style.RESET)
                 print("Support file location: " + os.popen("pwd").read().strip())
                 print("\nConsole Hostname: " + admhostname)
-                print("Registered to: " + registeredto)
+                print("Console Address: " + consoleaddr)
                 print("CCID: " + ccid)
                 print("Console IP Address: " + admip)
-                print("Console HA Peer IP: " + adm_ha_peer_ip)
-                print("Console HA Floating IP: " + (adm_ha_floating_ip if adm_ha_floating_ip else "N/A"))
+                print("Console HA Peer IP: " + adm_ha_peer_ip + "\nConsole HA Floating IP: " + adm_ha_floating_ip if adm_ha_floating_ip else "N/A") if adm_ha_peer_ip else None
                 if len(adm_ha_peer_version_ready_failover) > 23:
                     if len(adm_ha_peer_version_ready_failover.split("and")[0]) > 10:
                         if "True" in adm_ha_peer_version_ready_failover.split("and")[1]:
@@ -813,6 +812,20 @@ if args.sdx:
                 # Tooltrack
                 try:
                     fate_message = "show --sdx md"; send_request(version, username, url, fate_message, "Success")
+                finally:
+                    quit()
+        elif "gz" in args.sdx:
+            try:
+                process = sp.Popen('''find ./ -name "*.gz" -exec sh -c 'gunzip "{}" && echo -e "\e[33mExtracted: {}\e[0m"' \;''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                for line in iter(process.stdout.readline, ''):
+                    print(line, end='')
+                process.stdout.close()
+                process.wait()
+            finally:
+                # Tooltrack
+                try:
+                    fate_message = "show --sdx gz"
+                    send_request(version, username, url, fate_message, "Success")
                 finally:
                     quit()
         elif "xenport" in args.sdx:

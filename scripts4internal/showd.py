@@ -53,7 +53,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "3.10.01"
+version = "3.12.01"
 
 # About script
 showscriptabout = '''
@@ -100,6 +100,7 @@ def send_request(version, username, url, fate_message, result):
         with request.urlopen(req, timeout=3) as response:
             response_text = response.read().decode()
     finally:
+        logger.info(os.getcwd() + " - " + fate_message)
         return True
 
 # Parser args
@@ -144,7 +145,7 @@ parser.add_argument('-j', metavar="", nargs="+", help="Search for Jira with Keyw
 parser.add_argument('-J', metavar="", help="Get Jira Details")
 parser.add_argument('--case', action="store_true", help="Salesforce Case Details"+ style.YELLOW)
 parser.add_argument('--adm', action="append", choices={"info", "md", "imall", "gz", "apps", "crash", "graph", "cve", "lic", "agents"}, help="ADM Bundles Only\ninfo --> ADM Basic Information\nmd --> ADM Managed Devices\nimall --> Indexing timestamp of all logs\ngz --> Extract all gz files within ADM Support bundle\napps --> List all the vServer and Instance details\ncrash --> List Crash files if available\ngraph --> Plot Cosnole CPU and Memory Graph\ncve --> List the affected NSIP against CVE\nlic --> Console License Details\nagents --> Console Agent Details" + style.CYAN)
-parser.add_argument('--sdx', action="append", choices={"info", "md", "graph", "xenhealth", "xenport"}, help="SDX Bundles Only\ninfo --> SDX Basic Information\nmd --> SDX Managed Devices\ngraph --> Plot Cosnole CPU and Memory Graph\nxenport --> SVM - Xen Port Mappings\nxenhealth --> SVM - Xen Health" + style.RESET)
+parser.add_argument('--sdx', action="append", choices={"info", "md", "graph", "gz", "xenhealth", "xenport"}, help="SDX Bundles Only\ninfo --> SDX Basic Information\nmd --> SDX Managed Devices\ngraph --> Plot Cosnole CPU and Memory Graph\ngz --> Extract all gz files within SDX Support bundle\nxenport --> SVM - Xen Port Mappings\nxenhealth --> SVM - Xen Health" + style.RESET)
 parser.add_argument('md', action="store_true", help=argparse.SUPPRESS)
 parser.add_argument('agents', action="store_true", help=argparse.SUPPRESS)
 parser.add_argument('xenport', action="store_true", help=argparse.SUPPRESS)
@@ -814,6 +815,20 @@ if args.sdx:
                     fate_message = "show --sdx md"; send_request(version, username, url, fate_message, "Success")
                 finally:
                     quit()
+        elif "gz" in args.sdx:
+            try:
+                process = sp.Popen('''find ./ -name "*.gz" -exec sh -c 'gunzip "{}" && echo -e "\e[33mExtracted: {}\e[0m"' \;''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                for line in iter(process.stdout.readline, ''):
+                    print(line, end='')
+                process.stdout.close()
+                process.wait()
+            finally:
+                # Tooltrack
+                try:
+                    fate_message = "show --sdx gz"
+                    send_request(version, username, url, fate_message, "Success")
+                finally:
+                    quit()
         elif "xenport" in args.sdx:
             try:
                 svm_xen_ports = sp.run("awk -F, '{print $1, $3, $2, $5, $6, $9, $10, $4}' ./var/mps/mpsdb/xen_health_interface.csv | column -t", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
@@ -909,7 +924,6 @@ print("\n\n" + "Check out the new features related to "+ style.LIGHTGREEN + "ADM
 
 if args.i:
     try:
-        logger.info(os.getcwd() + " - show -i")
         # Printing system essential details
         print(style.YELLOW + '{:-^87}'.format('NetScaler Show Configuration') + "\n" + style.RESET)
         adchostname = sp.run("awk '{print $2}' shell/uname-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
@@ -1269,7 +1283,6 @@ elif args.pt:
             quit()
 elif args.n:
     try:
-        logger.info(os.getcwd() + " - show -n")
         # Prining Network related information on ADC
         print(style.YELLOW + '{:-^87}'.format('NetScaler Network Information') + style.RESET+"\n")
         adcnetinfo = sp.run("awk '/exec: show ns ip$/{flag=1;next}/Done/{flag=0}flag' shell/showcmds.txt", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
@@ -1294,7 +1307,6 @@ elif args.n:
             quit()
 elif args.p:
     try:
-        logger.info(os.getcwd() + " - show -p")
         vcpu = sp.run("awk '/System Detected/{print $(NF-1), $NF;exit}' var/nslog/dmesg.boot", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         nsppenum = sp.run("awk '/NSPPE/{print}' shell/nsp.out | wc -l | sed \"s/^[ \t]*//\"", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
         nsppepid = sp.run("awk '/NSPPE/{print}' shell/nsp.out | sed \"s/^[ \t]*//\"", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
@@ -1358,7 +1370,6 @@ elif args.E:
             quit()
 elif args.fw:
     try:
-        logger.info(os.getcwd() + " - show -fu")
         adcfirmwareRTM = sp.run("curl -s 'https://www.citrix.com/downloads/citrix-adc/' | egrep -C2 \"<a href=\\\"\/downloads\/citrix-adc.*\" | awk '/citrix-adc|\/p/{print}' | paste - - | sed -E 's/<\/.|<a href=|\\\"|NEW/ /g' | awk -F'>' '{printf \"%s|%s\\n\", $3, $2}' | awk '{$1=$1};1' | sed -E 's-\| \|- \|-g' | column -t -s'|' | sort -k4n -k2M -k3n", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip().replace('\n\n', '\n')
         admadcfirmwareRTM = sp.run("curl -s 'https://www.citrix.com/downloads/citrix-application-management/' | egrep -C2 \"<a href=\\\"\/downloads\/citrix-application-management.*\" | awk '/citrix-application-management|\/p/{print}' | paste - - | sed -E 's/<\/.|<a href=|\\\"|NEW/ /g' | awk -F'>' '{printf \"%s|%s\\n\", $3, $2}' | awk '{$1=$1};1' | sed -E 's-\| \|- \|-g' | column -t -s'|' | sort -k4n -k2M -k3n", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip().replace('\n\n', '\n')
     finally:
@@ -1403,7 +1414,6 @@ elif args.fw:
             quit()
 elif args.gz:
     try:
-        logger.info(os.getcwd() + " - show -gz")
         # Fix permission
         sp.run("fixperms ./", shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
         # Unzip all gz files under ./var/log
@@ -1431,7 +1441,6 @@ elif args.gz:
             quit()
 elif args.im:
     try:
-        logger.info(os.getcwd() + " - show -im")
         try:
             log_turnover = sp.run('''awk '/turned over due to size/{print}' var/log/ns.log''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
             nslog = sp.run("awk 'BEGIN{printf \"%s\\t| %s\\t  | %s\\n\", \"Start_Time\",\"End_Time\",\"File_Name\"}'; for i in $(printf '%s\n' var/log/ns.lo* | grep -v 'gz\|tar\|offset'| sort -t. -k3,3n); do awk 'NR == 2 {printf \"%s %02d %s\\t| \", $1,$2,$3}END{printf \"%s %02d %s | %s\\n\",  $1,$2,$3,substr(ARGV[1],9)}' $i; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
@@ -1450,7 +1459,6 @@ elif args.im:
 
 elif args.imall:
     try:
-        logger.info(os.getcwd() + " - show -imall")
         if os.path.isfile("conFetch/show_output/show_imall.txt") and os.path.getsize("conFetch/show_output/show_imall.txt") > 23:
             with open("conFetch/show_output/show_imall.txt", "r") as show_ha:
                 print(show_ha.read())
@@ -1565,7 +1573,6 @@ elif args.N:
 
 elif args.error:
     try:
-        logger.info(os.getcwd() + " - show -error")
         # Highlight all the ERROR|err|down|disconnect|fail containing lines in input file.
         print(sp.run("if test -f var/log/" + args.error + "; then awk '/ERROR|err|Err|down|disconnect|fail/{print \"\033[1;31m\"$0\"\033[0m\";next}{print $0}' var/log/" + args.error + "; else echo \"File not found\"; fi", shell=True).stdout)
     finally:
@@ -1573,7 +1580,6 @@ elif args.error:
         quit()
 elif args.show:
     try:
-        logger.info(os.getcwd() + " - show -show - " + args.show)
         # Prining show command output from file shell/showcmds.txt | Try without show
         showout = os.popen("sed -nr \"/^exec: show " + args.show + "/,/Done/p\" shell/showcmds.txt").read().strip()
         if len(showout) < 1:
@@ -1602,7 +1608,6 @@ elif args.show:
         quit()
 elif args.stat:
     try:
-        logger.info(os.getcwd() + " - show -stat - " + args.stat)
         # Prining stat command output from file shell/statcmds.txt | Try without stat
         statout = os.popen("sed -nr \"/^exec: stat " + args.stat + "/,/Done/p\" shell/statcmds.txt").read().strip()
         if len(statout) < 1:
@@ -1631,7 +1636,6 @@ elif args.stat:
         quit()
 elif args.vip:
     try:
-        logger.info(os.getcwd() + " - show -vip")
         # Prining formatted VIP output from file shell/ns_running_config.conf.txt
         lbvipout = os.popen("awk '/^add lb vserver/{printf \"\033[0;92m%s\033[00m | %s | %s | %s | %s |\\n\", $2, $4, $5, $7, $6}' shell/ns_running_config.conf  | column -t -s'|'").read().strip()
         csvipout = os.popen("awk '/^add cs vserver/{printf \"\033[0;96m%s\033[00m | %s | %s | %s | %s |\\n\", $2, $4, $7, $11, $8}' shell/ns_running_config.conf  | column -t -s'|'").read().strip()
@@ -2265,14 +2269,12 @@ elif args.bt1:
     finally:
         pass
 elif args.author:
-    logger.info(os.getcwd() + " - author")
     print(sp.run(["lolcat"], input=showscriptauthor, capture_output=True, text=True).stdout)
     try:
         fate_message = "show --author"; send_request(version, username, url, fate_message, "Success")
     finally:
         pass
 elif args.about:
-    logger.info(os.getcwd() + " - about")
     print(sp.run(["lolcat"], input=showscriptabout, capture_output=True, text=True).stdout)
     try:
         fate_message = "show --about"; send_request(version, username, url, fate_message, "Success")
@@ -2432,6 +2434,8 @@ elif args.ha:
                     box_timezone = sp.run("awk '{printf \"[%s]\", $5}' shell/date.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                     ha_initial_state = sp.run("i=$(ls -alh var/nslog/ | awk '/newnslog./{print \"var/nslog/\"$NF}' | sort | head -1); nsconmsg -d stats -g ha_cur_master_state -K $i |  awk -v i=\"$i\" '/ha_cur_master_state/{if ($3 == 0) print i \" --> Initial State --> \\033[;32mSecondary\\033[0m\"; else if ($3 == 1) print i \" --> Initial State  --> \\033[;32mClaiming To Primary\\033[0m\"; else if ($3 == 2) print i \" --> Initial State  --> \\033[;32mPrimary\\033[0m\"; else if ($3 == 3) print i \" --> Initial State  --> \\033[;32mStay Secondary\\033[0m\"; else if ($3 == 4) print i \" --> Initial State  --> \\033[;32mForce Change to Primary\\033[0m\"; else print i \" --> Initial State  --> \\033[;32mInvalid\\033[0m\"}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                     ha_transition = sp.run(" for i in $(printf \"%s\\n\" \"var/nslog/newnslog.*\" | grep -v gz | grep -v tar && printf \"var/nslog/newnslog\\n\"); do nsconmsg -d current -s disptime=1 -g ha_cur_master_state -K $i | awk -v i=\"$i\" '/ha_cur_master_state/{if ($3 == 0) print i \" --> Secondary --> \\033[;31mFailed Over Time\\033[0m --> \", $7, $8, $9, $10, $11; else if ($3 == 1) print i \" --> Claiming To Primary --> \\033[;31mFailed Over Time\\033[0m --> \", $7, $8, $9, $10, $11; else if ($3 == 2) print i \" --> Primary --> \\033[;31mFailed Over Time\\033[0m --> \", $7, $8, $9, $10, $11; else if ($3 == 3) print i \" --> Stay Secondary --> \\033[;31mFailed Over Time\\033[0m --> \", $7, $8, $9, $10, $11; else if ($3 == 4) print i \" --> Force Change to Primary --> \\033[;31mFailed Over Time\\033[0m --> \", $7, $8, $9, $10, $11; else print i \" --> Invalid --> \\033[;31mFailed Over Time\\033[0m --> \", $7, $8, $9, $10, $11}'; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                    print("Manjesh here")
+                    print(ha_transition)
                     if box_time == 0:
                         print(ha_initial_state + "\n")
                         if len(ha_transition) < 23:
