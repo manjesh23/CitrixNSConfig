@@ -183,4 +183,4 @@ for column in breakup_ws.columns:
     breakup_ws.column_dimensions[column_letter].width = adjusted_width
 
 # Save the workbook
-wb.save(r"G:\My Drive\bug_report.xlsx")
+wb.save(r"C:\bug_report\bug_report.xlsx")

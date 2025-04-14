@@ -53,7 +53,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "3.12.01"
+version = "3.14.05"
 
 # About script
 showscriptabout = '''
@@ -581,7 +581,7 @@ if args.adm:
                 lic_usage_data = []
                 issued_to = sp.run("awk -F'NOTICE=\"' '/NOTICE/ { split($2, arr, \"\\\"\"); print arr[1] }' ./mpsconfig/license/* | sed 's/\\\\/ /g' | sort | uniq", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 this_host_data = sp.run('''awk 'BEGIN {printf "Filename\\tHost_id\\tPort_Number\\n"} /SERVER this_host/{print FILENAME , $3, $4}' ./mpsconfig/license/*.lic | column -t''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
-                lic_expiry_data = sp.run('''sed 's/ /_/g' ./var/mps/mpsdb/license_expiry_info.csv | awk -F, 'BEGIN {printf "Type\\tDays_Left\\tCount\\n"} !/expirydays/{print $2, $3, ($2 ~ /Bandwidth/ ? $4 / 1000 " MB" : $4)}' | column -t''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                lic_expiry_data = sp.run('''sed 's/ /_/g' ./var/mps/mpsdb/license_expiry_info.csv | awk -F, 'BEGIN {printf "Type\\tDays_Left\\tCount\\n"} !/expirydays/{print $2, $3, ($2 ~ /Bandwidth/ ? $4 / 1000 " GB" : $4)}' | column -t''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 #lic_usage_data = sp.run("sed 's/ /_/g' ./var/mps/mpsdb/license_user_detail.csv | awk -F, '{print $5, $6, $7, $8}' | while read -r node display no_of_license time; do [[ \"$time\" =~ ^[0-9]+$ ]] && printf \"%s\\t%s\\t%s\\t%s\\n\" \"$node\" \"$display\" \"$no_of_license\" \"$(date -r \"$time\" +\"%b-%d/%Y::%H:%M:%S\")\" || printf \"%s\\t%s\\t%s\\treg_time\\n\" \"$node\" \"$display\" \"$no_of_license\"; done | column -t", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 with open('./var/mps/mpsdb/license_user_detail.csv', 'r') as f:
                     reader = csv.reader(f)
@@ -1581,10 +1581,10 @@ elif args.error:
 elif args.show:
     try:
         # Prining show command output from file shell/showcmds.txt | Try without show
-        showout = os.popen("sed -nr \"/^exec: show " + args.show + "/,/Done/p\" shell/showcmds.txt").read().strip()
+        showout = os.popen("sed -nr \"/^exec: show " + args.show + "/I,/Done/p\" shell/showcmds.txt").read().strip()
         if len(showout) < 1:
             print(style.RED + "Incorrect show command. Please use the below available match...\n" + style.RESET)
-            showsuggest = os.popen("cat shell/showcmds.txt | grep exec | grep -i " + "\"" + args.show + "\"" + " | awk '{$1=$2=\"\"}1' | cut -c3-").read().strip()
+            showsuggest = os.popen("cat shell/showcmds.txt | grep 'exec:\|exec :' | grep -i " + "\"" + args.show + "\"" + " | awk '{$1=$2=\"\"}1' | cut -c3-").read().strip()
             if len(showsuggest) < 1:
                 print(style.RED + "No matching show command found." + style.RESET)
                 try:
@@ -1592,7 +1592,7 @@ elif args.show:
                 finally:
                     pass
             else:
-                print(style.CYAN + os.popen("cat shell/showcmds.txt | grep exec | grep -i " + "\"" + args.show + "\"" + " | awk '{$1=$2=\"\"}1' | cut -c3-").read().strip() + style.RESET)
+                print(style.CYAN + os.popen("cat shell/showcmds.txt | grep 'exec:\|exec :' | grep -i " + "\"" + args.show + "\"" + " | awk '{$1=$2=\"\"}1' | cut -c3-").read().strip() + style.RESET)
                 try:
                     fate_message = "show -show " + args.show; send_request(version, username, url, fate_message, "Partial")
                 finally:
@@ -1609,10 +1609,10 @@ elif args.show:
 elif args.stat:
     try:
         # Prining stat command output from file shell/statcmds.txt | Try without stat
-        statout = os.popen("sed -nr \"/^exec: stat " + args.stat + "/,/Done/p\" shell/statcmds.txt").read().strip()
+        statout = os.popen("sed -nr \"/^exec: stat " + args.stat + "/I,/Done/p\" shell/statcmds.txt").read().strip()
         if len(statout) < 1:
             print(style.RED + "Incorrect stat command. Please use the below available match...\n" + style.RESET)
-            statsuggest = os.popen("cat shell/statcmds.txt | grep exec | grep -i " + "\"" + args.stat + "\"" + " | awk '{$1=$2=\"\"}1' | cut -c3-").read().strip()
+            statsuggest = os.popen("cat shell/statcmds.txt | grep 'exec:\|exec :' | grep -i " + "\"" + args.stat + "\"" + " | awk '{$1=$2=\"\"}1' | cut -c3-").read().strip()
             if len(statsuggest) < 1:
                 print(style.RED + "No matching stat command found." + style.RESET)
                 try:
@@ -1620,7 +1620,7 @@ elif args.stat:
                 finally:
                     pass
             else:
-                print(style.CYAN + os.popen("cat shell/statcmds.txt | grep exec | grep -i " + "\"" + args.stat + "\"" + " | awk '{$1=$2=\"\"}1' | cut -c3-").read().strip() + style.RESET)
+                print(style.CYAN + os.popen("cat shell/statcmds.txt | grep 'exec:\|exec :' | grep -i " + "\"" + args.stat + "\"" + " | awk '{$1=$2=\"\"}1' | cut -c3-").read().strip() + style.RESET)
                 try:
                     fate_message = "show -stat " + args.stat; send_request(version, username, url, fate_message, "Partial")
                 finally:
@@ -1741,16 +1741,18 @@ elif args.case:
     appliance_org_check = None
     # Get SFDC API Keys
     try:
-        sfdcurl = "https://ftltoolswebapi.deva.citrite.net/sfaas/api/salesforce"
-        tokenpayload = {"feature": "login", "parameters": [{"name": "tokenuri", "value": "https://login.salesforce.com/services/oauth2/token", "isbase64": "false"}] }
-        sfdcreq = request.Request(sfdcurl)
+        sfdcurl = "https://ftltoolswebapiashburn.deva.citrite.net/sfaas/api/salesforce"
+        tokenpayload = {"feature": "login", "parameters": [{"name": "tokenuri", "value": "https://login.salesforce.com/services/oauth2/token", "isbase64": "false"}]}
+        jsondata = json.dumps(tokenpayload).encode('utf-8')
+        sfdcreq = request.Request(sfdcurl, data=jsondata)
         sfdcreq.add_header('Content-Type', 'application/json; charset=utf-8')
-        jsondata = json.dumps(tokenpayload)
-        jsondataasbytes = jsondata.encode('utf-8')
-        sfdcreq.add_header('Content-Length', len(jsondataasbytes))
-        sfdctoken = json.loads(request.urlopen(sfdcreq, jsondataasbytes).read().decode("utf-8", "ignore"))['options'][0]['values'][0]
-    except:
-        print(style.RED + "Unable to get SFDC Token" + style.RESET)
+        sfdcreq.add_header('Content-Length', str(len(jsondata)))
+        with request.urlopen(sfdcreq) as response:
+            result = response.read().decode('utf-8', 'ignore')
+            sfdctoken = json.loads(result)['options'][0]['values'][0]
+    except Exception as e:
+        print("Unable to get SFDC Token:", str(e))
+        sfdctoken = '00D300000006M9V!AQEAQDmEJGI1qrLvGJ3P7Svoact_M4.E1541qyYuR5naKCA7UnYVuv3J6rqCu1all0h51vJ9LbnND3hUp0qWk3N1sEcneCFx'
 
     # Get case number from path
     try:
@@ -2142,98 +2144,94 @@ elif args.bt:
                         for i in initialJira.split():
                             detailedJira = sp.run("curl -s -H 'Content-type: application/json' -d '{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\",\"feature\":\"fetchfields\",\"parameters\":[{\"name\":\"id\",\"value\":\""+i+"\",\"isbase64\":false},{\"name\":\"fields\",\"value\":\"summary,versions,status,resolution,fixVersions,created\",\"isbase64\":false}]}' -X POST http://10.14.18.46/SFaaS/api/jira | jq '.options | .[] | .values | .[]' | sed 's/\\\\//g' | awk '{print substr($0, 2, length($0) - 2)}' | jq -r  '\"\\(.key) \\(\"-->\") \\(.fields.summary) \\(\"-->\") \\(.fields.resolution.name) \\(\"-->\") \\(.fields.created[0:10]) \\(\"\\nFound In:\") \\([.fields.versions[].name]) \\(\"--> Fixed In:\") \\([.fields.fixVersions[].name]) \\(\"\\n\")\"'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                             print(detailedJira)
-
         elif len(processcrashfile) != 0:
             print(style.YELLOW + '{:-^87}'.format('Its a Process Crash') + style.RESET)
             print(style.YELLOW + "\nAvailable Process Core files in Case directory " + style.RESET)
             print(style.CYAN + '\n'.join(processcrashfile) + style.RESET)
             print(style.YELLOW + "\nAvailable Process Core files in this collector bundle: " + style.RESET)
             print(style.CYAN + count_collectorprocesscrashfile + style.RESET)
-            print("Downloading and Using Debug files " + codebuild)
-            manaq = ("curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_mana/build_mana_" + codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild + " | awk '/HTTP/{print $2}'")
-            artesaq = ("curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_artesa/build_artesa_" + codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild + " | awk '/HTTP/{print $2}'")
-            mana = ("curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_mana/build_mana_" + codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild)
-            artesa = ("curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_artesa/build_artesa_" + codebuild.split("-")[1].split("_")[0].replace(".", "_")+"/dbgbins-"+codebuild)
-            if "200" in sp.run(manaq, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout:
-                try:
-                    fate_message = "show -bt --> mana process crash"; send_request(version, username, url, fate_message, "Success")
-                finally:
-                    pass
-                sp.run(mana, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+            entries = os.listdir('.')
+            dbgbins_dirs = [entry for entry in entries if os.path.isdir(entry) and entry.startswith('dbgbins-')]
+            delete_dbgbins = False
+            if not dbgbins_dirs:
+                while True:
+                    user_input = input("\nShould we delete dbgbins at the end of analysis? (True/False): ").strip().lower()
+                    if user_input in ["true", "false"]:
+                        delete_dbgbins = user_input == "true"
+                        break
+                    else:
+                        print("Invalid input. Please enter 'True' or 'False'.")
+                print("Downloading and Using Debug files " + codebuild)
+                build_id = codebuild.split("-")[1].split("_")[0].replace(".", "_")
+                manaq = f"curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_mana/build_mana_{build_id}/dbgbins-{codebuild} | awk '/HTTP/{{print $2}}'"
+                artesaq = f"curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_artesa/build_artesa_{build_id}/dbgbins-{codebuild} | awk '/HTTP/{{print $2}}'"
+                zionq = f"curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_zion/build_zion_{build_id}/dbgbins-{codebuild} | awk '/HTTP/{{print $2}}'"
+                mana = f"curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_mana/build_mana_{build_id}/dbgbins-{codebuild}"
+                artesa = f"curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_artesa/build_artesa_{build_id}/dbgbins-{codebuild}"
+                zion = f"curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_zion/build_zion_{build_id}/dbgbins-{codebuild}"
+                if "200" in sp.run(manaq, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout:
+                    try:
+                        fate_message = "show -bt --> mana process crash"
+                        send_request(version, username, url, fate_message, "Success")
+                    finally:
+                        pass
+                    sp.run(mana, shell=True)
+                elif "200" in sp.run(artesaq, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout:
+                    try:
+                        fate_message = "show -bt --> artesa process crash"
+                        send_request(version, username, url, fate_message, "Success")
+                    finally:
+                        pass
+                    sp.run(artesa, shell=True)
+                elif "200" in sp.run(zionq, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout:
+                    try:
+                        fate_message = "show -bt --> zion process crash"
+                        send_request(version, username, url, fate_message, "Success")
+                    finally:
+                        pass
+                    sp.run(zion, shell=True)
+                else:
+                    print(style.RED + "Debug binaries not found in any repo." + style.RESET)
+                    quit()
                 print("Extracting " + codebuild)
-                sp.run("tar -xf dbgbins*", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                sp.run("rm -rf dbgbins*.tgz", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                sp.run("fixperms ./", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                collectorprocesscrashfile = set(collectorprocesscrashfile)
-                for processcrash in processcrashfile:
-                    processcrash = re.sub("\(", "\(", processcrash)
-                    processcrash = re.sub("\)", "\)", processcrash)
-                    for collectorprocesscrash in collectorprocesscrashfile:
-                        collectorprocesscrash = re.sub("\(", "\(", collectorprocesscrash)
-                        collectorprocesscrash = re.sub("\)", "\)", collectorprocesscrash)
-                        collectorprocesscrash = re.sub(".gz", "", collectorprocesscrash)
-                        if collectorprocesscrash in processcrash:
-                            print(style.GREEN+"\nGenerating BackTrace for: " + processcrash + style.RESET)
-                            if os.path.isfile("dbgbins-" + codebuild[:-4] + "/" + processcrash.split("-")[0].split("/")[-1]):
-                                os.chdir("dbgbins-" + codebuild[:-4])
-                                btout = sp.run("gdb i386/" + processcrash.split("-")[0].split("/")[-1] + " " + processcrash + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
+                sp.run("tar -xf dbgbins*", shell=True)
+                sp.run("rm -rf dbgbins*.tgz", shell=True)
+                sp.run("fixperms ./", shell=True)
+            else:
+                print("Found matching dbgbins directories")
+            collectorprocesscrashfile = set(collectorprocesscrashfile)
+            for processcrash in processcrashfile:
+                processcrash = re.sub(r"\(", r"\(", processcrash)
+                processcrash = re.sub(r"\)", r"\)", processcrash)
+                for collectorprocesscrash in collectorprocesscrashfile:
+                    collectorprocesscrash = re.sub(r"\(", r"\(", collectorprocesscrash)
+                    collectorprocesscrash = re.sub(r"\)", r"\)", collectorprocesscrash)
+                    collectorprocesscrash = re.sub(r".gz", "", collectorprocesscrash)
+                    if collectorprocesscrash in processcrash:
+                        print(style.GREEN + "\nGenerating BackTrace for: " + processcrash + style.RESET)
+                        crash_bin_dir = "dbgbins-" + codebuild[:-4]
+                        process_bin = processcrash.split("-")[0].split("/")[-1]
+                        paths = [
+                            os.path.join(crash_bin_dir, process_bin),
+                            os.path.join(crash_bin_dir, "i386", process_bin),
+                            os.path.join(crash_bin_dir, "amd64", process_bin)
+                        ]
+                        for path in paths:
+                            if os.path.isfile(path):
+                                os.chdir(crash_bin_dir)
+                                arch = "i386" if "i386" in path else "amd64" if "amd64" in path else "."
+                                gdb_path = f"{arch}/{process_bin}" if arch != "." else process_bin
+                                btout = sp.run(f"gdb {gdb_path} {processcrash} -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                                 print(btout.stdout)
                                 os.chdir("..")
-                            elif os.path.isfile("dbgbins-" + codebuild[:-4] + "/" + "i386/"+processcrash.split("-")[0].split("/")[-1]):
-                                os.chdir("dbgbins-" + codebuild[:-4])
-                                btout = sp.run("gdb i386/" + processcrash.split("-")[0].split("/")[-1] + " " + processcrash + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                                print(btout.stdout)
-                                os.chdir("..")
-                            elif os.path.isfile("dbgbins-" + codebuild[:-4] + "/" + "amd64/" + processcrash.split("-")[0].split("/")[-1]):
-                                os.chdir("dbgbins-" + codebuild[:-4])
-                                btout = sp.run("gdb amd64/" + processcrash.split("-")[0].split("/")[-1] + " " + processcrash + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                                print(btout.stdout)
-                                sp.run("rm -rf dbgbins*", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                                os.chdir("..")
-                            else:
-                                print(style.RED + "Unable to find this process: " + processcrash.split("-")[0].split("/")[-1] + " in debug binaries" + style.RESET)
-                                sp.run("rm -rf dbgbins*", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                                quit()
-            elif "200" in sp.run(artesaq, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout:
-                try:
-                    fate_message = "show -bt --> artesa process crash"; send_request(version, username, url, fate_message, "Success")
-                finally:
-                    pass
-                sp.run(artesa, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                print("Extracting " + codebuild)
-                sp.run("tar -xf dbgbins*", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                sp.run("rm -rf dbgbins*.tgz", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                sp.run("fixperms ./", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                collectorprocesscrashfile = set(collectorprocesscrashfile)
-                for processcrash in processcrashfile:
-                    processcrash = re.sub("\(", "\(", processcrash)
-                    processcrash = re.sub("\)", "\)", processcrash)
-                    for collectorprocesscrash in collectorprocesscrashfile:
-                        collectorprocesscrash = re.sub("\(", "\(", collectorprocesscrash)
-                        collectorprocesscrash = re.sub("\)", "\)", collectorprocesscrash)
-                        collectorprocesscrash = re.sub(".gz", "", collectorprocesscrash)
-                        if collectorprocesscrash in processcrash:
-                            print(style.GREEN+"\nGenerating BackTrace for: " + processcrash + style.RESET)
-                            if os.path.isfile("dbgbins-" + codebuild[:-4] + "/" + processcrash.split("-")[0].split("/")[-1]):
-                                os.chdir("dbgbins-" + codebuild[:-4])
-                                btout = sp.run("gdb i386/" + processcrash.split("-")[0].split("/")[-1] + " " + processcrash + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                                print(btout.stdout)
-                                os.chdir("..")
-                            elif os.path.isfile("dbgbins-" + codebuild[:-4] + "/" + "i386/"+processcrash.split("-")[0].split("/")[-1]):
-                                os.chdir("dbgbins-" + codebuild[:-4])
-                                btout = sp.run("gdb i386/" + processcrash.split("-")[0].split("/")[-1] + " " + processcrash + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                                print(btout.stdout)
-                                os.chdir("..")
-                            elif os.path.isfile("dbgbins-" + codebuild[:-4] + "/" + "amd64/" + processcrash.split("-")[0].split("/")[-1]):
-                                os.chdir("dbgbins-" + codebuild[:-4])
-                                btout = sp.run("gdb amd64/" + processcrash.split("-")[0].split("/")[-1] + " " + processcrash + " -ex 'bt full' -ex quit", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                                print(btout.stdout)
-                                sp.run("rm -rf dbgbins*", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                                os.chdir("..")
-                            else:
-                                print(style.RED + "Unable to find this process: " + processcrash.split("-")[0].split("/")[-1] + " in debug binaries" + style.RESET)
-                                sp.run("rm -rf dbgbins*", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
-                                quit()
+                                break
+                        else:
+                            print(style.RED + "Unable to find this process: " + process_bin + " in debug binaries" + style.RESET)
+                            if delete_dbgbins:
+                                sp.run("rm -rf dbgbins*", shell=True)
+                            quit()
+            if delete_dbgbins:
+                sp.run("rm -rf dbgbins*", shell=True)
         else:
             print(style.RED + "Unable to find Process / NSPPE Crash in Either Collector Bundle or No Core File in Case Directory !!!" + style.RESET)
             try:
@@ -2430,11 +2428,10 @@ elif args.ha:
                     finally:
                         quit()
                 else:
-                    box_time = int(sp.run("awk '/local/&&/GMT/{print $3 - substr($6,12); exit}' var/log/ns.lo*", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
+                    box_time = int(sp.run("awk '/ns param/&&/timezone/{print substr($5,5,6) * 1; exit}' shell/ns_running_config.conf", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip() or '0')
                     box_timezone = sp.run("awk '{printf \"[%s]\", $5}' shell/date.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                     ha_initial_state = sp.run("i=$(ls -alh var/nslog/ | awk '/newnslog./{print \"var/nslog/\"$NF}' | sort | head -1); nsconmsg -d stats -g ha_cur_master_state -K $i |  awk -v i=\"$i\" '/ha_cur_master_state/{if ($3 == 0) print i \" --> Initial State --> \\033[;32mSecondary\\033[0m\"; else if ($3 == 1) print i \" --> Initial State  --> \\033[;32mClaiming To Primary\\033[0m\"; else if ($3 == 2) print i \" --> Initial State  --> \\033[;32mPrimary\\033[0m\"; else if ($3 == 3) print i \" --> Initial State  --> \\033[;32mStay Secondary\\033[0m\"; else if ($3 == 4) print i \" --> Initial State  --> \\033[;32mForce Change to Primary\\033[0m\"; else print i \" --> Initial State  --> \\033[;32mInvalid\\033[0m\"}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                     ha_transition = sp.run(" for i in $(printf \"%s\\n\" \"var/nslog/newnslog.*\" | grep -v gz | grep -v tar && printf \"var/nslog/newnslog\\n\"); do nsconmsg -d current -s disptime=1 -g ha_cur_master_state -K $i | awk -v i=\"$i\" '/ha_cur_master_state/{if ($3 == 0) print i \" --> Secondary --> \\033[;31mFailed Over Time\\033[0m --> \", $7, $8, $9, $10, $11; else if ($3 == 1) print i \" --> Claiming To Primary --> \\033[;31mFailed Over Time\\033[0m --> \", $7, $8, $9, $10, $11; else if ($3 == 2) print i \" --> Primary --> \\033[;31mFailed Over Time\\033[0m --> \", $7, $8, $9, $10, $11; else if ($3 == 3) print i \" --> Stay Secondary --> \\033[;31mFailed Over Time\\033[0m --> \", $7, $8, $9, $10, $11; else if ($3 == 4) print i \" --> Force Change to Primary --> \\033[;31mFailed Over Time\\033[0m --> \", $7, $8, $9, $10, $11; else print i \" --> Invalid --> \\033[;31mFailed Over Time\\033[0m --> \", $7, $8, $9, $10, $11}'; done", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
-                    print("Manjesh here")
                     print(ha_transition)
                     if box_time == 0:
                         print(ha_initial_state + "\n")
@@ -2464,6 +2461,7 @@ elif args.ha:
                                 if not tz_convert_msg_printed:
                                     print(style.GREEN + "Converted from GMT time to NetScaler Time " + box_timezone + " Offset: " + str(box_time) + style.RESET + "\n")
                                     tz_convert_msg_printed = True
+                                    ha_transition_timestamp = re.findall(timestamp_pattern, line)
                                 else:
                                     print(line.replace("'''", ""))
                                     ha_transition_timestamp = re.findall(timestamp_pattern, line)
@@ -2521,7 +2519,7 @@ elif args.ha:
                             diff = line_ts_dt - ts_dt
                             if abs(diff.total_seconds()) < 300:
                                 if not rca_msg_printed:
-                                    print(style.YELLOW + "Possible Force Failover at the time of " + ts + style.RESET)
+                                    print(style.YELLOW + "Possible Heartbeat missing at the time of " + ts + style.RESET)
                                     rca_msg_printed = True
                                 print(line)
                                 break
@@ -2540,6 +2538,23 @@ elif args.ha:
                             if abs(diff.total_seconds()) < 300:
                                 if not rca_msg_printed:
                                     print(style.YELLOW + "\nPossible Force Failover at the time of " + ts + style.RESET)
+                                    rca_msg_printed = True
+                                print(line)
+                                break
+                    pb_op_longer_hb = sp.run("for file in var/log/*; do awk '/pb_op_longer_hb/{print}' \"$file\"; done | sort | uniq", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                    rca_msg_printed = False
+                    for line in pb_op_longer_hb.split('\n'):
+                        if not line.strip():
+                            continue
+                        timestamp = line.split()[0:3]
+                        timestamp_str = ' '.join(timestamp)
+                        for ts in ha_transition_timestamp:
+                            ts_dt = datetime.strptime(ts, '%b %d %H:%M:%S')
+                            line_ts_dt = datetime.strptime(timestamp_str, '%b %d %H:%M:%S')
+                            diff = line_ts_dt - ts_dt
+                            if abs(diff.total_seconds()) < 300:
+                                if not rca_msg_printed:
+                                    print(style.YELLOW + "\nPossible Pitboss delayed heartbeat causing Failover at the time of " + ts + style.RESET)
                                     rca_msg_printed = True
                                 print(line)
                                 break
@@ -2910,7 +2925,7 @@ elif args.mem:
     try:
         print(style.YELLOW + '{:-^87}'.format('NetScaler Mem Pool more than 20% and its breakup') + "\n" + style.RESET)
         out_dir = 'conFetch/nsconmsg/'
-        matching_newnslog_files = glob(os.path.join('./var/nslog/', 'newnslog*'))  
+        matching_newnslog_files = [path for path in glob('./var/nslog/newnslog*') if os.path.isdir(path)] 
         if matching_newnslog_files:
             mem_stats_table = []
             keys_to_extract = ['netscaler_netaddress', 'sys_cur_nsbs', 'sys_cur_freensbs', 'mem_system_page_size', 'mem_tot_recovery_done', 'mem_tot_pages_recovered', 'mem_err_recovery_timeout']
@@ -2970,7 +2985,7 @@ elif args.mem:
         if mem_stats_table:
             fate_message = "show --mem"; send_request(version, username, url, fate_message, "Success")
             print(f"{'Newnslog File':<30} {'netscaler_netaddress':<20} {'sys_cur_nsbs':<15} {'sys_cur_freensbs':<18} {'mem_system_page_size':<20} {'mem_tot_recovery_done':<20} {'mem_tot_pages_recovered':<20} {'mem_err_recovery_timeout':<25}")
-            print("-" * 160)
+            print("-" * 180)
             for row in mem_stats_table:
                 print(f"{row[0]:<30} {row[1]:<20} {row[2]:<15} {row[3]:<18} {row[4]:<20} {row[5]:<20} {row[6]:<20} {row[7]:<25}")
         else:
