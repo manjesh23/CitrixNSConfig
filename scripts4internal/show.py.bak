@@ -53,7 +53,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "3.14.03"
+version = "3.14.05"
 
 # About script
 showscriptabout = '''
@@ -2144,7 +2144,6 @@ elif args.bt:
                         for i in initialJira.split():
                             detailedJira = sp.run("curl -s -H 'Content-type: application/json' -d '{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\",\"feature\":\"fetchfields\",\"parameters\":[{\"name\":\"id\",\"value\":\""+i+"\",\"isbase64\":false},{\"name\":\"fields\",\"value\":\"summary,versions,status,resolution,fixVersions,created\",\"isbase64\":false}]}' -X POST http://10.14.18.46/SFaaS/api/jira | jq '.options | .[] | .values | .[]' | sed 's/\\\\//g' | awk '{print substr($0, 2, length($0) - 2)}' | jq -r  '\"\\(.key) \\(\"-->\") \\(.fields.summary) \\(\"-->\") \\(.fields.resolution.name) \\(\"-->\") \\(.fields.created[0:10]) \\(\"\\nFound In:\") \\([.fields.versions[].name]) \\(\"--> Fixed In:\") \\([.fields.fixVersions[].name]) \\(\"\\n\")\"'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                             print(detailedJira)
-
         elif len(processcrashfile) != 0:
             print(style.YELLOW + '{:-^87}'.format('Its a Process Crash') + style.RESET)
             print(style.YELLOW + "\nAvailable Process Core files in Case directory " + style.RESET)
@@ -2162,18 +2161,14 @@ elif args.bt:
                         break
                     else:
                         print("Invalid input. Please enter 'True' or 'False'.")
-
                 print("Downloading and Using Debug files " + codebuild)
                 build_id = codebuild.split("-")[1].split("_")[0].replace(".", "_")
-
-                manaq = f"curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_mana/build_mana_{build_id}/dbgbins-{codebuild} | awk '/HTTP/{{print $2}}'"
-                artesaq = f"curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_artesa/build_artesa_{build_id}/dbgbins-{codebuild} | awk '/HTTP/{{print $2}}'"
-                zionq = f"curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_zion/build_zion_{build_id}/dbgbins-{codebuild} | awk '/HTTP/{{print $2}}'"
-
-                mana = f"curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_mana/build_mana_{build_id}/dbgbins-{codebuild}"
-                artesa = f"curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_artesa/build_artesa_{build_id}/dbgbins-{codebuild}"
-                zion = f"curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_zion/build_zion_{build_id}/dbgbins-{codebuild}"
-
+                manaq = f"timeout 2 curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_mana/build_mana_{build_id}/dbgbins-{codebuild} | awk '/HTTP/{{print $2}}'"
+                artesaq = f"timeout 2 curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_artesa/build_artesa_{build_id}/dbgbins-{codebuild} | awk '/HTTP/{{print $2}}'"
+                zionq = f"timeout 2 curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_zion/build_zion_{build_id}/dbgbins-{codebuild} | awk '/HTTP/{{print $2}}'"
+                mana = f"timeout 2 curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_mana/build_mana_{build_id}/dbgbins-{codebuild}"
+                artesa = f"timeout 2 curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_artesa/build_artesa_{build_id}/dbgbins-{codebuild}"
+                zion = f"timeout 2 curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_zion/build_zion_{build_id}/dbgbins-{codebuild}"
                 if "200" in sp.run(manaq, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout:
                     try:
                         fate_message = "show -bt --> mana process crash"
@@ -2198,15 +2193,12 @@ elif args.bt:
                 else:
                     print(style.RED + "Debug binaries not found in any repo." + style.RESET)
                     quit()
-
                 print("Extracting " + codebuild)
                 sp.run("tar -xf dbgbins*", shell=True)
                 sp.run("rm -rf dbgbins*.tgz", shell=True)
                 sp.run("fixperms ./", shell=True)
             else:
                 print("Found matching dbgbins directories")
-
-            # Run backtrace regardless of whether binaries were found or downloaded
             collectorprocesscrashfile = set(collectorprocesscrashfile)
             for processcrash in processcrashfile:
                 processcrash = re.sub(r"\(", r"\(", processcrash)
@@ -2215,18 +2207,15 @@ elif args.bt:
                     collectorprocesscrash = re.sub(r"\(", r"\(", collectorprocesscrash)
                     collectorprocesscrash = re.sub(r"\)", r"\)", collectorprocesscrash)
                     collectorprocesscrash = re.sub(r".gz", "", collectorprocesscrash)
-
                     if collectorprocesscrash in processcrash:
                         print(style.GREEN + "\nGenerating BackTrace for: " + processcrash + style.RESET)
                         crash_bin_dir = "dbgbins-" + codebuild[:-4]
                         process_bin = processcrash.split("-")[0].split("/")[-1]
-
                         paths = [
                             os.path.join(crash_bin_dir, process_bin),
                             os.path.join(crash_bin_dir, "i386", process_bin),
                             os.path.join(crash_bin_dir, "amd64", process_bin)
                         ]
-
                         for path in paths:
                             if os.path.isfile(path):
                                 os.chdir(crash_bin_dir)
@@ -2241,10 +2230,8 @@ elif args.bt:
                             if delete_dbgbins:
                                 sp.run("rm -rf dbgbins*", shell=True)
                             quit()
-
             if delete_dbgbins:
                 sp.run("rm -rf dbgbins*", shell=True)
-                    
         else:
             print(style.RED + "Unable to find Process / NSPPE Crash in Either Collector Bundle or No Core File in Case Directory !!!" + style.RESET)
             try:

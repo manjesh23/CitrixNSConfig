@@ -2155,20 +2155,20 @@ elif args.bt:
             delete_dbgbins = False
             if not dbgbins_dirs:
                 while True:
-                    user_input = input("\nShould we delete dbgbins at the end of analysis? (True/False): ").strip().lower()
-                    if user_input in ["true", "false"]:
-                        delete_dbgbins = user_input == "true"
+                    user_input = input("\nShould we delete dbgbins at the end of analysis? (yes/no): ").strip().lower()
+                    if user_input in ["yes", "no"]:
+                        delete_dbgbins = user_input == "yes"
                         break
                     else:
-                        print("Invalid input. Please enter 'True' or 'False'.")
+                        print("Invalid input. Please enter 'yes' or 'no'.")
                 print("Downloading and Using Debug files " + codebuild)
                 build_id = codebuild.split("-")[1].split("_")[0].replace(".", "_")
-                manaq = f"curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_mana/build_mana_{build_id}/dbgbins-{codebuild} | awk '/HTTP/{{print $2}}'"
-                artesaq = f"curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_artesa/build_artesa_{build_id}/dbgbins-{codebuild} | awk '/HTTP/{{print $2}}'"
-                zionq = f"curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_zion/build_zion_{build_id}/dbgbins-{codebuild} | awk '/HTTP/{{print $2}}'"
-                mana = f"curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_mana/build_mana_{build_id}/dbgbins-{codebuild}"
-                artesa = f"curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_artesa/build_artesa_{build_id}/dbgbins-{codebuild}"
-                zion = f"curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_zion/build_zion_{build_id}/dbgbins-{codebuild}"
+                manaq = f"timeout 2 curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_mana/build_mana_{build_id}/dbgbins-{codebuild} | awk '/HTTP/{{print $2}}'"
+                artesaq = f"timeout 2 curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_artesa/build_artesa_{build_id}/dbgbins-{codebuild} | awk '/HTTP/{{print $2}}'"
+                zionq = f"timeout 2 curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_zion/build_zion_{build_id}/dbgbins-{codebuild} | awk '/HTTP/{{print $2}}'"
+                mana = f"timeout 2 curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_mana/build_mana_{build_id}/dbgbins-{codebuild}"
+                artesa = f"timeout 2 curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_artesa/build_artesa_{build_id}/dbgbins-{codebuild}"
+                zion = f"timeout 2 curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_zion/build_zion_{build_id}/dbgbins-{codebuild}"
                 if "200" in sp.run(manaq, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout:
                     try:
                         fate_message = "show -bt --> mana process crash"
