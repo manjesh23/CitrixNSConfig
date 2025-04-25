@@ -54,7 +54,6 @@ ___  ___            _           _       _____      _   _
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
 version = "3.20.01"
-#version test
 
 # About script
 showscriptabout = '''
