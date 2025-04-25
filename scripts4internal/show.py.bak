@@ -53,7 +53,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "3.14.05"
+version = "3.20.01"
 
 # About script
 showscriptabout = '''
@@ -86,6 +86,7 @@ showscriptabout = '''
 
 # Logme the user
 username = os.popen("whoami").read().strip()
+
 userfile = "/home/CITRITE/manjeshn/manscript/showdata/"+username+".log"
 logging.basicConfig(filename=userfile, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger()
@@ -102,6 +103,15 @@ def send_request(version, username, url, fate_message, result):
     finally:
         logger.info(os.getcwd() + " - " + fate_message)
         return True
+
+# Testing user based access control
+if 'man123' in username:
+    print(style.RED + "You are banned from using show script due to confidential info" + style.RESET)
+    try:
+        fate_message = "show user banned"; send_request(version, username, url, fate_message, "Failed")
+    finally:
+        quit()
+    quit()
 
 # Parser args
 parser = argparse.ArgumentParser(description="NetScaler Support Bundle Show Script", formatter_class=argparse.RawTextHelpFormatter)
@@ -284,29 +294,31 @@ if args.adm:
                 admhostname = sp.run("awk '/kern.hostname/{print $NF; exit}' ./shell/sysctl-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 admip = sp.run("awk '/ifconfig/{print $(NF-2), $(NF-1), $NF, \"on iface\", $2}' ./var/mps/svm.conf", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 if not admip:
-                    admip = sp.run('''awk '/inet/&&/netmask/{print $2; exit}' shell/ifconfig-a.out''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                    admip = sp.run('''awk '!/127.0.0.1/&&/inet/&&/netmask/{print $2; exit}' shell/ifconfig-a.out''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                     if not admip:
                         admip = "NA"
                 admcpu = sp.run("awk '/hw.model/ { $1=\"\"; sub(/^ /, \"\"); print }' ./shell/sysctl-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 admfirmware = sp.run("awk -F/ '/kern.bootfile/{print $NF}' ./shell/sysctl-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
-                adm_nameserver = sp.run('''awk '/nameserver/{if (c++) {printf \", %s\", $NF} else {printf \"%s\", $NF}}' ./etc/resolv.conf''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                adm_nameserver = sp.run('''awk '!/#/&&!/127.0.0./&&/nameserver/{if (c++) {printf \", %s\", $NF} else {printf \"%s\", $NF}}' ./etc/resolv.conf''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 adm_ha_peer_ip = sp.run('''awk '/update_HA_state/{gsub(/'\\''|;/, "", $NF); print $NF; exit}' var/mps/log/mas_hb_monit.py.lo*''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 adm_ha_peer_version_ready_failover = sp.run('''awk '/readyForFailover/&&/receiveHeartbeat/{ match($0, /"Ver": "[^"]+"/); ver=substr($0, RSTART, RLENGTH); match($0, /"readyForFailover": "[^"]+"/); rff=substr($0, RSTART, RLENGTH); printf "%s and %s", ver, rff; exit}' var/mps/log/mas_hb_monit.py.lo* | sed \'s/"//g\' | sed \'s/ T/ True/g\'''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 adm_ha_floating_ip = sp.run("awk '/VIP Running ifconfig/{print $(NF-3); exit}' ./var/mps/log/mas_hb_monit.py.lo* | grep . || awk '/Changing vip address/{print $NF; exit}' ./var/mps/log/masha_vip.py.lo* || echo 'NA'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
-                admhostid = sp.run("awk '/this_host/{print $(NF-1); exit}' mpsconfig/license/FID*", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                admhostid = sp.run("awk '/this_host/{print $(NF-1); exit}' mpsconfig/license/*.lic", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 admrealmem = sp.run("awk '/real memory/{print $(NF-1), $NF; exit}' ./var/nslog/dmesg.boot", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 admavailmem = sp.run("awk '/avail memory/{print $(NF-1), $NF; exit}' ./var/nslog/dmesg.boot", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
-                admplatform = sp.run('''awk '/netscaler.sysid:/ {sysid=$2} END {if (sysid ~ /450000|450001/) print "Citrix Hypervisor"; else if (sysid ~ /450010|450011/) print "ESX"; else if (sysid ~ /450020|450021/ && !/vpx_on_cloud = 0/) print "Hyper-V"; else if (sysid ~ /450070|450071/ && !/vpx_on_cloud = 0/) print "KVM"; else print "Unknown"}' ./shell/sysctl-a.out''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                admplatform = sp.run("awk 'BEGIN {sysid=\"\"; vpx_on_cloud=-1; vpx_on_sdx=-1} /netscaler.sysid:/ {sysid=$2} /vpx_on_cloud:/ {split($0,a,\":\"); gsub(/[ \\t\\r\\n;]/,\"\",a[2]); vpx_on_cloud=a[2]+0} /vpx_on_sdx:/ {split($0,b,\":\"); gsub(/[ \\t\\r\\n;]/,\"\",b[2]); vpx_on_sdx=b[2]+0} END {if (vpx_on_cloud==1) print \"AWS\"; else if (vpx_on_cloud==3) print \"Azure\"; else if (vpx_on_cloud==4) print \"GCP\"; else if (vpx_on_sdx==1) print \"VPX on SDX\"; else if (sysid ~ /450000|450001/) print \"Citrix Hypervisor\"; else if (sysid ~ /450010|450011/) print \"ESX\"; else if ((sysid ~ /450020|450021/) && vpx_on_cloud==0) print \"Hyper-V\"; else if ((sysid ~ /450070|450071/) && vpx_on_cloud==0) print \"KVM\"; else print \"Unknown\"}' ./shell/sysctl-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 admvarsize = sp.run("awk '/\/var$/{capacity=substr($5,1,length($5)-1); printf \"%s -> Total: %s | Used: %s | Free: %s | Capacity Used: \\033[%sm%s%%\\033[0m\\n\", $1, $2, $3, $4, (capacity+0>75?\"0;31\":\"0;32\"), capacity}' ./shell/df-akin.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 admboottime = sp.run("awk -F} '/kern.boottime/{print $2}' ./shell/sysctl-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                admloadaverage = sp.run("awk '/load average/{printf \"%s %s %s\", \"1 min: \"$6, \"5 min: \"$7, \"15 min: \"$8}' shell/top-b.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                admdeviceuptime = sp.run("sed 's/^.*up //' shell/uptime.out | sed 's/,...user.*//'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
                 consoleaddr = sp.run("awk -F'url:' '/fetch_new_version/ {sub(/.*https?:\/\//, \"\", $2); sub(/\/.*/, \"\", $2); print $2; exit}' ./var/mps/log/agent_upgrade.log", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 ccid = sp.run('''awk -Furl '/fetch_new_version/ { sub(/^.*https:\/\/[^\/]+\//, "", $2); sub(/\/.*$/, "", $2); print $2; exit }' ./var/mps/log/agent_upgrade.log''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
             finally:
                 print(style.YELLOW + '{:-^87}'.format('NetScaler Console Show Configuration') + "\n" + style.RESET)
                 print("Support file location: " + os.popen("pwd").read().strip())
                 print("\nConsole Hostname: " + admhostname)
-                print("Console Address: " + consoleaddr)
-                print("CCID: " + ccid)
+                consoleaddr and print("Console Address: " + consoleaddr)
+                ccid and print("CCID: " + ccid)
                 print("Console IP Address: " + admip)
                 print("Console HA Peer IP: " + adm_ha_peer_ip + "\nConsole HA Floating IP: " + adm_ha_floating_ip if adm_ha_floating_ip else "N/A") if adm_ha_peer_ip else None
                 if len(adm_ha_peer_version_ready_failover) > 23:
@@ -323,7 +335,9 @@ if args.adm:
                 print("Console HostID: " + admhostid)
                 print("Console Hosted Hypervisor: " + admplatform)
                 print("Console Boot Time: " + admboottime)
+                print("Console Uptime: " + admdeviceuptime.stdout.strip())
                 print("\n" + admcpu)
+                print("Load Average: " +admloadaverage)
                 print("Real Memory: " + admrealmem + " | " + "Available Memory: " + admavailmem)
                 print("var Size: " + admvarsize)
                 # Tooltrack
@@ -333,6 +347,7 @@ if args.adm:
                     quit()
         elif "md" in args.adm:
             try:
+                print(style.YELLOW + '{:-^87}'.format('NetScaler Console Managed Devices') + "\n" + style.RESET)
                 managed_devices_file = str(sp.run("find ./ -name managed_device.csv", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
                 if not managed_devices_file:
                     print(style.RED + "Unable to find managed_device.csv file" + style.RESET)
@@ -340,6 +355,7 @@ if args.adm:
                         fate_message = "show --adm md"; send_request(version, username, url, fate_message, "Failed")
                     finally:
                         quit()
+                
                 columns_to_display = ['ip_address', 'type', 'hostname', 'model_id', 'license_edition', 'instance_mode', 'upsince', 'host_id', 'is_licensed', 'is_local_license', 'license_grace_time', 'status', 'instance_state']
                 def get_max_column_widths(csv_reader, columns):
                     max_widths = {column: len(column) for column in columns}
@@ -353,7 +369,6 @@ if args.adm:
                                     value = "OOS"
                                 max_widths[column] = max(max_widths[column], len(value))
                     return max_widths
-                print(style.YELLOW + '{:-^87}'.format('NetScaler Console Managed Devices') + "\n" + style.RESET)
                 with open(managed_devices_file, mode='r') as file:
                     csv_reader = csv.DictReader(file)
                     existing_columns = [column for column in columns_to_display if column in csv_reader.fieldnames]
@@ -405,6 +420,13 @@ if args.adm:
             try:
                 print(style.YELLOW + '{:-^87}\n'.format('NetScaler Console Applications') + style.RESET)
                 applications_file = str(sp.run("find ./ -name application.csv", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
+                managed_apps_file_data_check = int(sp.run('''awk '{print NR}' var/mps/mpsdb/application.csv''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip())
+                if not managed_apps_file_data_check > 1:
+                    print(style.RED + "No apps are managed on this Console Bundle" + style.RESET)
+                    try:
+                        fate_message = "show --adm apps"; send_request(version, username, url, fate_message, "Failed")
+                    finally:
+                        quit()
                 columns_to_display = ['name', 'vServer_Type', 'ns_ip_address', 'application_managed']
                 def get_max_column_widths(csv_reader, columns):
                     max_widths = {column: len(column) for column in columns}
@@ -581,8 +603,7 @@ if args.adm:
                 lic_usage_data = []
                 issued_to = sp.run("awk -F'NOTICE=\"' '/NOTICE/ { split($2, arr, \"\\\"\"); print arr[1] }' ./mpsconfig/license/* | sed 's/\\\\/ /g' | sort | uniq", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 this_host_data = sp.run('''awk 'BEGIN {printf "Filename\\tHost_id\\tPort_Number\\n"} /SERVER this_host/{print FILENAME , $3, $4}' ./mpsconfig/license/*.lic | column -t''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
-                lic_expiry_data = sp.run('''sed 's/ /_/g' ./var/mps/mpsdb/license_expiry_info.csv | awk -F, 'BEGIN {printf "Type\\tDays_Left\\tCount\\n"} !/expirydays/{print $2, $3, ($2 ~ /Bandwidth/ ? $4 / 1000 " GB" : $4)}' | column -t''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
-                #lic_usage_data = sp.run("sed 's/ /_/g' ./var/mps/mpsdb/license_user_detail.csv | awk -F, '{print $5, $6, $7, $8}' | while read -r node display no_of_license time; do [[ \"$time\" =~ ^[0-9]+$ ]] && printf \"%s\\t%s\\t%s\\t%s\\n\" \"$node\" \"$display\" \"$no_of_license\" \"$(date -r \"$time\" +\"%b-%d/%Y::%H:%M:%S\")\" || printf \"%s\\t%s\\t%s\\treg_time\\n\" \"$node\" \"$display\" \"$no_of_license\"; done | column -t", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                lic_expiry_data = sp.run('''sed 's/ /_/g' ./var/mps/mpsdb/license_expiry_info.csv | awk -F, 'BEGIN{printf "Type\tDays_Left\tCount\n"}!/expirydays/{printf "%s\t%s\t%s\n", $2, $3, ($2 ~ /Bandwidth|Throughput/ ? sprintf("%.0f GB", $4/1000) : $4)}' | column -t''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 with open('./var/mps/mpsdb/license_user_detail.csv', 'r') as f:
                     reader = csv.reader(f)
                     next(reader)
@@ -726,10 +747,13 @@ if args.sdx:
                 if len(sdx_matched_bug_report) is 0:
                     sdx_matched_bug_report = sp.run("find \"$(echo $(pwd) | awk -F'/' '{print \"/\"$2\"/\"$3\"/\"$4}')\" -name \"bug-report*\" -exec grep -H "+svm_IP+" {}/xenstore-ls-f.out \; | head -n 1 | sed -n 's|\\(.*bug-report[^/]*\).*|\\1|p'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 svm_firmware = sp.run("awk '/netscaler.version/&&/Build/{print $3, $5}' shell/sysctl-a.out | sed 's/[:,]//g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
-                xen_firmware = sp.run("find \"$(pwd | awk -F'/' '{print \"/\"$2\"/\"$3\"/\"$4}')\" -name \"bug-report*\" -exec awk -F= '/SDX_PLATFORM_SBI/{print $NF; exit}' {}/etc/sdx-inventory \;", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                xen_firmware = sp.run("find \"$(pwd | awk -F'/' '{print \"/\"$2\"/\"$3\"/\"$4}')\" -name \"bug-report*\" -exec awk -F= '/SDX_PLATFORM_SBI/{print $NF; exit}' {}/etc/sdx-inventory \; | sort -u", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 xen_upgrade_success = sp.run("awk '/MPSControl::/&&/will reboot the xenserver now/{print $1, $2, $3, $4}' ./var/mps/log/mps_control.lo* | tail -n 1", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 sdx_upgrade_success = sp.run("awk '/MPSControl::/&&/completed successfully/&&/SDX single reboot upgrade/{print $1, $2, $3, $4}' ./var/mps/log/mps_control.lo* | tail -n 1", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 lic_server = sp.run("awk -F, '/--/&&/,/{print $2, \"on Port\", $3}' ./var/mps/mpsdb/license_server.csv", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                local_lic_file = sp.run('''awk '/SERVER this_host/ {count++} END {print count}' ./mpsconfig/license/*.lic''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                adm_connected = sp.run('''awk '/nitro/&&/bmc/&&/Accept/&&/sessionid/{print $9; exit}' ./var/mps/log/mps_service.lo* | cut -d':' -f1''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                mem_value = sp.run('''find "$(pwd | awk -F'/' '{print "/"$2"/"$3"/"$4}')" -name "bug-report*" -exec awk '/^[[:space:]]*Size: [0-9]+ GB$/ { sum += $2 } END { print "Memory Total Size:", sum, "GB" }' {}/dmidecode.out \;''', shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
             finally:
                 print(style.YELLOW + '{:-^87}'.format('NetScaler SDX Show Configuration') + "\n" + style.RESET)
                 print("Support file location: " + bundle_location)
@@ -748,9 +772,11 @@ if args.sdx:
                 print("SVM IP: " + svm_IP)
                 print("Xen IP: " + xen_ip + "\n")
                 print("SDX Serial: " + sdx_serial)
-                print("License Server: " + (lic_server if lic_server else "NA"))
+                print("License Server: Local") if local_lic_file and local_lic_file.isdigit() else print("License Server: " + lic_server) if lic_server else None
                 print("Host ID: " + hostID + "\n")
+                print("ADM Connected: " + (adm_connected if adm_connected else "NA"))
                 print("SVM CPU Load Average: " + loadaverage)
+                print(mem_value)
                 print("SVM var Size: " + var_space)
                 try:
                     fate_message = "show --sdx info"; send_request(version, username, url, fate_message, "Success")
@@ -1142,6 +1168,7 @@ elif args.u:
     try:
         adcfirmwareRTM = sp.run("curl -s 'https://www.citrix.com/downloads/citrix-adc/' | egrep -C2 \"<a href=\\\"\/downloads\/citrix-adc.*\" | awk '/citrix-adc|\/p/{print}' | paste - - | sed -E 's/<\/.|<a href=|\\\"|NEW/ /g' | awk -F'>' '{printf \"%s|%s\\n\", $3, $2}' | awk '{$1=$1};1' | sed -E 's-\| \|- \|-g' | column -t -s'|' | sort -k4n -k2M -k3n", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip().replace('\n\n', '\n')
         fullversion = sp.run('''awk '/#NS/&&/Build/' shell/ns_running_config.conf''',  shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip().split()
+        firmware_history = sp.run('awk -F"(" \'/Successfully loaded configuration/{gsub(/\\)$/, "", $NF); print $NF}\' ./var/log/nscollect_cl.log | uniq -c | awk \'BEGIN{printf "%s\\t%s\\n", "Config_Version", "Times_Loaded"}{printf "%s\\t%s\\n", $NF, $1}\'', shell=True, text=True, stdout=sp.PIPE).stdout
         current_major_version = fullversion[0][3:]
         current_minor_version = fullversion[2]
         build_pattern = re.compile(r"([A-Za-z]+\s+\d{1,2},\s+\d{4})\s+Citrix ADC Release .* (13\.1|14\.1) Build (\d+\.\d+)(?:/\d+\.\d+)?")
@@ -1161,6 +1188,7 @@ elif args.u:
     finally:
         print(style.YELLOW + '{:-^87}'.format('NetScaler Build Update Details') + style.RESET)
         print(style.YELLOW + f"Current Firmware Version: " + style.RESET + f"{current_major_version} Build {current_minor_version}" + "\n")
+        print(style.YELLOW + "Older version config loaded on this NetScaler\n" + style.RESET + firmware_history)
         print(style.YELLOW + f"Number of new firmware versions greater than " + style.RESET + f"{current_major_version}_{current_minor_version}: {len(new_builds_with_dates)} builds\n")
         if new_builds_with_dates:
             print(style.YELLOW + "New firmware builds:" + style.RESET)
@@ -1346,13 +1374,13 @@ elif args.c:
         if len(newnslog_counter) > 10:
             print(newnslog_counter)
             try:
-                fate_message = "show -c"; send_request(version, username, url, fate_message, "Success")
+                fate_message = "show -c " + args.c; send_request(version, username, url, fate_message, "Success")
             finally:
                 pass
         else:
             print(style.RED + "Unable to find any counter name with the keyword " + args.c + style.RESET)
             try:
-                fate_message = "show -c"; send_request(version, username, url, fate_message, "Failed")
+                fate_message = "show -c " + args.c; send_request(version, username, url, fate_message, "Failed")
             finally:
                 pass
         quit()
@@ -1718,7 +1746,7 @@ elif args.lbvip:
                 for detail in details:
                     print(f"{member:<20} {detail:<30}")
         try:
-            fate_message = "show --lbvip"; send_request(version, username, url, fate_message, "Success")
+            fate_message = "show --lbvip" + args.lbvip; send_request(version, username, url, fate_message, "Success")
         finally:
             quit()
 
@@ -1960,6 +1988,24 @@ elif args.case:
         else:
             ATS_Rep__c_Name = "No ATS Mapped"
     finally:
+        is_tech_play = False
+        is_top100 = False
+        is_next400 = False
+
+        techplay_top100_file = '/home/CITRITE/manjeshn/manscript/Tech_Play_Top_100.csv'
+
+        with open(techplay_top100_file, mode='r', encoding='utf-8') as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                if row['Account Org ID'] == Account_Org_ID__c:
+                    account_type = row['Tracking Account Type'].strip()
+                    if account_type == 'Tech Play':
+                        is_tech_play = True
+                    elif account_type == 'Top 100':
+                        is_top100 = True
+                    elif account_type == 'Next 400':
+                        is_next400 = True
+                    break
         print(style.YELLOW + '{:-^87}'.format('SalesForce Case details') + style.RESET)
         print(style.YELLOW + '{:-^87}'.format('Case Related') + style.RESET)
         print("\nSalesForce Case Number: " + casenum)
@@ -1985,7 +2031,14 @@ elif args.case:
             print(appliance_org_check)
         print("Account Name: " + Account_Name__c)
         print("NetScaler Telemetry Compliance: " + (style.RED if 'Non-Compliant' in Netscaler_Telemetry_Compliance_Status__c else style.GREEN) + Netscaler_Telemetry_Compliance_Status__c + style.RESET)
-        print("Org Id: " + Account_Org_ID__c)
+        if is_tech_play:
+            print(f"Org Id: {Account_Org_ID__c} - " + style.GREEN + "is a Tech Play account." + style.RESET)
+        elif is_top100:
+            print(f"Org Id: {Account_Org_ID__c} - " + style.GREEN + "is a Top 100 account." + style.RESET)
+        elif is_next400:
+            print(f"Org Id: {Account_Org_ID__c} - " + style.GREEN + "is a Next 400 account." + style.RESET)
+        else:
+            print(f"Org Id: {Account_Org_ID__c} - is NOT a Tech Play, Top 100, or Next 400 account.")
         print("Geo Segmentation: " + GEO_Segmentation__c)
         print("Named Account Owner: " + Named_Owner_Name__c)
         print("ATS: " + ATS_Rep__c_Name)
@@ -2041,14 +2094,14 @@ elif args.j:
             keywords[:10] = list(zip_longest(args_list, keywords, fillvalue=""))[:10]
             search_string = " and ".join([kw[0] for kw in keywords if kw[0]])
             print(style.YELLOW + f'Searching for: {search_string} + "\n"' + style.RESET)
-            JiraNumber = sp.run(f"curl -s -H 'Content-type: application/json' -d '{{\"feature\":\"search\", \"parameters\": [{{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\"}},{{\"name\":\"searchstring\",\"value\":\"{search_string}\"}}]}}' -X POST http://10.14.18.46/SFaaS/api/jira | perl -wnE'say /\"[A-Z]+-[0-9]{{3,9}}/g' | sed 's/\"/ /g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+            JiraNumber = sp.run(f"curl -s -H 'Content-type: application/json' -d '{{\"feature\":\"search\", \"parameters\": [{{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\"}},{{\"name\":\"searchstring\",\"value\":\"{search_string}\"}}]}}' -X POST http://10.14.18.47/SFaaS/api/jira | perl -wnE'say /\"[A-Z]+-[0-9]{{3,9}}/g' | sed 's/\"/ /g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
         else:
             JiraNumber = ""
     finally:
         print(style.YELLOW + JiraNumber + style.RESET)
         if JiraNumber and JiraNumber.strip():
             for i in JiraNumber.split():
-                detailedJira = sp.run("curl -s -H 'Content-type: application/json' -d '{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\",\"feature\":\"fetchfields\",\"parameters\":[{\"name\":\"id\",\"value\":\""+i+"\",\"isbase64\":false},{\"name\":\"fields\",\"value\":\"summary,versions,status,resolution,fixVersions,created\",\"isbase64\":false}]}' -X POST http://10.14.18.46/SFaaS/api/jira | jq '.options | .[] | .values | .[]' | sed 's/\\\\//g' | awk '{print substr($0, 2, length($0) - 2)}' | jq -r  '\"\\(.key) \\(\"-->\") \\(.fields.summary) \\(\"-->\") \\(.fields.resolution.name) \\(\"-->\") \\(.fields.created[0:10]) \\(\"Found In:\") \\([.fields.versions[].name]) \\(\"--> Fixed In:\") \\([.fields.fixVersions[].name]) \\(\"\")\"'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                detailedJira = sp.run("curl -s -H 'Content-type: application/json' -d '{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\",\"feature\":\"fetchfields\",\"parameters\":[{\"name\":\"id\",\"value\":\""+i+"\",\"isbase64\":false},{\"name\":\"fields\",\"value\":\"summary,versions,status,resolution,fixVersions,created\",\"isbase64\":false}]}' -X POST http://10.14.18.47/SFaaS/api/jira | jq '.options | .[] | .values | .[]' | sed 's/\\\\//g' | awk '{print substr($0, 2, length($0) - 2)}' | jq -r  '\"\\(.key) \\(\"-->\") \\(.fields.summary) \\(\"-->\") \\(.fields.resolution.name) \\(\"-->\") \\(.fields.created[0:10]) \\(\"Found In:\") \\([.fields.versions[].name]) \\(\"--> Fixed In:\") \\([.fields.fixVersions[].name]) \\(\"\")\"'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                 print(detailedJira)
             try:
                 fate_message = "show -j"; send_request(version, username, url, fate_message, "Success")
@@ -2065,7 +2118,7 @@ elif args.J:
     try:
         print(style.YELLOW + '{:-^87}'.format('Jira Summary') + style.RESET)
         JiraNumber = str(args.J)
-        detailedJira = sp.run("curl -s -H 'Content-type: application/json' -d '{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\",\"feature\":\"fetchfields\",\"parameters\":[{\"name\":\"id\",\"value\":\""+JiraNumber+"\",\"isbase64\":false},{\"name\":\"fields\",\"value\":\"summary,versions,status,resolution,fixVersions,created,customfield_19731,assignee,creator\",\"isbase64\":false}]}' -X POST http://10.14.18.46/SFaaS/api/jira | jq '.options | .[] | .values | .[]' | sed 's/\\\\//g' | awk '{print substr($0, 2, length($0) - 2)}' | jq -r  '\"\\(.key) \\(\"\\nSummary:\") \\(.fields.summary) \\(\"\\nResolution:\") \\(.fields.resolution.name) \\(\"\\nCreated on:\") \\(.fields.created[0:10]) \\(\"\\nFound In:\") \\([.fields.versions[].name]) \\(\"\\nFStatus:\") \\([.fields.status.name]) \\(\"\\nFixed In:\") \\([.fields.fixVersions[].name]) \\(\"\\nJustification:\") \\(.fields.customfield_19731) \\(\"\\nAssignee:\") \\(.fields.assignee.name) \\(\"\\nReporter:\") \\(.fields.creator.name) \\(\"\\n\")\"'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+        detailedJira = sp.run("curl -s -H 'Content-type: application/json' -d '{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\",\"feature\":\"fetchfields\",\"parameters\":[{\"name\":\"id\",\"value\":\""+JiraNumber+"\",\"isbase64\":false},{\"name\":\"fields\",\"value\":\"summary,versions,status,resolution,fixVersions,created,customfield_19731,assignee,creator\",\"isbase64\":false}]}' -X POST http://10.14.18.47/SFaaS/api/jira | jq '.options | .[] | .values | .[]' | sed 's/\\\\//g' | awk '{print substr($0, 2, length($0) - 2)}' | jq -r  '\"\\(.key) \\(\"\\nSummary:\") \\(.fields.summary) \\(\"\\nResolution:\") \\(.fields.resolution.name) \\(\"\\nCreated on:\") \\(.fields.created[0:10]) \\(\"\\nFound In:\") \\([.fields.versions[].name]) \\(\"\\nFStatus:\") \\([.fields.status.name]) \\(\"\\nFixed In:\") \\([.fields.fixVersions[].name]) \\(\"\\nJustification:\") \\(.fields.customfield_19731) \\(\"\\nAssignee:\") \\(.fields.assignee.name) \\(\"\\nReporter:\") \\(.fields.creator.name) \\(\"\\n\")\"'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
     finally:
         if detailedJira:
             print(detailedJira)
@@ -2110,13 +2163,13 @@ elif args.bt:
                     JiraFun = (' '.join(rawjira))
                     print(style.UNDERLINE + style.GREEN + "Crashing functions:" + "\n" + style.RESET)
                     print(JiraFun + "\n")
-                    initialJira = sp.run("curl -s -H 'Content-type: application/json' -d '{\"feature\":\"search\", \"parameters\": [{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\"},{\"name\":\"searchstring\",\"value\":\""+JiraFun+"\"}]}' -X POST http://10.14.18.46/SFaaS/api/jira | perl -wnE'say /\"NSHELP-[0-9]{3,9}/g' | sed 's/\"/ /g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                    initialJira = sp.run("curl -s -H 'Content-type: application/json' -d '{\"feature\":\"search\", \"parameters\": [{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\"},{\"name\":\"searchstring\",\"value\":\""+JiraFun+"\"}]}' -X POST http://10.14.18.47/SFaaS/api/jira | perl -wnE'say /\"NSHELP-[0-9]{3,9}/g' | sed 's/\"/ /g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                     if len(initialJira) > 5:
                         print(style.GREEN + "Matching Jira -->" + style.RESET + initialJira)
                     else:
                         print(style.RED + "Unable to match any Jira with the above crashing funcation !!!" + style.RESET + initialJira)
                     for i in initialJira.split():
-                        detailedJira = sp.run("curl -s -H 'Content-type: application/json' -d '{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\",\"feature\":\"fetchfields\",\"parameters\":[{\"name\":\"id\",\"value\":\""+i+"\",\"isbase64\":false},{\"name\":\"fields\",\"value\":\"summary,versions,status,resolution,fixVersions,created\",\"isbase64\":false}]}' -X POST http://10.14.18.46/SFaaS/api/jira | jq '.options | .[] | .values | .[]' | sed 's/\\\\//g' | awk '{print substr($0, 2, length($0) - 2)}' | jq -r  '\"\\(.key) \\(\"-->\") \\(.fields.summary) \\(\"-->\") \\(.fields.resolution.name) \\(\"-->\") \\(.fields.created[0:10]) \\(\"\\nFound In:\") \\([.fields.versions[].name]) \\(\"--> Fixed In:\") \\([.fields.fixVersions[].name]) \\(\"\\n\")\"'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                        detailedJira = sp.run("curl -s -H 'Content-type: application/json' -d '{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\",\"feature\":\"fetchfields\",\"parameters\":[{\"name\":\"id\",\"value\":\""+i+"\",\"isbase64\":false},{\"name\":\"fields\",\"value\":\"summary,versions,status,resolution,fixVersions,created\",\"isbase64\":false}]}' -X POST http://10.14.18.47/SFaaS/api/jira | jq '.options | .[] | .values | .[]' | sed 's/\\\\//g' | awk '{print substr($0, 2, length($0) - 2)}' | jq -r  '\"\\(.key) \\(\"-->\") \\(.fields.summary) \\(\"-->\") \\(.fields.resolution.name) \\(\"-->\") \\(.fields.created[0:10]) \\(\"\\nFound In:\") \\([.fields.versions[].name]) \\(\"--> Fixed In:\") \\([.fields.fixVersions[].name]) \\(\"\\n\")\"'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                         print(detailedJira)
             for nsppecrash in nsppecrashfile:
                 nsppecrash = re.sub("\(", "\(", nsppecrash)
@@ -2136,13 +2189,13 @@ elif args.bt:
                         JiraFun = (' '.join(rawjira))
                         print(style.GREEN + "Crashing functions:" + "\n" + style.RESET)
                         print(JiraFun + "\n")
-                        initialJira = sp.run("curl -s -H 'Content-type: application/json' -d '{\"feature\":\"search\", \"parameters\": [{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\"},{\"name\":\"searchstring\",\"value\":\""+JiraFun+"\"}]}' -X POST http://10.14.18.46/SFaaS/api/jira | perl -wnE'say /\"NSHELP-[0-9]{3,9}/g' | sed 's/\"/ /g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                        initialJira = sp.run("curl -s -H 'Content-type: application/json' -d '{\"feature\":\"search\", \"parameters\": [{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\"},{\"name\":\"searchstring\",\"value\":\""+JiraFun+"\"}]}' -X POST http://10.14.18.47/SFaaS/api/jira | perl -wnE'say /\"NSHELP-[0-9]{3,9}/g' | sed 's/\"/ /g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                         if len(initialJira) > 5:
                             print(style.GREEN + "Matching Jira -->" + style.RESET + initialJira)
                         else:
                             print(style.RED + "Unable to match any Jira with the above crashing function !!!" + style.RESET + initialJira)
                         for i in initialJira.split():
-                            detailedJira = sp.run("curl -s -H 'Content-type: application/json' -d '{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\",\"feature\":\"fetchfields\",\"parameters\":[{\"name\":\"id\",\"value\":\""+i+"\",\"isbase64\":false},{\"name\":\"fields\",\"value\":\"summary,versions,status,resolution,fixVersions,created\",\"isbase64\":false}]}' -X POST http://10.14.18.46/SFaaS/api/jira | jq '.options | .[] | .values | .[]' | sed 's/\\\\//g' | awk '{print substr($0, 2, length($0) - 2)}' | jq -r  '\"\\(.key) \\(\"-->\") \\(.fields.summary) \\(\"-->\") \\(.fields.resolution.name) \\(\"-->\") \\(.fields.created[0:10]) \\(\"\\nFound In:\") \\([.fields.versions[].name]) \\(\"--> Fixed In:\") \\([.fields.fixVersions[].name]) \\(\"\\n\")\"'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                            detailedJira = sp.run("curl -s -H 'Content-type: application/json' -d '{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\",\"feature\":\"fetchfields\",\"parameters\":[{\"name\":\"id\",\"value\":\""+i+"\",\"isbase64\":false},{\"name\":\"fields\",\"value\":\"summary,versions,status,resolution,fixVersions,created\",\"isbase64\":false}]}' -X POST http://10.14.18.47/SFaaS/api/jira | jq '.options | .[] | .values | .[]' | sed 's/\\\\//g' | awk '{print substr($0, 2, length($0) - 2)}' | jq -r  '\"\\(.key) \\(\"-->\") \\(.fields.summary) \\(\"-->\") \\(.fields.resolution.name) \\(\"-->\") \\(.fields.created[0:10]) \\(\"\\nFound In:\") \\([.fields.versions[].name]) \\(\"--> Fixed In:\") \\([.fields.fixVersions[].name]) \\(\"\\n\")\"'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                             print(detailedJira)
         elif len(processcrashfile) != 0:
             print(style.YELLOW + '{:-^87}'.format('Its a Process Crash') + style.RESET)
@@ -2155,20 +2208,20 @@ elif args.bt:
             delete_dbgbins = False
             if not dbgbins_dirs:
                 while True:
-                    user_input = input("\nShould we delete dbgbins at the end of analysis? (True/False): ").strip().lower()
-                    if user_input in ["true", "false"]:
-                        delete_dbgbins = user_input == "true"
+                    user_input = input("\nShould we delete dbgbins at the end of analysis? (yes/no): ").strip().lower()
+                    if user_input in ["yes", "no"]:
+                        delete_dbgbins = user_input == "yes"
                         break
                     else:
-                        print("Invalid input. Please enter 'True' or 'False'.")
+                        print("Invalid input. Please enter 'yes' or 'no'.")
                 print("Downloading and Using Debug files " + codebuild)
                 build_id = codebuild.split("-")[1].split("_")[0].replace(".", "_")
-                manaq = f"timeout 2 curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_mana/build_mana_{build_id}/dbgbins-{codebuild} | awk '/HTTP/{{print $2}}'"
-                artesaq = f"timeout 2 curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_artesa/build_artesa_{build_id}/dbgbins-{codebuild} | awk '/HTTP/{{print $2}}'"
-                zionq = f"timeout 2 curl -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_zion/build_zion_{build_id}/dbgbins-{codebuild} | awk '/HTTP/{{print $2}}'"
-                mana = f"timeout 2 curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_mana/build_mana_{build_id}/dbgbins-{codebuild}"
-                artesa = f"timeout 2 curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_artesa/build_artesa_{build_id}/dbgbins-{codebuild}"
-                zion = f"timeout 2 curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_zion/build_zion_{build_id}/dbgbins-{codebuild}"
+                manaq = f"curl --connect-timeout 2 --max-time 2 -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_mana/build_mana_{build_id}/dbgbins-{codebuild} | awk '/HTTP/{{print $2}}'"
+                artesaq = f"curl --connect-timeout 2 --max-time 2 -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_artesa/build_artesa_{build_id}/dbgbins-{codebuild} | awk '/HTTP/{{print $2}}'"
+                zionq = f"curl --connect-timeout 2 --max-time 2 -Iks https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_zion/build_zion_{build_id}/dbgbins-{codebuild} | awk '/HTTP/{{print $2}}'"
+                mana = f"curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_mana/build_mana_{build_id}/dbgbins-{codebuild}"
+                artesa = f"curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_artesa/build_artesa_{build_id}/dbgbins-{codebuild}"
+                zion = f"curl -Ok https://sjc-repo.citrite.net/list/nwa-virtual-netscaler-build/builds_ns/builds_zion/build_zion_{build_id}/dbgbins-{codebuild}"
                 if "200" in sp.run(manaq, shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout:
                     try:
                         fate_message = "show -bt --> mana process crash"
@@ -2256,13 +2309,13 @@ elif args.bt1:
             JiraFun = (' '.join(rawjira))
             print(style.UNDERLINE + style.GREEN + "Crashing functions:" + "\n" + style.RESET)
             print(JiraFun + "\n")
-            initialJira = sp.run("curl -s -H 'Content-type: application/json' -d '{\"feature\":\"search\", \"parameters\": [{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\"},{\"name\":\"searchstring\",\"value\":\""+JiraFun+"\"}]}' -X POST http://10.14.18.46/SFaaS/api/jira | perl -wnE'say /\"NSHELP-[0-9]{3,9}/g' | sed 's/\"/ /g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+            initialJira = sp.run("curl -s -H 'Content-type: application/json' -d '{\"feature\":\"search\", \"parameters\": [{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\"},{\"name\":\"searchstring\",\"value\":\""+JiraFun+"\"}]}' -X POST http://10.14.18.47/SFaaS/api/jira | perl -wnE'say /\"NSHELP-[0-9]{3,9}/g' | sed 's/\"/ /g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
             if len(initialJira) > 5:
                 print(style.GREEN + "Matching Jira -->" + style.RESET + initialJira)
             else:
                 print(style.RED + "Unable to match any Jira with the above crashing funcation !!!" + style.RESET + initialJira)
             for i in initialJira.split():
-                detailedJira = sp.run("curl -s -H 'Content-type: application/json' -d '{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\",\"feature\":\"fetchfields\",\"parameters\":[{\"name\":\"id\",\"value\":\""+i+"\",\"isbase64\":false},{\"name\":\"fields\",\"value\":\"summary,versions,status,resolution,fixVersions,created\",\"isbase64\":false}]}' -X POST http://10.14.18.46/SFaaS/api/jira | jq '.options | .[] | .values | .[]' | sed 's/\\\\//g' | awk '{print substr($0, 2, length($0) - 2)}' | jq -r  '\"\\(.key) \\(\"-->\") \\(.fields.summary) \\(\"-->\") \\(.fields.resolution.name) \\(\"-->\") \\(.fields.created[0:10]) \\(\"\\nFound In:\") \\([.fields.versions[].name]) \\(\"--> Fixed In:\") \\([.fields.fixVersions[].name]) \\(\"\\n\")\"'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                detailedJira = sp.run("curl -s -H 'Content-type: application/json' -d '{\"name\":\"authorization\",\"value\":\"c3ZjYWNjdF9zY2FuYWRtaW46ZG5KMmxxaGg==\",\"feature\":\"fetchfields\",\"parameters\":[{\"name\":\"id\",\"value\":\""+i+"\",\"isbase64\":false},{\"name\":\"fields\",\"value\":\"summary,versions,status,resolution,fixVersions,created\",\"isbase64\":false}]}' -X POST http://10.14.18.47/SFaaS/api/jira | jq '.options | .[] | .values | .[]' | sed 's/\\\\//g' | awk '{print substr($0, 2, length($0) - 2)}' | jq -r  '\"\\(.key) \\(\"-->\") \\(.fields.summary) \\(\"-->\") \\(.fields.resolution.name) \\(\"-->\") \\(.fields.created[0:10]) \\(\"\\nFound In:\") \\([.fields.versions[].name]) \\(\"--> Fixed In:\") \\([.fields.fixVersions[].name]) \\(\"\\n\")\"'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
                 print(detailedJira)
     finally:
         pass

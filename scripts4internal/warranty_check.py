@@ -148,7 +148,7 @@ except ValueError:
 
 # Get SFDC API keys
 try:
-    sfdcurl = "https://ftltoolswebapi.deva.citrite.net/sfaas/api/salesforce"
+    sfdcurl = "https://ftltoolswebapiashburn.deva.citrite.net/sfaas/api/salesforce"
     tokenpayload = {"feature": "login", "parameters": [{"name": "tokenuri", "value": "https://login.salesforce.com/services/oauth2/token", "isbase64": "false"}]}
     sfdcreq = request.Request(sfdcurl)
     sfdcreq.add_header('Content-Type', 'application/json; charset=utf-8')

@@ -5,10 +5,10 @@ import smtplib
 
 class EmailSender:
     def __init__(self, cc, receiver):
-        self.sender = 'vignesh.kumar@citrix.com'
+        self.sender = 'manjesh.n@citrix.com'
         self.receiver = receiver
         self.cc = cc
-        self.user = 'tejesh.doddikoppad@citrix.com'
+        self.user = 'manjesh.n@citrix.com'
         self.tasktype = 'Task'
         self.smtp_server = 'mail.citrix.com'
         self.smtp_port = 25
@@ -34,7 +34,7 @@ class EmailSender:
             print(e)
 
 cc=[]
-receiver = "tejesh.doddikoppad@citrix.com"
+receiver = "manjesh.n@citrix.com"
 
 email_subject = "Hi"
 email_body = "Hello"
