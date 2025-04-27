@@ -11,6 +11,7 @@ import json
 import ast
 import time
 from datetime import datetime, timedelta
+from collections import defaultdict
 import ssl
 import csv
 from itertools import zip_longest
@@ -53,7 +54,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "3.21.01"
+version = "4.01.01"
 
 # About script
 showscriptabout = '''
@@ -151,6 +152,7 @@ parser.add_argument('-s', action="append", metavar="newnslog starttime", help=ar
 parser.add_argument('-e', action="append", metavar="newnslog endtime", help=argparse.SUPPRESS)
 parser.add_argument('-ha', action="store_true", help="HA Analysis (Potential RCA)")
 parser.add_argument('-pt', metavar="", action="append", help="Check if the given problem time present in the bundle (\"Aug 02 13:40:00\")")
+parser.add_argument('--graph', action="append", metavar="", help="Generate HTML Graph for all newnslog(s) at once per user-input counter\n--divide <integer> --> value used to divide 'totalcount-val' in nsconmsg output")
 parser.add_argument('-z', action="append", metavar="", help="Generate HTML Graph for all newnslog(s) at once per user-input counter\n--divide <integer> --> value used to divide 'totalcount-val' in nsconmsg output")
 parser.add_argument('--divide', action="append", metavar="divide column 3 by", help=argparse.SUPPRESS)
 parser.add_argument('-T', action="append", choices={"ha"}, help="Generate PNG file for specific feature")
@@ -2776,6 +2778,154 @@ elif args.g:
                     pass
     finally:
         pass
+elif args.graph:
+    try:
+        print(style.YELLOW + '{:-^87}'.format('NetScaler Advanced nsconmsg Graphs') + "\n" + style.RESET)
+        log_dir = "./var/nslog"
+        path = './conFetch/Graph'
+        counter_name = ''.join(args.graph)
+        # Get all newnslog files
+        newnslog_files = [f for f in os.listdir(log_dir) if f.startswith("newnslog")]
+        # This will store the names of all generated HTML files
+        generated_html_files = []
+        # Process each newnslog file
+        for newnslog in newnslog_files:
+            newnslog_path = os.path.join(log_dir, newnslog)
+            # Run the nsconmsg command to fetch data
+            cmd = ["nsconmsg", "-K", newnslog_path, "-s", "disptime=1", "-d", "current", "-f", counter_name]
+            result = sp.run(cmd, stdout=sp.PIPE, stderr=sp.PIPE, text=True)
+            # Define regex pattern for matching data
+            pattern = re.compile(r"^\s*\d+\s+\d+\s+(?P<totalcount>\d+)\s+(?P<delta>-?\d+)\s+(?P<rate>-?\d+)\s+(?P<counter>\S+)(?:\s+(?P<device>\S+))?\s+(?P<date>\w+ \w+ \d+ \d+:\d+:\d+ \d+)")
+            adchostname = sp.run("awk '{print $2}' shell/uname-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+            collector_bundle_name = re.search(r"(collector_\S+)", sp.run('pwd', shell=True, capture_output=True, text=True).stdout)
+            collector_bundle_name = collector_bundle_name.group(1) if collector_bundle_name else None
+            start_time = sp.run(f"nsconmsg -K {newnslog_path} -d setime | awk '/start time/{{print $4, $5, $6, $7}}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+            end_time = sp.run(f"nsconmsg -K {newnslog_path} -d setime | awk '/end   time/{{print $4, $5, $6, $7}}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+            start_end = f'{start_time} to {end_time}'
+            data, time_device_metric_map = [], defaultdict(lambda: defaultdict(dict))
+            for line in result.stdout.splitlines():
+                match = pattern.search(line)
+                if match:
+                    g = match.groupdict()
+                    dt = datetime.strptime(g["date"], "%a %b %d %H:%M:%S %Y")
+                    device = g.get("device") or "default"
+                    data.append({"datetime": dt, "device": device, "totalcount": int(g["totalcount"]), "delta": int(g["delta"]), "rate": int(g["rate"])})
+            if not data:
+                print(style.RED + f"No data found for counter: {counter_name} in {newnslog}" + style.RESET)
+                continue
+            times = sorted(set(d["datetime"] for d in data))
+            devices = sorted(set(d["device"] for d in data))
+            for d in data:
+                for metric in ["totalcount", "delta", "rate"]:
+                    time_device_metric_map[d["datetime"]][d["device"]][metric] = d[metric]
+            # === Build HTML ===
+            def build_rows(metric):
+                rows = []
+                for t in times:
+                    ts = t.strftime("%b %d,%Y %H:%M:%S")
+                    vals = [str(time_device_metric_map[t].get(dev, {}).get(metric, "null")) for dev in devices]
+                    row = f"[new Date('{ts}'), {', '.join(vals)}]"
+                    rows.append(row)
+                return ",\n".join(rows)
+            html = f"""<html><head>
+            <script src="https://www.gstatic.com/charts/loader.js"></script>
+            <script src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.js"></script>
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@816d3f5dea979b15d3bda3a7f0990ec121ad8d56/scripts4internal/conFetch.css">
+            <script>google.charts.load('current',{{'packages':['annotationchart']}});
+            google.charts.setOnLoadCallback(()=>drawChart());
+            var data_all={{"totalcount":[{build_rows('totalcount')}],"delta":[{build_rows('delta')}],"rate":[{build_rows('rate')}] }};
+            function drawChart(metric="totalcount"){{
+            var data=new google.visualization.DataTable();
+            data.addColumn('date','Timestamp');
+            {''.join([f"data.addColumn('number','{d}');" for d in devices])}
+            data_all[metric].forEach(r=>data.addRow(r));
+            var chart=new google.visualization.AnnotationChart(document.getElementById('chart_div'));
+            chart.draw(data,{{displayAnnotations:true,displayZoomButtons:false,dateFormat:'HH:mm:ss MMM dd, yyyy',thickness:2,scaleType:'allfixed'}});
+            }}
+            function changeMetric(){{drawChart(document.getElementById('metric_selector').value);}}
+            </script></head><body>
+            <h1 class="txt-primary">{counter_name}</h1><hr>
+            <p class="txt-title">
+            Collector_Bundle_Name: {collector_bundle_name}<br>
+            Device_Name: {adchostname}<br>
+            Log_file: {newnslog}<br>
+            Log_Timestamp: {start_end}
+            </p><hr>
+            <div style="margin-bottom:10px;">
+            <label for="metric_selector">Select Metric: </label>
+            <select id="metric_selector" onchange="changeMetric()">
+            <option value="totalcount" selected>Total Count</option>
+            <option value="delta">Delta</option>
+            <option value="rate">Rate/sec</option>
+            </select></div>
+            <div style="width:100%">
+            <p class="txt-primary">{counter_name} Graph</p>
+            <div id="chart_div" style="height:450px"></div>
+            </div>
+            <div class="footer">Project conFetch</div>
+            </body></html>"""
+            # Build chart filename properly
+            os.makedirs(path, exist_ok=True)  # Ensure the path exists
+            chart_filename = f"{counter_name}_{newnslog}.html"
+            full_chart_path = os.path.join(path, chart_filename)
+            with open(full_chart_path, "w") as f:
+                f.write(html)
+            generated_html_files.append(full_chart_path)
+            print(style.GREEN + f"Extracted {counter_name} timeseries data for file {newnslog}" + style.RESET)
+        # Now create the master HTML file that allows selection of the charts
+        master_html_content = """
+        <html>
+        <head>
+            <title>conFetch Master Graph</title>
+            <script>
+                function loadChart() {
+                    var chartFile = document.getElementById("chart_selector").value;
+                    if (chartFile) {
+                        var iframe = document.getElementById("chart_iframe");
+                        iframe.src = chartFile;
+                    }
+                }
+            </script>
+            <script src="https://www.gstatic.com/charts/loader.js"></script>
+            <script src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.js"></script>
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@816d3f5dea979b15d3bda3a7f0990ec121ad8d56/scripts4internal/conFetch.css">
+        </head>
+        <body>
+            <h1 class="header">Project conFetch Graph</h1>
+            <h1 class="txt-primaryleft">Select a newnslog file to View graph</h1>
+            <label for="chart_selector">Select newnslog file: </label>
+            <select id="chart_selector" onchange="loadChart()">
+                <option value="">-- Select --</option>
+        """
+        # Filter generated HTML files that match the counter name
+        trimmed_html_files = [os.path.basename(file) for file in generated_html_files]
+        for html_file in trimmed_html_files:
+            if counter_name in html_file:
+                master_html_content += f'        <option value="{html_file}">{html_file}</option>\n'
+        master_html_content += """
+            </select>
+
+            <div style="margin-top: 20px;">
+                <iframe id="chart_iframe" scrolling="no"></iframe>
+            </div>
+            <div class="footer">Project conFetch</div>
+        </body>
+        </html>
+        """
+        # Save the master HTML file
+        master_html_filename = f"master_{counter_name}_graph.html"
+        full_master_html_path = os.path.join(path, master_html_filename)
+        with open(full_master_html_path, "w") as f:
+            f.write(master_html_content)
+        graphloc = generate_file_url(f"conFetch/Graph/{master_html_filename}")
+        print(style.GREEN + f"Processed '{master_html_filename}' and you can access the graph using below link:\n\n" + style.YELLOW + f"{graphloc}\n" + style.RESET)
+    finally:
+        os.popen("fixperms ./conFetch").read()
+        try:
+            fate_message = "show --graph " + ''.join(args.graph) ; send_request(version, username, url, fate_message, "Success")
+        finally:
+            pass
+        quit()
 elif args.z:
     try:
         path = './conFetch/Graph'

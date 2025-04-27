@@ -2019,7 +2019,6 @@ elif args.case:
         print("Highest Severity: " + Highest_Severity__c)
         print("Escalated: " + IsEscalated)
         print("Engineering Involved: " + IsEscalatedtoEng__c)
-
         print(style.YELLOW + '{:-^87}'.format('Account Related') + style.RESET)
         print("Serial Number on Case: " + Serial_Number__c + " and its Maintenance End Date: " + Maintenance_End_Date__c)
         if "Not a HW Model" in str(platformserial_Maintenance_End_Date__c):
@@ -2032,13 +2031,13 @@ elif args.case:
         print("Account Name: " + Account_Name__c)
         print("NetScaler Telemetry Compliance: " + (style.RED if 'Non-Compliant' in Netscaler_Telemetry_Compliance_Status__c else style.GREEN) + Netscaler_Telemetry_Compliance_Status__c + style.RESET)
         if is_tech_play:
-            print(f"Org Id: {Account_Org_ID__c} - " + style.GREEN + "is a Tech Play account." + style.RESET)
+            print(f"Org Id: {Account_Org_ID__c} and " + style.GREEN + "a Tech Play account." + style.RESET)
         elif is_top100:
-            print(f"Org Id: {Account_Org_ID__c} - " + style.GREEN + "is a Top 100 account." + style.RESET)
+            print(f"Org Id: {Account_Org_ID__c} and " + style.GREEN + "a Top 100 account." + style.RESET)
         elif is_next400:
-            print(f"Org Id: {Account_Org_ID__c} - " + style.GREEN + "is a Next 400 account." + style.RESET)
+            print(f"Org Id: {Account_Org_ID__c} and " + style.GREEN + "a Next 400 account." + style.RESET)
         else:
-            print(f"Org Id: {Account_Org_ID__c} - is NOT a Tech Play, Top 100, or Next 400 account.")
+            print(f"Org Id: {Account_Org_ID__c}")
         print("Geo Segmentation: " + GEO_Segmentation__c)
         print("Named Account Owner: " + Named_Owner_Name__c)
         print("ATS: " + ATS_Rep__c_Name)
