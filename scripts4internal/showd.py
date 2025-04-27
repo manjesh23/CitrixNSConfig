@@ -53,7 +53,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "3.20.01"
+version = "3.21.01"
 
 # About script
 showscriptabout = '''
@@ -112,6 +112,13 @@ if 'man123' in username:
     finally:
         quit()
     quit()
+
+# Get the pwd path to URL
+def generate_file_url(filename, server="cis-data.eng.citrite.net"):
+    full_path = os.path.join(os.getcwd(), filename)
+    adjusted_path = full_path.replace("/upload/ftp", "/upload/uploads")
+    encoded_path = parse.quote(adjusted_path)
+    return f"file://{server}{encoded_path}"
 
 # Parser args
 parser = argparse.ArgumentParser(description="NetScaler Support Bundle Show Script", formatter_class=argparse.RawTextHelpFormatter)
@@ -569,7 +576,9 @@ if args.adm:
                 if "_Agent" in pwd_output:
                     print(style.RED + "Agent Bundle Graph is not working as expected" + style.RESET)
                 else:
-                    print(style.GREEN + f'Processed CPU_Mem_Graph.html Graph' + style.RESET)
+                    print(style.GREEN + f'Processed CPU_Mem_Graph.html Graph and you can access graph using below link' + style.RESET)
+                    graphloc = generate_file_url("conFetch/Graph/CPU_Mem_Graph.html")
+                    print(style.GREEN + graphloc + style.RESET)
                 try:
                     fate_message = "show --adm graph"; send_request(version, username, url, fate_message, "Success")
                 finally:
