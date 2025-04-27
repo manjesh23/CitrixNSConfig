@@ -12,6 +12,13 @@ body {
     text-align: center;
 }
 
+iframe { 
+    width: 100%; 
+    height: 100%; 
+    border: none; 
+    overflow: hidden;
+}
+
 .txt-title {
     width: 100%;
     color: rgb(38, 85, 214);
