@@ -18,7 +18,21 @@ body {
     display: flex;
 }
 
-.footer, .header {
+.header {
+    font-weight: bold;
+    left: 0;
+    top: 0;
+    width: 100%;
+    background-color: rgb(41, 37, 37);
+    color: rgb(42, 133, 207);
+    text-align: center;
+    position: fixed; /* Make sure it sticks */
+    height: 50px;
+    line-height: 50px; /* Center the text vertically */
+    z-index: 1000; /* Stay above other content */
+}
+
+.footer {
     font-weight: bold;
     left: 0;
     bottom: 0;
@@ -26,4 +40,8 @@ body {
     background-color: rgb(41, 37, 37);
     color: rgb(42, 133, 207);
     text-align: center;
+    position: fixed; /* Make footer stick at bottom too */
+    height: 50px;
+    line-height: 50px;
+    z-index: 1000;
 }
