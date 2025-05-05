@@ -54,7 +54,7 @@ ___  ___            _           _       _____      _   _
 # tooltrack data
 url = 'https://tooltrack.deva.citrite.net/use/conFetch'
 headers = {'Content-Type': 'application/json'}
-version = "4.01.01"
+version = "4.02.07"
 
 # About script
 showscriptabout = '''
@@ -95,6 +95,8 @@ logger.setLevel(logging.DEBUG)
 
 # Tooltrack send data function (embeded with fail proof)
 def send_request(version, username, url, fate_message, result):
+    if args.notel:
+        quit()
     payload = {"version": version, "user": username, "action": f"{fate_message} --> {os.getcwd()} --> {int(time.time())}", "runtime": 0, "result": result, "format": "string", "sr": os.getcwd().split("/")[3]}
     try:
         data = json.dumps(payload).encode()
@@ -124,19 +126,18 @@ def generate_file_url(filename, server="cis-data.eng.citrite.net"):
 # Parser args
 parser = argparse.ArgumentParser(description="NetScaler Support Bundle Show Script", formatter_class=argparse.RawTextHelpFormatter)
 parser.add_argument('--author', action="store_true", help=argparse.SUPPRESS)
+parser.add_argument('--notel', action="store_true", help=argparse.SUPPRESS)
 parser.add_argument('-i', action="store_true", help="NetScaler Basic Information")
 parser.add_argument('-P', action="store_true", help="NetScaler Admin Partition Details")
 parser.add_argument('-n', action="store_true", help="NetScaler Networking Information")
 parser.add_argument('-p', action="store_true", help="NetScaler Process Related Information")
 parser.add_argument('-r', action="store_true", help="NetScaler Reboot Timestamps")
 parser.add_argument('-c', metavar="", help="Display all possible counter names within newnslog")
-parser.add_argument('-E', action="store_true", help="Match well known error with KB articles")
 parser.add_argument('-fw', action="store_true", help="Display Latest RTM Firmware Code")
 parser.add_argument('-gz', action="store_true", help="Unzip *.gz files under /var/log and var/nslog")
 parser.add_argument('-im', action="store_true",help="Indexing timestamp of ns.log")
 parser.add_argument('-imall', action="store_true", help="Indexing timestamp of logs including ns, auth, bash, nitro, notice, nsvpn, sh, newnslogs")
 parser.add_argument('-N', action="store_true", help="Display newnslog Start and End Time in both GMT and Local Timezone")
-parser.add_argument('-error', metavar="", help="Highlights known errors")
 parser.add_argument('-show', metavar="", help="Selected Show Commands")
 parser.add_argument('-stat', metavar="", help="Selected Stat Commands")
 parser.add_argument('-vip', action="store_true", help="Get VIP Basic Details")
@@ -151,8 +152,8 @@ parser.add_argument('-K', action="append", metavar="newnslog filename", help=arg
 parser.add_argument('-s', action="append", metavar="newnslog starttime", help=argparse.SUPPRESS)
 parser.add_argument('-e', action="append", metavar="newnslog endtime", help=argparse.SUPPRESS)
 parser.add_argument('-ha', action="store_true", help="HA Analysis (Potential RCA)")
-parser.add_argument('-pt', metavar="", action="append", help="Check if the given problem time present in the bundle (\"Aug 02 13:40:00\")")
-parser.add_argument('--graph', action="append", metavar="", help="Generate HTML Graph for all newnslog(s) at once per user-input counter\n--divide <integer> --> value used to divide 'totalcount-val' in nsconmsg output")
+parser.add_argument('-pt', metavar="", action="append", help="Check if the given problem time present in the bundle (\"Aug 02 13:40:00\")" + style.CYAN)
+parser.add_argument('--graph', action="append", metavar="", help="Generate Advanced HTML Graph for all newnslog(s) at once per user-input counter\nshow --graph <nsconmsg_counter_name>" + style.RESET)
 parser.add_argument('-z', action="append", metavar="", help="Generate HTML Graph for all newnslog(s) at once per user-input counter\n--divide <integer> --> value used to divide 'totalcount-val' in nsconmsg output")
 parser.add_argument('--divide', action="append", metavar="divide column 3 by", help=argparse.SUPPRESS)
 parser.add_argument('-T', action="append", choices={"ha"}, help="Generate PNG file for specific feature")
@@ -317,6 +318,7 @@ if args.adm:
                 admavailmem = sp.run("awk '/avail memory/{print $(NF-1), $NF; exit}' ./var/nslog/dmesg.boot", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 admplatform = sp.run("awk 'BEGIN {sysid=\"\"; vpx_on_cloud=-1; vpx_on_sdx=-1} /netscaler.sysid:/ {sysid=$2} /vpx_on_cloud:/ {split($0,a,\":\"); gsub(/[ \\t\\r\\n;]/,\"\",a[2]); vpx_on_cloud=a[2]+0} /vpx_on_sdx:/ {split($0,b,\":\"); gsub(/[ \\t\\r\\n;]/,\"\",b[2]); vpx_on_sdx=b[2]+0} END {if (vpx_on_cloud==1) print \"AWS\"; else if (vpx_on_cloud==3) print \"Azure\"; else if (vpx_on_cloud==4) print \"GCP\"; else if (vpx_on_sdx==1) print \"VPX on SDX\"; else if (sysid ~ /450000|450001/) print \"Citrix Hypervisor\"; else if (sysid ~ /450010|450011/) print \"ESX\"; else if ((sysid ~ /450020|450021/) && vpx_on_cloud==0) print \"Hyper-V\"; else if ((sysid ~ /450070|450071/) && vpx_on_cloud==0) print \"KVM\"; else print \"Unknown\"}' ./shell/sysctl-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 admvarsize = sp.run("awk '/\/var$/{capacity=substr($5,1,length($5)-1); printf \"%s -> Total: %s | Used: %s | Free: %s | Capacity Used: \\033[%sm%s%%\\033[0m\\n\", $1, $2, $3, $4, (capacity+0>75?\"0;31\":\"0;32\"), capacity}' ./shell/df-akin.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
+                admvarmpssize = sp.run("awk '/\/var\/mps/{capacity=substr($5,1,length($5)-1); printf \"%s -> Total: %s | Used: %s | Free: %s | Capacity Used: \\033[%sm%s%%\\033[0m\\n\", $1, $2, $3, $4, (capacity+0>75?\"0;31\":\"0;32\"), capacity}' ./shell/df-akin.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 admboottime = sp.run("awk -F} '/kern.boottime/{print $2}' ./shell/sysctl-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 admloadaverage = sp.run("awk '/load average/{printf \"%s %s %s\", \"1 min: \"$6, \"5 min: \"$7, \"15 min: \"$8}' shell/top-b.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
                 admdeviceuptime = sp.run("sed 's/^.*up //' shell/uptime.out | sed 's/,...user.*//'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE)
@@ -348,7 +350,8 @@ if args.adm:
                 print("\n" + admcpu)
                 print("Load Average: " +admloadaverage)
                 print("Real Memory: " + admrealmem + " | " + "Available Memory: " + admavailmem)
-                print("var Size: " + admvarsize)
+                print("var Size: " + str(admvarsize) if admvarsize else "none")
+                print("var/mps Size: " + str(admvarmpssize) if admvarmpssize else "none")
                 # Tooltrack
                 try:
                     fate_message = "show --adm info"; send_request(version, username, url, fate_message, "Success")
@@ -626,7 +629,7 @@ if args.adm:
                         except IndexError:
                             pass
                         lic_usage_data.append(row[3:])
-                header = ["name", "node", "display", "no_of_license", "reg_timestamp"]
+                header = ["name", "node", "device", "no_of_license", "reg_timestamp"]
                 col_widths = [max(len(str(item)) for item in [header[i]] + [row[i] for row in lic_usage_data]) 
                             for i in range(len(header))]
             finally:
@@ -1395,18 +1398,6 @@ elif args.c:
             finally:
                 pass
         quit()
-
-elif args.E:
-    try:
-        print(style.YELLOW +
-              '{:-^87}'.format('Errors and Matched KB Articles') + style.RESET+"\n")
-        print(os.popen("for i in $(ls -lah var/log/ | awk '/ns.lo*/{print $NF}'); do awk 'BEGIN{c=0}/\"ERROR: Operation not permitted - no FIPS card present in the system\"/{c++}END {if(c > 0){printf \"%s\\t%s\\t%s\\t%s\\n\", ARGV[1], c, \"ERROR: Operation not permitted - no FIPS card present in the system\", \"https://support.citrix.com/article/CTX330685\"}}' var/log/$i; done").read().strip())
-        print("\n")
-    finally:
-        try:
-            fate_message = "show -E"; send_request(version, username, url, fate_message, "Success")
-        finally:
-            quit()
 elif args.fw:
     try:
         adcfirmwareRTM = sp.run("curl -s 'https://www.citrix.com/downloads/citrix-adc/' | egrep -C2 \"<a href=\\\"\/downloads\/citrix-adc.*\" | awk '/citrix-adc|\/p/{print}' | paste - - | sed -E 's/<\/.|<a href=|\\\"|NEW/ /g' | awk -F'>' '{printf \"%s|%s\\n\", $3, $2}' | awk '{$1=$1};1' | sed -E 's-\| \|- \|-g' | column -t -s'|' | sort -k4n -k2M -k3n", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip().replace('\n\n', '\n')
@@ -1609,14 +1600,6 @@ elif args.N:
                 fate_message = "show -N N+GMT"; send_request(version, username, url, fate_message, "Success")
             finally:
                 quit()
-
-elif args.error:
-    try:
-        # Highlight all the ERROR|err|down|disconnect|fail containing lines in input file.
-        print(sp.run("if test -f var/log/" + args.error + "; then awk '/ERROR|err|Err|down|disconnect|fail/{print \"\033[1;31m\"$0\"\033[0m\";next}{print $0}' var/log/" + args.error + "; else echo \"File not found\"; fi", shell=True).stdout)
-    finally:
-        fate_message = "show -error"; send_request(version, username, url, fate_message, "Success")
-        quit()
 elif args.show:
     try:
         # Prining show command output from file shell/showcmds.txt | Try without show
@@ -2166,8 +2149,8 @@ elif args.bt:
                 manual_core = input(style.YELLOW + "\nPlease specify the core file full path for manual analysis: " + style.RESET)
                 if len(manual_core) > 5:
                     print(style.GREEN+"\nGenerating BackTrace for: " + manual_core + " --> " + sp.run("what " + manual_core + "| awk '/NetScaler/{print substr($2,3) substr($4,1,length($4)-4)}' | sed 's/:/_/g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout + style.RESET)
-                    nsppefw = "nsppe64-"+sp.run("what " + manual_core + " | awk '/Build/{print $2, $4}' | cut -c 3- | sed s/\": \"/-/g | sed s/.nc/_nc/g | rev | cut -c 2- | rev | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
-                    nsppebtout = (sp.run("gdb /home/django/nsppe_symbols/"+nsppefw + " " + manual_core + " -ex 'bt full' -ex quit | awk '/0x[0-9a-z]|symbols from|generated by|terminated with|handler called/{print}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout)
+                    nsppefw = "nsppe-"+sp.run("what " + manual_core + " | awk '/Build/{print $2, $4}' | cut -c 3- | sed s/\": \"/-/g | sed s/.nc/_nc/g | rev | cut -c 2- | rev | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                    nsppebtout = (sp.run("gdb /netscaler/nsppe/"+nsppefw + " " + manual_core + " -ex 'bt full' -ex quit | awk '/0x[0-9a-z]|symbols from|generated by|terminated with|handler called/{print}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout)
                     print(nsppebtout)
                     rawjira = [e[3:] for e in re.findall( "in\s[a-z_0-9]{3,}", nsppebtout)]
                     JiraFun = (' '.join(rawjira))
@@ -2192,8 +2175,8 @@ elif args.bt:
                     collectornscrash = re.sub(".gz", "", collectornscrash)
                     if collectornscrash in nsppecrash:
                         print(style.GREEN+"\nGenerating BackTrace for: " + nsppecrash + " --> " + sp.run("what " + nsppecrash + "| awk '/NetScaler/{print substr($2,3) substr($4,1,length($4)-4)}' | sed 's/:/_/g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout + style.RESET)
-                        nsppefw = "nsppe64-"+sp.run("what " + nsppecrash + " | awk '/Build/{print $2, $4}' | cut -c 3- | sed s/\": \"/-/g | sed s/.nc/_nc/g | rev | cut -c 2- | rev | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
-                        nsppebtout = (sp.run("gdb /home/django/nsppe_symbols/"+nsppefw + " " + nsppecrash + " -ex 'bt full' -ex quit | awk '/0x[0-9a-z]|symbols from|generated by|terminated with|handler called/{print}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout)
+                        nsppefw = "nsppe-"+sp.run("what " + nsppecrash + " | awk '/Build/{print $2, $4}' | cut -c 3- | sed s/\": \"/-/g | sed s/.nc/_nc/g | rev | cut -c 2- | rev | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+                        nsppebtout = (sp.run("gdb /netscaler/nsppe/"+nsppefw + " " + nsppecrash + " -ex 'bt full' -ex quit | awk '/0x[0-9a-z]|symbols from|generated by|terminated with|handler called/{print}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout)
                         print(nsppebtout)
                         rawjira = [e[3:] for e in re.findall("in\s[a-z_0-9]{3,}", nsppebtout)]
                         JiraFun = (' '.join(rawjira))
@@ -2312,8 +2295,8 @@ elif args.bt1:
         manual_core = input(style.YELLOW + "\nPlease specify the core file full path for manual analysis: " + style.RESET)
         if len(manual_core) > 5:
             print(style.GREEN+"\nGenerating BackTrace for: " + manual_core + " --> " + sp.run("what " + manual_core + "| awk '/NetScaler/{print substr($2,3) substr($4,1,length($4)-4)}' | sed 's/:/_/g'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout + style.RESET)
-            nsppefw = "nsppe64-"+sp.run("what " + manual_core + " | awk '/Build/{print $2, $4}' | cut -c 3- | sed s/\": \"/-/g | sed s/.nc/_nc/g | rev | cut -c 2- | rev | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
-            nsppebtout = (sp.run("gdb /home/django/nsppe_symbols/"+nsppefw + " " + manual_core + " -ex 'bt full' -ex quit | awk '/0x[0-9a-z]|symbols from|generated by|terminated with|handler called/{print}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout)
+            nsppefw = "nsppe-"+sp.run("what " + manual_core + " | awk '/Build/{print $2, $4}' | cut -c 3- | sed s/\": \"/-/g | sed s/.nc/_nc/g | rev | cut -c 2- | rev | tr -d '\\n'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout
+            nsppebtout = (sp.run("gdb /netscaler/nsppe/"+nsppefw + " " + manual_core + " -ex 'bt full' -ex quit | awk '/0x[0-9a-z]|symbols from|generated by|terminated with|handler called/{print}'", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout)
             print(nsppebtout)
             rawjira = [e[3:] for e in re.findall("in\s[a-z_0-9]{3,}", nsppebtout)]
             JiraFun = (' '.join(rawjira))
@@ -2785,17 +2768,17 @@ elif args.graph:
         path = './conFetch/Graph'
         counter_name = ''.join(args.graph)
         # Get all newnslog files
-        newnslog_files = [f for f in os.listdir(log_dir) if f.startswith("newnslog")]
+        newnslog_dirs = [f for f in os.listdir(log_dir) if f.startswith("newnslog") and os.path.isdir(os.path.join(log_dir, f))]
         # This will store the names of all generated HTML files
         generated_html_files = []
         # Process each newnslog file
-        for newnslog in newnslog_files:
+        for newnslog in newnslog_dirs:
             newnslog_path = os.path.join(log_dir, newnslog)
             # Run the nsconmsg command to fetch data
             cmd = ["nsconmsg", "-K", newnslog_path, "-s", "disptime=1", "-d", "current", "-f", counter_name]
             result = sp.run(cmd, stdout=sp.PIPE, stderr=sp.PIPE, text=True)
             # Define regex pattern for matching data
-            pattern = re.compile(r"^\s*\d+\s+\d+\s+(?P<totalcount>\d+)\s+(?P<delta>-?\d+)\s+(?P<rate>-?\d+)\s+(?P<counter>\S+)(?:\s+(?P<device>\S+))?\s+(?P<date>\w+ \w+ \d+ \d+:\d+:\d+ \d+)")
+            pattern = re.compile(r"^\s*\d+\s+\d+\s+(?P<totalcount>\d+)\s+(?P<delta>-?\d+)\s+(?P<rate>-?\d+)\s+(?P<counter>\S+)(?:\s+(?P<device>\S+))?\s+(?P<date>\w+ \w+\s+\d+ \d+:\d+:\d+ \d+)")
             adchostname = sp.run("awk '{print $2}' shell/uname-a.out", shell=True, text=True, stdout=sp.PIPE, stderr=sp.PIPE).stdout.strip()
             collector_bundle_name = re.search(r"(collector_\S+)", sp.run('pwd', shell=True, capture_output=True, text=True).stdout)
             collector_bundle_name = collector_bundle_name.group(1) if collector_bundle_name else None
@@ -2873,18 +2856,18 @@ elif args.graph:
             generated_html_files.append(full_chart_path)
             print(style.GREEN + f"Extracted {counter_name} timeseries data for file {newnslog}" + style.RESET)
         # Now create the master HTML file that allows selection of the charts
-        master_html_content = """
+        master_html_content = f"""
         <html>
         <head>
-            <title>conFetch Master Graph</title>
+            <title>conFetch {counter_name} Master Graph</title>
             <script>
-                function loadChart() {
+                function loadChart() {{
                     var chartFile = document.getElementById("chart_selector").value;
-                    if (chartFile) {
+                    if (chartFile) {{
                         var iframe = document.getElementById("chart_iframe");
                         iframe.src = chartFile;
-                    }
-                }
+                    }}
+                }}
             </script>
             <script src="https://www.gstatic.com/charts/loader.js"></script>
             <script src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.js"></script>
@@ -2898,17 +2881,15 @@ elif args.graph:
                 <option value="">-- Select --</option>
         """
         # Filter generated HTML files that match the counter name
-        trimmed_html_files = [os.path.basename(file) for file in generated_html_files]
+        trimmed_html_files = sorted([os.path.basename(file) for file in generated_html_files], reverse=True)
         for html_file in trimmed_html_files:
             if counter_name in html_file:
                 master_html_content += f'        <option value="{html_file}">{html_file}</option>\n'
         master_html_content += """
             </select>
-
             <div style="margin-top: 20px;">
                 <iframe id="chart_iframe" scrolling="no"></iframe>
             </div>
-            <div class="footer">Project conFetch</div>
         </body>
         </html>
         """

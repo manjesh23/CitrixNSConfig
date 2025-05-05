@@ -1,0 +1,21 @@
+{
+  "users": [
+    {
+      "username": "admin",
+      "password": "scrypt:32768:8:1$4zCbabp9XhG4I2M4$29c9125ea5891aaa3657e1e6f4f927d4ef703767a1696ba933f2dd70ece4a73f0054c2a2b4d90a4272720ca36eefdd4c4ee67e90c4830b8885d2c3d9e511d11e",
+      "role": "admin",
+      "servers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ]
+    }
+  ]
+}

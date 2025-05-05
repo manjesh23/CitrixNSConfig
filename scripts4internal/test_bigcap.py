@@ -124,6 +124,10 @@ master_html_content = """
             }
         }
     </script>
+    <title>Master Graph Viewer</title>
+    <script src="https://www.gstatic.com/charts/loader.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@9bc88cdd9bf82282eacd2babf714a1d8a5d00358/scripts4internal/conFetch.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/manjesh23/CitrixNSConfig@491e726507ed0e640ac3fca89a72ac5e6b31b2af/scripts4internal/conFetch.css">
     <style>
         body, html { margin: 0; padding: 0; height: 100%; width: 100%; }
         iframe { 
